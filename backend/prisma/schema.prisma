@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+ enum UserRole {
+  PATIENT
+  DOCTOR
+  CAREGIVER
+  PHARMACY
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  APPROVED
+  REJECTED
+  DISABLED
+}
+//user model
+model User {
+  id                              String        @id @default(uuid())
+  fullName                        String
+  email                           String        @unique
+  passwordHash                    String
+  role                            UserRole
+  accountStatus                   AccountStatus @default(ACTIVE)
+  isEmailVerified                 Boolean       @default(false)
+  emailVerificationToken          String?
+  emailVerificationTokenExpiresAt DateTime?
+  createdAt                       DateTime      @default(now())
+  updatedAt                       DateTime      @updatedAt
+}
