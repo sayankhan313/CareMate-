@@ -1,15 +1,11 @@
-import dotenv from "dotenv";
-import { z } from "zod";
+import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { env } from "./env.js";
 
-dotenv.config();
-
-const envSchema = z.object({
-  PORT: z.string().default("5001"),
-  NODE_ENV: z.string().default("development"),
-  JWT_SECRET: z.string().min(10, "JWT_SECRET must be at least 10 characters"),
-  JWT_EXPIRES_IN: z.string().default("7d"),
-  CLIENT_URL: z.string().default("http://localhost:8081"),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL,
 });
 
-export const env = envSchema.parse(process.env);
+export const prisma = new PrismaClient({
+  adapter,
+});
