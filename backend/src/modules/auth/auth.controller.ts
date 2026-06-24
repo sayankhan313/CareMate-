@@ -2,9 +2,11 @@ import type { Request, Response, NextFunction } from "express";
 
 import { authService } from "./auth.service.js";
 import {
+  forgotPasswordSchema,
   loginSchema,
   registerSchema,
   resendVerificationEmailSchema,
+  resetPasswordSchema,
   verifyEmailSchema,
 } from "./auth.validation.js";
 
@@ -106,6 +108,55 @@ export const authController = {
           success: true,
           message: "Verification email sent successfully",
           data: result,
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: formatZodErrors(validation.error.issues),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = forgotPasswordSchema.safeParse(req.body);
+
+      if (validation.success) {
+        const result = await authService.forgotPassword(validation.data);
+
+        return res.status(200).json({
+          success: true,
+          message: result.message,
+          data: {
+            resetLink: result.resetLink,
+          },
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: formatZodErrors(validation.error.issues),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = resetPasswordSchema.safeParse(req.body);
+
+      if (validation.success) {
+        const result = await authService.resetPassword(validation.data);
+
+        return res.status(200).json({
+          success: true,
+          message: result.message,
         });
       }
 

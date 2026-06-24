@@ -7,11 +7,17 @@ import {
   createEmailVerificationToken,
   createVerificationLink,
 } from "../../utils/emailToken.util.js";
+import {
+  createPasswordResetToken,
+  createPasswordResetLink,
+} from "../../utils/passwordResetToken.util.js";
 
 import type {
+  ForgotPasswordInput,
   LoginInput,
   RegisterInput,
   ResendVerificationEmailInput,
+  ResetPasswordInput,
   VerifyEmailInput,
 } from "./auth.types.js";
 
@@ -189,6 +195,82 @@ export const authService = {
     return {
       verificationLink:
         env.NODE_ENV === "development" ? verificationLink : undefined,
+    };
+  },
+
+  async forgotPassword(data: ForgotPasswordInput) {
+    const user = await prisma.user.findUnique({
+      where: {
+        email: data.email,
+      },
+    });
+
+    const genericMessage =
+      "If an account exists with this email, a password reset link has been sent.";
+
+    if (!user) {
+      return {
+        message: genericMessage,
+        resetLink: undefined,
+      };
+    }
+
+    const { token, expiresAt } = createPasswordResetToken();
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordResetToken: token,
+        passwordResetTokenExpiresAt: expiresAt,
+      },
+    });
+
+    const resetLink = createPasswordResetLink(token);
+
+    if (env.NODE_ENV === "development") {
+      console.log("Password reset link:", resetLink);
+    }
+
+    return {
+      message: genericMessage,
+      resetLink: env.NODE_ENV === "development" ? resetLink : undefined,
+    };
+  },
+
+  async resetPassword(data: ResetPasswordInput) {
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: data.token,
+      },
+    });
+
+    if (!user || !user.passwordResetTokenExpiresAt) {
+      throw new AppError("Invalid password reset token", 400);
+    }
+
+    const now = new Date();
+
+    if (user.passwordResetTokenExpiresAt < now) {
+      throw new AppError("Password reset token has expired", 400);
+    }
+
+    const passwordHash = await hashPassword(data.newPassword);
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetTokenExpiresAt: null,
+      },
+    });
+
+    return {
+      message: "Password reset successfully",
     };
   },
 };

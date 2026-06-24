@@ -30,8 +30,13 @@ model User {
   role                            UserRole
   accountStatus                   AccountStatus @default(ACTIVE)
   isEmailVerified                 Boolean       @default(false)
+
   emailVerificationToken          String?
   emailVerificationTokenExpiresAt DateTime?
+
+  passwordResetToken              String?
+  passwordResetTokenExpiresAt     DateTime?
+
   createdAt                       DateTime      @default(now())
   updatedAt                       DateTime      @updatedAt
 }

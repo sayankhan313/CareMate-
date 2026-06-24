@@ -19,3 +19,12 @@ export type ResendVerificationEmailInput = {
 export type VerifyEmailInput = {
   token: string;
 };
+export type ForgotPasswordInput = {
+  email: string;
+};
+
+export type ResetPasswordInput = {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+};
