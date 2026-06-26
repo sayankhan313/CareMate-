@@ -1,4 +1,5 @@
 import { Router } from "express";
+
 import { authController } from "./auth.controller.js";
 
 const router = Router();
@@ -13,7 +14,10 @@ router.post(
   "/resend-verification-email",
   authController.resendVerificationEmail
 );
+
 router.post("/forgot-password", authController.forgotPassword);
+
+router.get("/reset-password", authController.renderResetPasswordPage);
 
 router.post("/reset-password", authController.resetPassword);
 

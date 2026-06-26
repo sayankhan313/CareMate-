@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../utils/AppError.js";
 import { hashPassword, comparePassword } from "../../utils/password.util.js";
 import { createJwtToken } from "../../utils/jwt.util.js";
+import { emailUtil } from "../../utils/email.util.js";
 import {
   createEmailVerificationToken,
   createVerificationLink,
@@ -64,6 +65,8 @@ export const authService = {
     });
 
     const verificationLink = createVerificationLink(token);
+
+    await emailUtil.sendEmailVerificationEmail(user.email, verificationLink);
 
     if (env.NODE_ENV === "development") {
       console.log("Email verification link:", verificationLink);
@@ -188,6 +191,8 @@ export const authService = {
 
     const verificationLink = createVerificationLink(token);
 
+    await emailUtil.sendEmailVerificationEmail(user.email, verificationLink);
+
     if (env.NODE_ENV === "development") {
       console.log("New email verification link:", verificationLink);
     }
@@ -228,6 +233,8 @@ export const authService = {
     });
 
     const resetLink = createPasswordResetLink(token);
+
+    await emailUtil.sendPasswordResetEmail(user.email, resetLink);
 
     if (env.NODE_ENV === "development") {
       console.log("Password reset link:", resetLink);
