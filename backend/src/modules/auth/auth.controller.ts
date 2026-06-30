@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 import { authService } from "./auth.service.js";
 import {
@@ -9,6 +9,175 @@ import {
   resetPasswordSchema,
   verifyEmailSchema,
 } from "./auth.validation.js";
+
+const getVerificationSuccessHtml = (message: string) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>CareMate+ Email Verified</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <style>
+          body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            color: #0F172A;
+          }
+
+          .card {
+            background: #FFFFFF;
+            width: 100%;
+            max-width: 420px;
+            padding: 32px 24px;
+            border-radius: 22px;
+            text-align: center;
+            box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);
+          }
+
+          .brand {
+            color: #2563EB;
+            font-size: 21px;
+            font-weight: 900;
+            margin-bottom: 18px;
+          }
+
+          .icon {
+            width: 78px;
+            height: 78px;
+            border-radius: 39px;
+            background: #DCFCE7;
+            color: #16A34A;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: 900;
+            margin: 0 auto 18px;
+          }
+
+          h1 {
+            margin: 0 0 10px;
+            font-size: 26px;
+            color: #0F172A;
+          }
+
+          p {
+            margin: 0 0 22px;
+            color: #64748B;
+            font-size: 15px;
+            line-height: 22px;
+          }
+
+          .note {
+            background: #EFF6FF;
+            border: 1px solid #DBEAFE;
+            color: #1D4ED8;
+            border-radius: 14px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 700;
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="card">
+          <div class="brand">CareMate+</div>
+          <div class="icon">✓</div>
+          <h1>Email verified</h1>
+          <p>${message}. You can now return to the CareMate+ app and login.</p>
+          <div class="note">Please go back to the app and sign in.</div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+const getVerificationErrorHtml = (title: string, message: string) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>CareMate+ Verification Failed</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <style>
+          body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            color: #0F172A;
+          }
+
+          .card {
+            background: #FFFFFF;
+            width: 100%;
+            max-width: 420px;
+            padding: 30px 24px;
+            border-radius: 22px;
+            text-align: center;
+            box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);
+          }
+
+          .brand {
+            color: #2563EB;
+            font-size: 21px;
+            font-weight: 900;
+            margin-bottom: 18px;
+          }
+
+          .icon {
+            width: 76px;
+            height: 76px;
+            border-radius: 38px;
+            background: #FEE2E2;
+            color: #DC2626;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+            font-weight: 900;
+            margin: 0 auto 18px;
+          }
+
+          h1 {
+            margin: 0 0 10px;
+            font-size: 25px;
+            color: #0F172A;
+          }
+
+          p {
+            margin: 0;
+            color: #64748B;
+            font-size: 15px;
+            line-height: 22px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="card">
+          <div class="brand">CareMate+</div>
+          <div class="icon">!</div>
+          <h1>${title}</h1>
+          <p>${message}</p>
+        </div>
+      </body>
+    </html>
+  `;
+};
 
 export const authController = {
   async register(req: Request, res: Response) {
@@ -36,15 +205,56 @@ export const authController = {
     });
   },
 
-  async verifyEmail(req: Request, res: Response) {
-    const validatedData = verifyEmailSchema.parse(req.query);
+  async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    const acceptsHtml = req.headers.accept?.includes("text/html");
 
-    const result = await authService.verifyEmail(validatedData);
+    try {
+      const validation = verifyEmailSchema.safeParse(req.query);
 
-    return res.status(200).json({
-      success: true,
-      message: result.message,
-    });
+      if (!validation.success) {
+        if (acceptsHtml) {
+          return res
+            .status(400)
+            .send(
+              getVerificationErrorHtml(
+                "Invalid verification link",
+                "Please request a new verification email from the CareMate+ app."
+              )
+            );
+        }
+
+        return res.status(400).json({
+          success: false,
+          message: "Verification token is required.",
+        });
+      }
+
+      const result = await authService.verifyEmail(validation.data);
+
+      if (acceptsHtml) {
+        return res
+          .status(200)
+          .send(getVerificationSuccessHtml(result.message));
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      if (acceptsHtml) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Email verification failed.";
+
+        return res
+          .status(400)
+          .send(getVerificationErrorHtml("Verification failed", message));
+      }
+
+      return next(error);
+    }
   },
 
   async resendVerificationEmail(req: Request, res: Response) {

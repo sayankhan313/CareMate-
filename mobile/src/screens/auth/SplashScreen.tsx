@@ -5,139 +5,139 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
-import { colors } from "../../constants/colors";
 import { tokenStorage } from "../../services/tokenStorage";
-import { CareMateLogo } from "../../components/CareMateLogo";
-type Props = {
-  navigation: any;
-};
+import type { RootStackParamList } from "../../types/navigation";
 
-export const SplashScreen = ({ navigation }: Props) => {
+type SplashScreenProps = NativeStackScreenProps<RootStackParamList, "Splash">;
+
+export const SplashScreen = ({ navigation }: SplashScreenProps) => {
   useEffect(() => {
-    checkLoginStatus();
-  }, []);
+    const checkLoginStatus = async () => {
+      try {
+        const token = await tokenStorage.getToken();
 
-  const checkLoginStatus = async () => {
-    try {
-      const token = await tokenStorage.getToken();
+        if (!token) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Welcome" }],
+          });
+          return;
+        }
 
-      if (!token) {
+        const response = await fetch(`${API_BASE_URL}/users/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
+          await tokenStorage.removeToken();
+
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          });
+          return;
+        }
+
         navigation.reset({
           index: 0,
           routes: [
             {
-              name: "Login",
+              name: "PatientDashboard",
+              params: {
+                user: json.data.user,
+              },
             },
           ],
         });
-
-        return;
-      }
-
-      const currentUserResponse = await fetch(`${API_BASE_URL}/users/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const currentUserJson = await currentUserResponse.json();
-
-      if (!currentUserResponse.ok || !currentUserJson.success) {
+      } catch (error) {
         await tokenStorage.removeToken();
 
         navigation.reset({
           index: 0,
-          routes: [
-            {
-              name: "Login",
-            },
-          ],
+          routes: [{ name: "Login" }],
         });
-
-        return;
       }
+    };
 
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: "PatientDashboard",
-            params: {
-              user: currentUserJson.data.user,
-            },
-          },
-        ],
-      });
-    } catch (error) {
-      await tokenStorage.removeToken();
-
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: "Login",
-          },
-        ],
-      });
-    }
-  };
+    checkLoginStatus();
+  }, [navigation]);
 
   return (
-    <View style={styles.container}>
-      <CareMateLogo size={96} />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.logoCircle}>
+          <Text style={styles.logoText}>♡</Text>
+        </View>
 
-      <Text style={styles.title}>CareMate+</Text>
+        <Text style={styles.appName}>CareMate+</Text>
 
-      <Text style={styles.subtitle}>
-        Checking your secure session...
-      </Text>
+        <Text style={styles.subtitle}>Preparing your care dashboard</Text>
 
-      <ActivityIndicator
-        size="large"
-        color={colors.primary}
-        style={styles.loader}
-      />
-    </View>
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
+          style={styles.loader}
+        />
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#F6FAFF",
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
   logoCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.primary,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 20,
+    marginBottom: 18,
+    shadowColor: "#2563EB",
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 6,
   },
   logoText: {
     color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 40,
+    fontWeight: "900",
   },
-  title: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: colors.text,
+  appName: {
+    color: "#0F172A",
+    fontSize: 30,
+    fontWeight: "900",
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    color: colors.mutedText,
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
     textAlign: "center",
   },
   loader: {
-    marginTop: 28,
+    marginTop: 26,
   },
 });

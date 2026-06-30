@@ -9,8 +9,9 @@ import { EmailVerificationScreen } from "../screens/auth/EmailVerificationScreen
 import { ForgotPasswordScreen } from "../screens/auth/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "../screens/auth/ResetPasswordScreen";
 import { PatientDashboardScreen } from "../screens/patient/PatientDashboardScreen";
-
-const Stack = createNativeStackNavigator();
+import type { RootStackParamList } from "../types/navigation";
+import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator = () => {
   return (
@@ -22,13 +23,27 @@ export const AppNavigator = () => {
         }}
       >
         <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+
         <Stack.Screen name="Login" component={LoginScreen} />
+
         <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+
         <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
-        <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+
+        <Stack.Screen
+          name="EmailVerification"
+          component={EmailVerificationScreen}
+        />
+
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-        <Stack.Screen name="PatientDashboard" component={PatientDashboardScreen} />
+
+        <Stack.Screen
+          name="PatientDashboard"
+          component={PatientDashboardScreen}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

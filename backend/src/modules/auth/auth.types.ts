@@ -1,10 +1,19 @@
-export type PublicRegisterRole = "PATIENT" | "DOCTOR" | "CAREGIVER" | "PHARMACY";
+export type PublicRegisterRole =
+  | "PATIENT"
+  | "DOCTOR"
+  | "CAREGIVER"
+  | "PHARMACY";
 
 export type RegisterInput = {
   fullName: string;
   email: string;
   password: string;
   role: PublicRegisterRole;
+
+  phoneNumber?: string;
+  dateOfBirth?: string;
+  medicalConditions?: string;
+  emergencyContact?: string;
 };
 
 export type LoginInput = {
@@ -19,6 +28,7 @@ export type ResendVerificationEmailInput = {
 export type VerifyEmailInput = {
   token: string;
 };
+
 export type ForgotPasswordInput = {
   email: string;
 };

@@ -22,6 +22,75 @@ import type {
   VerifyEmailInput,
 } from "./auth.types.js";
 
+const parseDateOfBirth = (dateOfBirth: string) => {
+  const parts = dateOfBirth.split("/");
+
+  if (parts.length !== 3) {
+    throw new AppError("Date of birth must be in DD/MM/YYYY format", 400);
+  }
+
+  const dayText = parts[0];
+  const monthText = parts[1];
+  const yearText = parts[2];
+
+  if (!dayText || !monthText || !yearText) {
+    throw new AppError("Date of birth must be in DD/MM/YYYY format", 400);
+  }
+
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year)
+  ) {
+    throw new AppError("Date of birth must contain valid numbers", 400);
+  }
+
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+  const isInvalidDate =
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day;
+
+  if (isInvalidDate) {
+    throw new AppError("Please enter a valid date of birth", 400);
+  }
+
+  return parsedDate;
+};
+
+const getPatientProfileData = (data: RegisterInput) => {
+  if (data.role !== "PATIENT") {
+    return undefined;
+  }
+
+  if (!data.phoneNumber) {
+    throw new AppError("Phone number is required for patient registration", 400);
+  }
+
+  if (!data.dateOfBirth) {
+    throw new AppError("Date of birth is required for patient registration", 400);
+  }
+
+  if (!data.emergencyContact) {
+    throw new AppError(
+      "Emergency contact is required for patient registration",
+      400
+    );
+  }
+
+  return {
+    phoneNumber: data.phoneNumber.trim(),
+    dateOfBirth: parseDateOfBirth(data.dateOfBirth.trim()),
+    medicalConditions: data.medicalConditions?.trim() || null,
+    emergencyContact: data.emergencyContact.trim(),
+  };
+};
+
 export const authService = {
   async register(data: RegisterInput) {
     const existingUser = await prisma.user.findUnique({
@@ -43,6 +112,8 @@ export const authService = {
 
     const { token, expiresAt } = createEmailVerificationToken();
 
+    const patientProfileData = getPatientProfileData(data);
+
     const user = await prisma.user.create({
       data: {
         fullName: data.fullName,
@@ -52,6 +123,14 @@ export const authService = {
         accountStatus,
         emailVerificationToken: token,
         emailVerificationTokenExpiresAt: expiresAt,
+
+        ...(patientProfileData
+          ? {
+              patientProfile: {
+                create: patientProfileData,
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -61,6 +140,7 @@ export const authService = {
         accountStatus: true,
         isEmailVerified: true,
         createdAt: true,
+        patientProfile: true,
       },
     });
 

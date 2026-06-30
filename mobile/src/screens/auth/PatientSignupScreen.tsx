@@ -9,39 +9,48 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
 import { colors } from "../../constants/colors";
+import type { RootStackParamList } from "../../types/navigation";
 
-type SignupFormValues = {
+type PatientSignupFormValues = {
   fullName: string;
   email: string;
+  phoneNumber: string;
   password: string;
-  confirmPassword: string;
+  dateOfBirth: string;
+  medicalConditions: string;
+  emergencyContact: string;
 };
 
-type Props = {
-  navigation: any;
-};
+type PatientSignupScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  "PatientSignup"
+>;
 
-export const PatientSignupScreen = ({ navigation }: Props) => {
+export const PatientSignupScreen = ({
+  navigation,
+}: PatientSignupScreenProps) => {
   const {
     control,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
-  } = useForm<SignupFormValues>({
+  } = useForm<PatientSignupFormValues>({
     defaultValues: {
       fullName: "",
       email: "",
+      phoneNumber: "",
       password: "",
-      confirmPassword: "",
+      dateOfBirth: "",
+      medicalConditions: "",
+      emergencyContact: "",
     },
   });
 
-  const passwordValue = watch("password");
-
-  const onSubmit = async (formData: SignupFormValues) => {
+  const onSubmit = async (formData: PatientSignupFormValues) => {
     try {
       const registerResponse = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
@@ -49,10 +58,15 @@ export const PatientSignupScreen = ({ navigation }: Props) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim().toLowerCase(),
-          password: formData.password,
-          role: "PATIENT",
+    fullName: formData.fullName.trim(),
+  email: formData.email.trim().toLowerCase(),
+  password: formData.password,
+  role: "PATIENT",
+
+  phoneNumber: formData.phoneNumber.trim(),
+  dateOfBirth: formData.dateOfBirth.trim(),
+  medicalConditions: formData.medicalConditions.trim(),
+  emergencyContact: formData.emergencyContact.trim(),
         }),
       });
 
@@ -75,141 +89,242 @@ export const PatientSignupScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.title}>Patient Sign Up</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backIconButton}
+            onPress={() => navigation.goBack()}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
 
-      <Text style={styles.subtitle}>
-        Create your CareMate+ patient account to continue.
-      </Text>
+          <View>
+            <Text style={styles.headerTitle}>Patient Signup</Text>
+            <Text style={styles.headerSubtitle}>Create your patient account</Text>
+          </View>
+        </View>
 
-      <View style={styles.formCard}>
-        <Text style={styles.label}>Full Name</Text>
-        <Controller
-          control={control}
-          name="fullName"
-          rules={{
-            required: "Full name is required.",
-            minLength: {
-              value: 2,
-              message: "Full name must be at least 2 characters.",
-            },
-          }}
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextInput
-              placeholder="Enter your full name"
-              placeholderTextColor={colors.mutedText}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              style={[
-                styles.input,
-                errors.fullName ? styles.inputError : undefined,
-              ]}
-            />
-          )}
-        />
-        {errors.fullName ? (
-          <Text style={styles.errorText}>{errors.fullName.message}</Text>
-        ) : null}
+        <View style={styles.statusCard}>
+          <View style={styles.statusIconCircle}>
+            <Text style={styles.statusIcon}>✓</Text>
+          </View>
 
-        <Text style={styles.label}>Email</Text>
-        <Controller
-          control={control}
-          name="email"
-          rules={{
-            required: "Email is required.",
-            pattern: {
-              value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-              message: "Please enter a valid email address.",
-            },
-          }}
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextInput
-              placeholder="Enter your email"
-              placeholderTextColor={colors.mutedText}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              style={[
-                styles.input,
-                errors.email ? styles.inputError : undefined,
-              ]}
-            />
-          )}
-        />
-        {errors.email ? (
-          <Text style={styles.errorText}>{errors.email.message}</Text>
-        ) : null}
-
-        <Text style={styles.label}>Password</Text>
-        <Controller
-          control={control}
-          name="password"
-          rules={{
-            required: "Password is required.",
-            minLength: {
-              value: 8,
-              message: "Password must be at least 8 characters.",
-            },
-          }}
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextInput
-              placeholder="Create a password"
-              placeholderTextColor={colors.mutedText}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              secureTextEntry
-              style={[
-                styles.input,
-                errors.password ? styles.inputError : undefined,
-              ]}
-            />
-          )}
-        />
-        {errors.password ? (
-          <Text style={styles.errorText}>{errors.password.message}</Text>
-        ) : null}
-
-        <Text style={styles.label}>Confirm Password</Text>
-        <Controller
-          control={control}
-          name="confirmPassword"
-          rules={{
-            required: "Please confirm your password.",
-            validate: (value) =>
-              value === passwordValue || "Passwords do not match.",
-          }}
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextInput
-              placeholder="Confirm your password"
-              placeholderTextColor={colors.mutedText}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              secureTextEntry
-              style={[
-                styles.input,
-                errors.confirmPassword ? styles.inputError : undefined,
-              ]}
-            />
-          )}
-        />
-        {errors.confirmPassword ? (
-          <Text style={styles.errorText}>
-            {errors.confirmPassword.message}
+          <Text style={styles.statusText}>
+            Account status: <Text style={styles.statusActive}>Active</Text>
           </Text>
-        ) : null}
+        </View>
+
+        <View style={styles.formCard}>
+          <Text style={styles.label}>Full name</Text>
+          <Controller
+            control={control}
+            name="fullName"
+            rules={{
+              required: "Full name is required.",
+              minLength: {
+                value: 2,
+                message: "Full name must be at least 2 characters.",
+              },
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="Enter your full name"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                style={[
+                  styles.input,
+                  errors.fullName ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.fullName ? (
+            <Text style={styles.errorText}>{errors.fullName.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>Email</Text>
+          <Controller
+            control={control}
+            name="email"
+            rules={{
+              required: "Email is required.",
+              pattern: {
+                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                message: "Please enter a valid email address.",
+              },
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="you@example.com"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={[
+                  styles.input,
+                  errors.email ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.email ? (
+            <Text style={styles.errorText}>{errors.email.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>Phone number</Text>
+          <Controller
+            control={control}
+            name="phoneNumber"
+            rules={{
+              required: "Phone number is required.",
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="+44 7000 000000"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                keyboardType="phone-pad"
+                style={[
+                  styles.input,
+                  errors.phoneNumber ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.phoneNumber ? (
+            <Text style={styles.errorText}>{errors.phoneNumber.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>Password</Text>
+          <Controller
+            control={control}
+            name="password"
+            rules={{
+              required: "Password is required.",
+              minLength: {
+                value: 8,
+                message: "Password must be at least 8 characters.",
+              },
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="Create a secure password"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                secureTextEntry
+                style={[
+                  styles.input,
+                  errors.password ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.password ? (
+            <Text style={styles.errorText}>{errors.password.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>Date of birth</Text>
+          <Controller
+            control={control}
+            name="dateOfBirth"
+            rules={{
+              required: "Date of birth is required.",
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="dd/mm/yyyy"
+                placeholderTextColor="#0F172A"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                keyboardType="numbers-and-punctuation"
+                style={[
+                  styles.input,
+                  errors.dateOfBirth ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.dateOfBirth ? (
+            <Text style={styles.errorText}>{errors.dateOfBirth.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>
+            Medical conditions <Text style={styles.optionalText}>(optional)</Text>
+          </Text>
+          <Controller
+            control={control}
+            name="medicalConditions"
+            render={({ field }) => (
+              <TextInput
+                placeholder="List any medical conditions"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                multiline
+                textAlignVertical="top"
+                style={styles.textArea}
+              />
+            )}
+          />
+
+          <Text style={styles.label}>Emergency contact</Text>
+          <Controller
+            control={control}
+            name="emergencyContact"
+            rules={{
+              required: "Emergency contact is required.",
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="Name and phone number"
+                placeholderTextColor="#8A94A6"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                style={[
+                  styles.input,
+                  errors.emergencyContact ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+          {errors.emergencyContact ? (
+            <Text style={styles.errorText}>
+              {errors.emergencyContact.message}
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.infoCard}>
+          <View style={styles.infoIconCircle}>
+            <Text style={styles.infoIcon}>i</Text>
+          </View>
+
+          <Text style={styles.infoText}>
+            Patients can access the dashboard after email verification.
+          </Text>
+        </View>
 
         <TouchableOpacity
           style={[
-            styles.signupButton,
+            styles.createButton,
             isSubmitting ? styles.disabledButton : undefined,
           ]}
           onPress={handleSubmit(onSubmit)}
@@ -218,95 +333,237 @@ export const PatientSignupScreen = ({ navigation }: Props) => {
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.signupButtonText}>Create Patient Account</Text>
+            <Text style={styles.createButtonText}>Create Patient Account</Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Login")}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.linkText}>Already have an account? Login</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>
+            Already have an account?{" "}
+            <Text
+              style={styles.loginLink}
+              onPress={() => navigation.navigate("Login")}
+            >
+              Login
+            </Text>
+          </Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#EEF5FC",
+  },
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#EEF5FC",
   },
   container: {
-    paddingHorizontal: 24,
-    paddingTop: 70,
-    paddingBottom: 40,
+    paddingBottom: 34,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: colors.text,
+  header: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 24,
+    paddingTop: 56,
+    paddingBottom: 66,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  backIcon: {
+    color: "#FFFFFF",
+    fontSize: 32,
+    fontWeight: "400",
+  },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 27,
+    fontWeight: "900",
     marginBottom: 8,
   },
-  subtitle: {
+  headerSubtitle: {
+    color: "#EAF2FF",
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  statusCard: {
+    marginHorizontal: 30,
+    marginTop: -34,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: "#DDE7F3",
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#0F172A",
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  statusIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#10B981",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  statusIcon: {
+    color: "#10B981",
     fontSize: 15,
-    color: colors.mutedText,
-    lineHeight: 22,
-    marginBottom: 24,
+    fontWeight: "900",
+  },
+  statusText: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  statusActive: {
+    color: "#10B981",
+    fontWeight: "900",
   },
   formCard: {
-    backgroundColor: colors.card,
+    marginHorizontal: 30,
+    marginTop: 22,
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    padding: 20,
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#DDE7F3",
+    shadowColor: "#0F172A",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
   label: {
+    color: "#60728E",
     fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 8,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  optionalText: {
+    color: "#94A3B8",
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderColor: "#DDE7F3",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    color: colors.text,
-    marginBottom: 8,
+    color: "#0F172A",
     backgroundColor: "#FFFFFF",
+    marginBottom: 20,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: "#DDE7F3",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    minHeight: 100,
+    fontSize: 16,
+    color: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 28,
   },
   inputError: {
     borderColor: colors.danger,
   },
   errorText: {
     color: colors.danger,
-    fontSize: 13,
-    marginBottom: 12,
+    fontSize: 12,
+    marginTop: -14,
+    marginBottom: 14,
   },
-  signupButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    paddingVertical: 15,
+  infoCard: {
+    marginHorizontal: 30,
+    marginTop: 22,
+    backgroundColor: "#EAF4FF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#CFE3FF",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  infoIconCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#2563EB",
     alignItems: "center",
-    marginTop: 10,
-    marginBottom: 18,
+    justifyContent: "center",
+    marginRight: 12,
+    marginTop: 1,
+  },
+  infoIcon: {
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  infoText: {
+    flex: 1,
+    color: "#1D4ED8",
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "600",
+  },
+  createButton: {
+    marginHorizontal: 30,
+    marginTop: 22,
+    backgroundColor: "#2563EB",
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: "center",
   },
   disabledButton: {
     opacity: 0.7,
   },
-  signupButtonText: {
+  createButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
   },
-  linkText: {
-    color: colors.primary,
+  loginContainer: {
+    alignItems: "center",
+    marginTop: 24,
+  },
+  loginText: {
+    color: "#60728E",
     fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
+    fontWeight: "600",
+  },
+  loginLink: {
+    color: "#2563EB",
+    fontSize: 17,
+    fontWeight: "900",
   },
 });
