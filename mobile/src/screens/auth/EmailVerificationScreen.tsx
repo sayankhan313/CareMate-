@@ -2,216 +2,346 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
 import { colors } from "../../constants/colors";
+import type { RootStackParamList } from "../../types/navigation";
 
-type Props = {
-  navigation: any;
-  route: any;
-};
+type EmailVerificationScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  "EmailVerification"
+>;
 
-const extractTokenFromLink = (link?: string) => {
-  if (!link) {
-    return "";
-  }
+export const EmailVerificationScreen = ({
+  navigation,
+  route,
+}: EmailVerificationScreenProps) => {
+  const { email } = route.params;
 
-  const match = link.match(/[?&]token=([^&]+)/);
+  const [isResending, setIsResending] = useState(false);
 
-  return match?.[1] || "";
-};
+  const handleGoToLogin = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+    });
+  };
 
-export const EmailVerificationScreen = ({ navigation, route }: Props) => {
-  const email = route.params?.email || "";
-  const verificationLink = route.params?.verificationLink;
-
-  const [token, setToken] = useState(extractTokenFromLink(verificationLink));
-  const [loading, setLoading] = useState(false);
-
-  const handleVerifyEmail = async () => {
-    if (!token.trim()) {
-      Alert.alert("Missing token", "Please enter the verification token.");
-      return;
-    }
-
+  const handleResendEmail = async () => {
     try {
-      setLoading(true);
+      setIsResending(true);
 
-      const verifyResponse = await fetch(
-        `${API_BASE_URL}/auth/verify-email?token=${encodeURIComponent(
-          token.trim()
-        )}`,
+      const response = await fetch(
+        `${API_BASE_URL}/auth/resend-verification-email`,
         {
-          method: "GET",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+          }),
         }
       );
 
-      const verifyJson = await verifyResponse.json();
+      const json = await response.json();
 
-      if (!verifyResponse.ok || !verifyJson.success) {
-        throw new Error(verifyJson.message || "Email verification failed.");
+      if (!response.ok || !json.success) {
+        throw new Error(json.message || "Could not resend verification email.");
       }
 
-      Alert.alert("Email verified", "Your email has been verified successfully.");
-
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: "Login",
-          },
-        ],
-      });
+      Alert.alert(
+        "Verification email sent",
+        "Please check your inbox for the new verification link."
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong.";
 
-      Alert.alert("Verification failed", message);
+      Alert.alert("Resend failed", message);
     } finally {
-      setLoading(false);
+      setIsResending(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Verify your email</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconText}>✉</Text>
+          </View>
 
-      <Text style={styles.subtitle}>
-        A verification token has been created for {email || "your account"}.
-      </Text>
+          <Text style={styles.appName}>CareMate+</Text>
 
-      {verificationLink ? (
-        <View style={styles.devBox}>
-          <Text style={styles.devTitle}>Development Verification Link</Text>
-          <Text style={styles.devText}>{verificationLink}</Text>
+          <Text style={styles.title}>Verify your email</Text>
+
+          <Text style={styles.subtitle}>
+            We have sent a verification link to your email address.
+          </Text>
         </View>
-      ) : null}
 
-      <View style={styles.formCard}>
-        <Text style={styles.label}>Verification Token</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>Verification email sent to</Text>
 
-        <TextInput
-          placeholder="Paste verification token"
-          placeholderTextColor={colors.mutedText}
-          value={token}
-          onChangeText={setToken}
-          autoCapitalize="none"
-          style={styles.input}
-        />
+          <View style={styles.emailBox}>
+            <Text style={styles.emailText}>{email}</Text>
+          </View>
+
+          <Text style={styles.instructions}>
+            Open your email inbox and click the CareMate+ verification link.
+            After your email is verified, return to the app and login.
+          </Text>
+
+          <View style={styles.stepsBox}>
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>1</Text>
+              </View>
+              <Text style={styles.stepText}>Check your email inbox.</Text>
+            </View>
+
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>2</Text>
+              </View>
+              <Text style={styles.stepText}>
+                Open the CareMate+ verification link.
+              </Text>
+            </View>
+
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>3</Text>
+              </View>
+              <Text style={styles.stepText}>Return here and login.</Text>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleGoToLogin}
+          disabled={isResending}
+        >
+          <Text style={styles.primaryButtonText}>
+            I have verified, go to login
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[
-            styles.verifyButton,
-            loading ? styles.disabledButton : undefined,
+            styles.secondaryButton,
+            isResending ? styles.disabledButton : undefined,
           ]}
-          onPress={handleVerifyEmail}
-          disabled={loading}
+          onPress={handleResendEmail}
+          disabled={isResending}
         >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
+          {isResending ? (
+            <ActivityIndicator color="#2563EB" />
           ) : (
-            <Text style={styles.verifyButtonText}>Verify Email</Text>
+            <Text style={styles.secondaryButtonText}>
+              Resend verification email
+            </Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => navigation.navigate("Login")}
-          disabled={loading}
+          style={styles.backButton}
+          onPress={handleGoToLogin}
+          disabled={isResending}
         >
-          <Text style={styles.linkText}>Back to login</Text>
+          <Text style={styles.backButtonText}>Back to login</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#F6FAFF",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "#F6FAFF",
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 70,
+    paddingTop: 40,
+    paddingBottom: 34,
+    justifyContent: "center",
   },
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: colors.mutedText,
-    lineHeight: 22,
+  header: {
+    alignItems: "center",
     marginBottom: 24,
   },
-  devBox: {
-    backgroundColor: "#FFF7ED",
-    borderRadius: 16,
-    padding: 14,
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.warning,
-    marginBottom: 18,
+    borderColor: "#BFDBFE",
   },
-  devTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
+  iconText: {
+    color: "#2563EB",
+    fontSize: 34,
+    fontWeight: "900",
+  },
+  appName: {
+    color: "#2563EB",
+    fontSize: 20,
+    fontWeight: "900",
     marginBottom: 8,
   },
-  devText: {
-    fontSize: 12,
-    color: colors.mutedText,
-    lineHeight: 18,
+  title: {
+    color: "#0F172A",
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 8,
+    textAlign: "center",
   },
-  formCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 20,
+  subtitle: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 21,
+    paddingHorizontal: 10,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#E2E8F0",
+    marginBottom: 18,
+    shadowColor: "#0F172A",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "800",
     marginBottom: 8,
+    textAlign: "center",
   },
-  input: {
+  emailBox: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    color: colors.text,
+    borderColor: "#DBEAFE",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     marginBottom: 16,
-    backgroundColor: "#FFFFFF",
   },
-  verifyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
+  emailText: {
+    color: "#1D4ED8",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  instructions: {
+    color: "#64748B",
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 18,
+  },
+  stepsBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  stepNumberText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  stepText: {
+    flex: 1,
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  primaryButton: {
+    backgroundColor: "#2563EB",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  secondaryButton: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     paddingVertical: 15,
     alignItems: "center",
-    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    marginBottom: 10,
+  },
+  secondaryButtonText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "900",
   },
   disabledButton: {
     opacity: 0.7,
   },
-  verifyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+  backButton: {
+    alignItems: "center",
+    paddingVertical: 8,
   },
-  linkText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
+  backButtonText: {
+    color: colors.mutedText,
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

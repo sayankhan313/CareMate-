@@ -10,6 +10,15 @@ import {
   verifyEmailSchema,
 } from "./auth.validation.js";
 
+const escapeHtml = (value: string) => {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+};
+
 const getVerificationSuccessHtml = (message: string) => {
   return `
     <!DOCTYPE html>
@@ -92,7 +101,9 @@ const getVerificationSuccessHtml = (message: string) => {
           <div class="brand">CareMate+</div>
           <div class="icon">✓</div>
           <h1>Email verified</h1>
-          <p>${message}. You can now return to the CareMate+ app and login.</p>
+          <p>${escapeHtml(
+            message
+          )}. You can now return to the CareMate+ app and login.</p>
           <div class="note">Please go back to the app and sign in.</div>
         </div>
       </body>
@@ -171,8 +182,74 @@ const getVerificationErrorHtml = (title: string, message: string) => {
         <div class="card">
           <div class="brand">CareMate+</div>
           <div class="icon">!</div>
-          <h1>${title}</h1>
-          <p>${message}</p>
+          <h1>${escapeHtml(title)}</h1>
+          <p>${escapeHtml(message)}</p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+const getResetPasswordSuccessHtml = (message: string) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Password Reset Successful</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </head>
+
+      <body style="font-family: Arial, sans-serif; background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px;">
+        <div style="background: white; max-width: 420px; width: 100%; padding: 32px 24px; border-radius: 22px; text-align: center; box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);">
+          <div style="color: #2563EB; font-size: 21px; font-weight: 900; margin-bottom: 18px;">
+            CareMate+
+          </div>
+
+          <div style="width: 78px; height: 78px; border-radius: 39px; background: #DCFCE7; color: #16A34A; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; margin: 0 auto 18px;">
+            ✓
+          </div>
+
+          <h2 style="color: #0F172A; margin-bottom: 10px;">
+            Password reset successful
+          </h2>
+
+          <p style="color: #64748B; line-height: 1.5;">
+            ${escapeHtml(
+              message
+            )}. You can now return to the CareMate+ app and login with your new password.
+          </p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+const getResetPasswordErrorHtml = (message: string) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Password Reset Failed</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </head>
+
+      <body style="font-family: Arial, sans-serif; background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px;">
+        <div style="background: white; max-width: 420px; width: 100%; padding: 32px 24px; border-radius: 22px; text-align: center; box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);">
+          <div style="color: #2563EB; font-size: 21px; font-weight: 900; margin-bottom: 18px;">
+            CareMate+
+          </div>
+
+          <div style="width: 78px; height: 78px; border-radius: 39px; background: #FEE2E2; color: #DC2626; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; margin: 0 auto 18px;">
+            !
+          </div>
+
+          <h2 style="color: #0F172A; margin-bottom: 10px;">
+            Password reset failed
+          </h2>
+
+          <p style="color: #64748B; line-height: 1.5;">
+            ${escapeHtml(message)}
+          </p>
         </div>
       </body>
     </html>
@@ -295,7 +372,7 @@ export const authController = {
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           </head>
 
-          <body style="font-family: Arial, sans-serif; background: #F4F8FF; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px;">
+          <body style="font-family: Arial, sans-serif; background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px;">
             <div style="background: white; max-width: 420px; width: 100%; padding: 28px; border-radius: 18px; text-align: center; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);">
               <h2 style="color: #0F172A;">Invalid Reset Link</h2>
               <p style="color: #64748B;">Password reset token is missing.</p>
@@ -315,90 +392,88 @@ export const authController = {
           <style>
             body {
               font-family: Arial, sans-serif;
-              background: #F4F8FF;
+              background: linear-gradient(180deg, #ECF7FF 0%, #D6EDFC 100%);
               display: flex;
               justify-content: center;
               align-items: center;
               min-height: 100vh;
               margin: 0;
               padding: 20px;
+              box-sizing: border-box;
             }
 
             .card {
               background: #FFFFFF;
               width: 100%;
-              max-width: 420px;
-              padding: 28px;
-              border-radius: 18px;
-              box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+              max-width: 430px;
+              padding: 30px;
+              border-radius: 22px;
+              box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);
             }
 
             .logo {
-              width: 70px;
-              height: 70px;
-              border-radius: 35px;
+              width: 76px;
+              height: 76px;
+              border-radius: 38px;
               background: #2563EB;
               color: #FFFFFF;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 26px;
-              font-weight: 800;
+              font-size: 28px;
+              font-weight: 900;
               margin: 0 auto 18px;
             }
 
             h2 {
               color: #0F172A;
               text-align: center;
-              margin-bottom: 8px;
+              margin: 0 0 10px;
+              font-size: 26px;
             }
 
             p {
               color: #64748B;
               text-align: center;
               line-height: 1.5;
+              margin: 0 0 22px;
+              font-size: 15px;
             }
 
             label {
               display: block;
               margin-top: 14px;
               color: #0F172A;
-              font-weight: 700;
+              font-weight: 800;
               font-size: 14px;
             }
 
             input {
               width: 100%;
-              padding: 13px;
+              padding: 14px;
               margin-top: 8px;
-              border-radius: 12px;
+              border-radius: 14px;
               border: 1px solid #DDE7F3;
               font-size: 15px;
               box-sizing: border-box;
+              outline: none;
+            }
+
+            input:focus {
+              border-color: #2563EB;
             }
 
             button {
               width: 100%;
-              margin-top: 20px;
-              padding: 14px;
+              margin-top: 22px;
+              padding: 15px;
               border: none;
-              border-radius: 12px;
+              border-radius: 14px;
               background: #2563EB;
               color: #FFFFFF;
               font-size: 16px;
-              font-weight: bold;
+              font-weight: 900;
               cursor: pointer;
-            }
-
-            button:disabled {
-              opacity: 0.7;
-              cursor: not-allowed;
-            }
-
-            .message {
-              margin-top: 16px;
-              font-weight: bold;
-              text-align: center;
             }
           </style>
         </head>
@@ -409,106 +484,68 @@ export const authController = {
 
             <h2>Reset your CareMate+ password</h2>
 
-            <p>Please enter your new password below.</p>
+            <p>Please enter and confirm your new password below.</p>
 
-            <label for="newPassword">New Password</label>
-            <input
-              id="newPassword"
-              type="password"
-              placeholder="Enter new password"
-            />
+            <form method="POST" action="/api/v1/auth/reset-password">
+              <input type="hidden" name="token" value="${escapeHtml(token)}" />
 
-            <label for="confirmPassword">Confirm Password</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              placeholder="Confirm new password"
-            />
+              <label for="newPassword">New Password</label>
+              <input
+                id="newPassword"
+                name="newPassword"
+                type="password"
+                placeholder="Enter new password"
+                autocomplete="new-password"
+                required
+              />
 
-            <button id="resetButton" onclick="resetPassword()">
-              Reset Password
-            </button>
+              <label for="confirmPassword">Confirm Password</label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                placeholder="Confirm new password"
+                autocomplete="new-password"
+                required
+              />
 
-            <p id="message" class="message"></p>
+              <button type="submit">Reset Password</button>
+            </form>
           </div>
-
-          <script>
-            async function resetPassword() {
-              const newPassword = document.getElementById("newPassword").value;
-              const confirmPassword = document.getElementById("confirmPassword").value;
-              const message = document.getElementById("message");
-              const resetButton = document.getElementById("resetButton");
-
-              message.innerText = "";
-
-              if (!newPassword || !confirmPassword) {
-                message.style.color = "#DC2626";
-                message.innerText = "Please enter and confirm your new password.";
-                return;
-              }
-
-              if (newPassword.length < 8) {
-                message.style.color = "#DC2626";
-                message.innerText = "Password must be at least 8 characters.";
-                return;
-              }
-
-              if (newPassword !== confirmPassword) {
-                message.style.color = "#DC2626";
-                message.innerText = "Passwords do not match.";
-                return;
-              }
-
-              try {
-                resetButton.disabled = true;
-                resetButton.innerText = "Resetting...";
-
-                const response = await fetch("/api/v1/auth/reset-password", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({
-                    token: "${token}",
-                    newPassword: newPassword,
-                    confirmPassword: confirmPassword
-                  })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok || !data.success) {
-                  throw new Error(data.message || "Password reset failed.");
-                }
-
-                message.style.color = "#16A34A";
-                message.innerText =
-                  "Password reset successfully. You can now login in the CareMate+ app.";
-
-                document.getElementById("newPassword").value = "";
-                document.getElementById("confirmPassword").value = "";
-              } catch (error) {
-                message.style.color = "#DC2626";
-                message.innerText = error.message || "Something went wrong.";
-              } finally {
-                resetButton.disabled = false;
-                resetButton.innerText = "Reset Password";
-              }
-            }
-          </script>
         </body>
       </html>
     `);
   },
 
-  async resetPassword(req: Request, res: Response) {
-    const validatedData = resetPasswordSchema.parse(req.body);
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    const acceptsHtml =
+      req.headers.accept?.includes("text/html") ||
+      req.headers["content-type"]?.includes("application/x-www-form-urlencoded");
 
-    const result = await authService.resetPassword(validatedData);
+    try {
+      const validatedData = resetPasswordSchema.parse(req.body);
 
-    return res.status(200).json({
-      success: true,
-      message: result.message,
-    });
+      const result = await authService.resetPassword(validatedData);
+
+      if (acceptsHtml) {
+        return res
+          .status(200)
+          .send(getResetPasswordSuccessHtml(result.message));
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      if (acceptsHtml) {
+        const message =
+          error instanceof Error ? error.message : "Password reset failed.";
+
+        return res.status(400).send(getResetPasswordErrorHtml(message));
+      }
+
+      return next(error);
+    }
   },
 };

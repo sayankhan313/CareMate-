@@ -78,7 +78,7 @@ export const PatientSignupScreen = ({
 
       navigation.navigate("EmailVerification", {
         email: formData.email.trim().toLowerCase(),
-        verificationLink: registerJson.data?.verificationLink,
+        
       });
     } catch (error) {
       const message =

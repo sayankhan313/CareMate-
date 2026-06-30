@@ -2,25 +2,32 @@ import { Controller, useForm } from "react-hook-form";
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
 import { colors } from "../../constants/colors";
+import type { RootStackParamList } from "../../types/navigation";
 
 type ForgotPasswordFormValues = {
   email: string;
 };
 
-type Props = {
-  navigation: any;
-};
+type ForgotPasswordScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  "ForgotPassword"
+>;
 
-export const ForgotPasswordScreen = ({ navigation }: Props) => {
+export const ForgotPasswordScreen = ({
+  navigation,
+}: ForgotPasswordScreenProps) => {
   const {
     control,
     handleSubmit,
@@ -31,9 +38,16 @@ export const ForgotPasswordScreen = ({ navigation }: Props) => {
     },
   });
 
+  const handleBackToLogin = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+    });
+  };
+
   const onSubmit = async (formData: ForgotPasswordFormValues) => {
     try {
-      const forgotResponse = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -43,167 +57,310 @@ export const ForgotPasswordScreen = ({ navigation }: Props) => {
         }),
       });
 
-      const forgotJson = await forgotResponse.json();
+      const json = await response.json();
 
-      if (!forgotResponse.ok || !forgotJson.success) {
-        throw new Error(forgotJson.message || "Forgot password request failed.");
+      if (!response.ok || !json.success) {
+        throw new Error(json.message || "Could not send password reset email.");
       }
 
       Alert.alert(
-        "Reset request created",
-        forgotJson.message || "Password reset request created."
+        "Reset link sent",
+        "If an account exists with this email, a password reset link has been sent. Please check your inbox.",
+        [
+          {
+            text: "Back to Login",
+            onPress: handleBackToLogin,
+          },
+        ]
       );
-
-      navigation.navigate("ResetPassword", {
-        resetLink: forgotJson.data?.resetLink,
-      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong.";
 
-      Alert.alert("Request failed", message);
+      Alert.alert("Reset email failed", message);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Forgot Password</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backIconButton}
+            onPress={handleBackToLogin}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
 
-      <Text style={styles.subtitle}>
-        Enter your registered email address to create a password reset request.
-      </Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.appName}>CareMate+</Text>
 
-      <View style={styles.formCard}>
-        <Text style={styles.label}>Email</Text>
+            <Text style={styles.title}>Forgot password?</Text>
 
-        <Controller
-          control={control}
-          name="email"
-          rules={{
-            required: "Email is required.",
-            pattern: {
-              value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-              message: "Please enter a valid email address.",
-            },
-          }}
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextInput
-              placeholder="Enter your email"
-              placeholderTextColor={colors.mutedText}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              style={[
-                styles.input,
-                errors.email ? styles.inputError : undefined,
-              ]}
-            />
-          )}
-        />
+            <Text style={styles.subtitle}>
+              Enter your email and we will send a secure reset link.
+            </Text>
+          </View>
+        </View>
 
-        {errors.email ? (
-          <Text style={styles.errorText}>{errors.email.message}</Text>
-        ) : null}
+        <View style={styles.iconCard}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconText}>🔐</Text>
+          </View>
+
+          <Text style={styles.iconTitle}>Secure password recovery</Text>
+
+          <Text style={styles.iconSubtitle}>
+            For your safety, password reset is completed through your email
+            reset link.
+          </Text>
+        </View>
+
+        <View style={styles.formCard}>
+          <Text style={styles.label}>Email address</Text>
+
+          <Controller
+            control={control}
+            name="email"
+            rules={{
+              required: "Email is required.",
+              pattern: {
+                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                message: "Please enter a valid email address.",
+              },
+            }}
+            render={({ field }) => (
+              <TextInput
+                placeholder="you@example.com"
+                placeholderTextColor="#94A3B8"
+                value={field.value}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={[
+                  styles.input,
+                  errors.email ? styles.inputError : undefined,
+                ]}
+              />
+            )}
+          />
+
+          {errors.email ? (
+            <Text style={styles.errorText}>{errors.email.message}</Text>
+          ) : null}
+
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              If this email exists in CareMate+, a reset link will be sent.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              isSubmitting ? styles.disabledButton : undefined,
+            ]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
-          style={[
-            styles.submitButton,
-            isSubmitting ? styles.disabledButton : undefined,
-          ]}
-          onPress={handleSubmit(onSubmit)}
+          style={styles.backToLoginButton}
+          onPress={handleBackToLogin}
           disabled={isSubmitting}
         >
-          {isSubmitting ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>Continue</Text>
-          )}
+          <Text style={styles.backToLoginText}>Back to login</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Login")}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.linkText}>Back to login</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#F6FAFF",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "#F6FAFF",
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 70,
+    paddingTop: 32,
+    paddingBottom: 34,
+    justifyContent: "center",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 26,
+  },
+  backIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  backIcon: {
+    color: "#2563EB",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  appName: {
+    color: "#2563EB",
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 6,
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: colors.text,
+    color: "#0F172A",
+    fontSize: 28,
+    fontWeight: "900",
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    color: colors.mutedText,
-    lineHeight: 22,
-    marginBottom: 24,
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 21,
+  },
+  iconCard: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    padding: 22,
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  iconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  iconText: {
+    fontSize: 34,
+  },
+  iconTitle: {
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  iconSubtitle: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 20,
+    textAlign: "center",
   },
   formCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#E2E8F0",
+    marginBottom: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "800",
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#E2E8F0",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontSize: 16,
-    color: colors.text,
-    marginBottom: 8,
+    fontSize: 14,
+    color: "#0F172A",
     backgroundColor: "#FFFFFF",
+    marginBottom: 8,
   },
   inputError: {
     borderColor: colors.danger,
   },
   errorText: {
     color: colors.danger,
-    fontSize: 13,
+    fontSize: 12,
     marginBottom: 12,
   },
-  submitButton: {
-    backgroundColor: colors.primary,
+  infoBox: {
+    backgroundColor: "#F8FAFC",
     borderRadius: 14,
-    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  infoText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  primaryButton: {
+    backgroundColor: "#2563EB",
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 18,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
   },
   disabledButton: {
     opacity: 0.7,
   },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+  backToLoginButton: {
+    alignItems: "center",
+    paddingVertical: 10,
   },
-  linkText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
+  backToLoginText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "900",
   },
 });

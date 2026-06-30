@@ -7,7 +7,7 @@ import { RoleSelectionScreen } from "../screens/auth/RoleSelectionScreen";
 import { PatientSignupScreen } from "../screens/auth/PatientSignupScreen";
 import { EmailVerificationScreen } from "../screens/auth/EmailVerificationScreen";
 import { ForgotPasswordScreen } from "../screens/auth/ForgotPasswordScreen";
-import { ResetPasswordScreen } from "../screens/auth/ResetPasswordScreen";
+
 import { PatientDashboardScreen } from "../screens/patient/PatientDashboardScreen";
 import type { RootStackParamList } from "../types/navigation";
 import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
@@ -38,7 +38,7 @@ export const AppNavigator = () => {
 
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
-        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      
 
         <Stack.Screen
           name="PatientDashboard"

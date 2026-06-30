@@ -9,7 +9,8 @@ export type User = {
 
 export type RootStackParamList = {
   Splash: undefined;
-    Welcome: undefined;
+
+  Welcome: undefined;
 
   Login: undefined;
 
@@ -19,10 +20,11 @@ export type RootStackParamList = {
 
   EmailVerification: {
     email: string;
-    verificationLink?: string;
   };
 
-  ForgotPassword: undefined;
+  ForgotPassword: {
+    email: string;
+  };
 
   ResetPassword: {
     resetLink?: string;

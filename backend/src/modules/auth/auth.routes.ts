@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, urlencoded } from "express";
 
 import { authController } from "./auth.controller.js";
 
@@ -19,6 +19,10 @@ router.post("/forgot-password", authController.forgotPassword);
 
 router.get("/reset-password", authController.renderResetPasswordPage);
 
-router.post("/reset-password", authController.resetPassword);
+router.post(
+  "/reset-password",
+  urlencoded({ extended: false }),
+  authController.resetPassword
+);
 
 export default router;
