@@ -76,7 +76,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         index: 0,
         routes: [
           {
-            name: "PatientDashboard",
+            name: "PatientTabs",
             params: {
               user: currentUserJson.data.user,
             },
@@ -92,7 +92,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.container}
@@ -199,15 +199,15 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
           ) : null}
 
           <TouchableOpacity
-            style={styles.forgotContainer}
+            style={styles.forgotButton}
             onPress={() => navigation.navigate("ForgotPassword")}
             disabled={isSubmitting}
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
+          <View style={styles.roleHint}>
+            <Text style={styles.roleHintText}>
               Your dashboard opens based on your verified role.
             </Text>
           </View>
@@ -219,6 +219,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting}
+            activeOpacity={0.85}
           >
             {isSubmitting ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -229,15 +230,14 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         </View>
 
         <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>
-            New to CareMate+?{" "}
-            <Text
-              style={styles.signupLink}
-              onPress={() => navigation.navigate("RoleSelection")}
-            >
-              Create account
-            </Text>
-          </Text>
+          <Text style={styles.signupText}>New to CareMate+?</Text>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate("RoleSelection")}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.signupLink}> Create account</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.securityCard}>
@@ -246,8 +246,8 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
           </View>
 
           <Text style={styles.securityText}>
-            Secure role-based access for patients, doctors, caregivers and
-            pharmacy users.
+            CareMate+ uses secure authentication and role-based access to
+            protect patient workflows.
           </Text>
         </View>
       </ScrollView>
@@ -258,80 +258,69 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F6FAFF",
+    backgroundColor: "#F4F8FF",
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F6FAFF",
+    backgroundColor: "#F4F8FF",
   },
   container: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 36,
+    paddingTop: 24,
+    paddingBottom: 32,
   },
   header: {
     alignItems: "center",
-    marginTop: 20,
-    marginBottom: 26,
+    marginBottom: 18,
   },
   logoCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
-    shadowColor: "#2563EB",
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 6,
   },
   logoIcon: {
     color: "#FFFFFF",
     fontSize: 34,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   appName: {
-    fontSize: 28,
-    fontWeight: "800",
     color: "#0F172A",
-    marginBottom: 4,
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 6,
   },
   title: {
-    fontSize: 22,
-    fontWeight: "800",
     color: "#0F172A",
-    marginBottom: 4,
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 13,
     color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
     textAlign: "center",
   },
   illustrationCard: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 22,
-    paddingVertical: 22,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
+    backgroundColor: "#EAF2FF",
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 18,
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "space-around",
   },
   featureItem: {
     alignItems: "center",
-    marginHorizontal: 12,
   },
   featureIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#DBEAFE",
     alignItems: "center",
     justifyContent: "center",
@@ -339,34 +328,26 @@ const styles = StyleSheet.create({
   },
   featureIcon: {
     color: "#2563EB",
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
   },
   featureLabel: {
-    fontSize: 10,
     color: "#64748B",
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "800",
   },
   formCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     marginBottom: 16,
-    shadowColor: "#0F172A",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    elevation: 3,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748B",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: "800",
     marginBottom: 8,
   },
   input: {
@@ -378,7 +359,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#0F172A",
     backgroundColor: "#FFFFFF",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   inputError: {
     borderColor: colors.danger,
@@ -386,36 +367,36 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.danger,
     fontSize: 12,
-    marginBottom: 12,
+    marginBottom: 10,
+    fontWeight: "600",
   },
-  forgotContainer: {
+  forgotButton: {
     alignSelf: "flex-end",
     paddingVertical: 4,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   forgotText: {
     color: "#2563EB",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
   },
-  infoBox: {
+  roleHint: {
     backgroundColor: "#EFF6FF",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginBottom: 14,
   },
-  infoText: {
-    color: "#1E40AF",
-    fontSize: 11,
+  roleHintText: {
+    color: "#1D4ED8",
+    fontSize: 12,
+    fontWeight: "700",
     textAlign: "center",
-    fontWeight: "600",
   },
   loginButton: {
     backgroundColor: "#2563EB",
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 15,
+    paddingVertical: 16,
     alignItems: "center",
   },
   disabledButton: {
@@ -423,10 +404,12 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
   },
   signupContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
   },

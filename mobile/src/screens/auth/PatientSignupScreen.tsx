@@ -58,15 +58,14 @@ export const PatientSignupScreen = ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-    fullName: formData.fullName.trim(),
-  email: formData.email.trim().toLowerCase(),
-  password: formData.password,
-  role: "PATIENT",
-
-  phoneNumber: formData.phoneNumber.trim(),
-  dateOfBirth: formData.dateOfBirth.trim(),
-  medicalConditions: formData.medicalConditions.trim(),
-  emergencyContact: formData.emergencyContact.trim(),
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          role: "PATIENT",
+          phoneNumber: formData.phoneNumber.trim(),
+          dateOfBirth: formData.dateOfBirth.trim(),
+          medicalConditions: formData.medicalConditions.trim(),
+          emergencyContact: formData.emergencyContact.trim(),
         }),
       });
 
@@ -78,7 +77,6 @@ export const PatientSignupScreen = ({
 
       navigation.navigate("EmailVerification", {
         email: formData.email.trim().toLowerCase(),
-        
       });
     } catch (error) {
       const message =
@@ -89,7 +87,7 @@ export const PatientSignupScreen = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.container}

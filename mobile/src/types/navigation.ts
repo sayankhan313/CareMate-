@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
 export type User = {
   id: string;
   fullName: string;
@@ -7,30 +9,43 @@ export type User = {
   isEmailVerified: boolean;
 };
 
+export type MedicineDraft = {
+  name: string;
+  dose: string;
+  instructions?: string;
+  frequency: string;
+  timeOfDay: string;
+  selectedTimes: string[];
+  startDate: string;
+  endDate?: string;
+  sendToDoctorForReview: boolean;
+};
+
+export type PatientTabParamList = {
+  Home: { user?: User } | undefined;
+  Medicines: undefined;
+  Vitals: undefined;
+  Consultations: undefined;
+  PatientOrders: undefined;
+};
+
 export type RootStackParamList = {
   Splash: undefined;
-
   Welcome: undefined;
-
   Login: undefined;
-
   RoleSelection: undefined;
-
   PatientSignup: undefined;
+  EmailVerification: { email: string };
+  ForgotPassword: undefined;
 
-  EmailVerification: {
-    email: string;
-  };
+  PatientTabs:
+    | (NavigatorScreenParams<PatientTabParamList> & {
+        user?: User;
+      })
+    | undefined;
 
-  ForgotPassword: {
-    email: string;
-  };
-
-  ResetPassword: {
-    resetLink?: string;
-  };
-
-  PatientDashboard: {
-    user: User;
+  AddMedicine: undefined;
+  ConfirmReminder: {
+    medicineDraft: MedicineDraft;
   };
 };

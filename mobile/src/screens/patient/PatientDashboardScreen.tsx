@@ -7,23 +7,39 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { CompositeScreenProps } from "@react-navigation/native";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from "@react-navigation/native-stack";
 
 import { colors } from "../../constants/colors";
 import { tokenStorage } from "../../services/tokenStorage";
+import type {
+  PatientTabParamList,
+  RootStackParamList,
+} from "../../types/navigation";
 
-type Props = {
-  navigation: any;
-  route: any;
-};
+type PatientDashboardScreenProps = CompositeScreenProps<
+  BottomTabScreenProps<PatientTabParamList, "Home">,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
-export const PatientDashboardScreen = ({ navigation, route }: Props) => {
+export const PatientDashboardScreen = ({
+  navigation,
+  route,
+}: PatientDashboardScreenProps) => {
   const user = route.params?.user;
 
   const handleLogout = async () => {
     try {
       await tokenStorage.removeToken();
 
-      navigation.reset({
+      const rootNavigation =
+        navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+
+      rootNavigation?.reset({
         index: 0,
         routes: [
           {
@@ -36,8 +52,12 @@ export const PatientDashboardScreen = ({ navigation, route }: Props) => {
     }
   };
 
+  const openMedicinesScreen = () => {
+    navigation.navigate("Medicines");
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.container}
@@ -95,16 +115,27 @@ export const PatientDashboardScreen = ({ navigation, route }: Props) => {
         </View>
 
         <View style={styles.nextCard}>
-          <Text style={styles.sectionTitle}>Next Module</Text>
+          <Text style={styles.sectionTitle}>Patient Features</Text>
 
           <Text style={styles.nextText}>
-            Patient features such as medication reminders, vitals, appointments,
-            emergency support and caregiver access will be connected after the
-            authentication flow is completed.
+            Medication reminders are now connected with the backend. You can
+            add medicines, review reminders, and track today's doses.
           </Text>
+
+          <TouchableOpacity
+            style={styles.medicineButton}
+            onPress={openMedicinesScreen}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.medicineButtonText}>Open Medicines</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.85}
+        >
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -124,7 +155,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
   headerCard: {
     backgroundColor: colors.primary,
@@ -198,6 +229,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.mutedText,
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  medicineButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  medicineButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
   },
   logoutButton: {
     backgroundColor: colors.danger,

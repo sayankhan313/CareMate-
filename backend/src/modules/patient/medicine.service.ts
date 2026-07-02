@@ -44,12 +44,33 @@ const parseDateTime = (dateTimeText: string) => {
   return parsedDate;
 };
 
-const getTodayRange = () => {
-  const start = new Date();
+const getStartOfDay = (date: Date) => {
+  const start = new Date(date);
+
   start.setHours(0, 0, 0, 0);
 
-  const end = new Date(start);
+  return start;
+};
+
+const getEndOfDay = (date: Date) => {
+  const end = getStartOfDay(date);
+
   end.setDate(end.getDate() + 1);
+
+  return end;
+};
+
+const addDays = (date: Date, days: number) => {
+  const nextDate = new Date(date);
+
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return nextDate;
+};
+
+const getUpcomingRange = () => {
+  const start = getStartOfDay(new Date());
+  const end = addDays(start, 7);
 
   return {
     start,
@@ -57,13 +78,42 @@ const getTodayRange = () => {
   };
 };
 
-const getScheduledDateTimeForToday = (timeOfDay: string) => {
+const getScheduledDateTimeForDate = (date: Date, timeOfDay: string) => {
   const [hourText, minuteText] = timeOfDay.split(":");
 
-  const scheduledFor = new Date();
+  const scheduledFor = new Date(date);
+
   scheduledFor.setHours(Number(hourText), Number(minuteText), 0, 0);
 
   return scheduledFor;
+};
+
+const getDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+const isSameScheduledDateTime = (firstDate: Date, secondDate: Date) => {
+  return firstDate.getTime() === secondDate.getTime();
+};
+
+const isReminderActiveOnDate = (reminder: any, date: Date) => {
+  const reminderStartDate = getStartOfDay(reminder.startDate);
+  const reminderEndDate = reminder.endDate ? getStartOfDay(reminder.endDate) : null;
+  const targetDate = getStartOfDay(date);
+
+  if (reminderStartDate > targetDate) {
+    return false;
+  }
+
+  if (reminderEndDate && reminderEndDate < targetDate) {
+    return false;
+  }
+
+  return true;
 };
 
 const getPeriodFromTime = (timeOfDay: string) => {
@@ -80,9 +130,7 @@ const getPeriodFromTime = (timeOfDay: string) => {
   return "Evening";
 };
 
-const getReviewStatus = (
-  sendToDoctorForReview?: boolean
-): ReviewStatus => {
+const getReviewStatus = (sendToDoctorForReview?: boolean): ReviewStatus => {
   return sendToDoctorForReview ? "PENDING" : "NOT_REQUESTED";
 };
 
@@ -114,6 +162,30 @@ const formatMedicine = (medicine: any) => {
   };
 };
 
+const buildSummary = (items: any[]) => {
+  const takenCount = items.filter((item) => item.status === "TAKEN").length;
+
+  const pendingCount = items.filter((item) => item.status === "PENDING").length;
+
+  const missedCount = items.filter((item) => item.status === "MISSED").length;
+
+  const snoozedCount = items.filter((item) => item.status === "SNOOZED").length;
+
+  const totalCount = items.length;
+
+  const progressPercentage =
+    totalCount === 0 ? 0 : Math.round((takenCount / totalCount) * 100);
+
+  return {
+    totalCount,
+    takenCount,
+    pendingCount,
+    missedCount,
+    snoozedCount,
+    progressPercentage,
+  };
+};
+
 const getReminderForPatient = async (reminderId: string, patientId: string) => {
   const reminder = await prisma.medicineReminder.findFirst({
     where: {
@@ -140,6 +212,10 @@ export const medicineService = {
   async createMedicine(patientId: string, data: CreateMedicineInput) {
     const startDate = parseDate(data.startDate);
     const endDate = data.endDate ? parseDate(data.endDate) : null;
+
+    if (endDate && endDate < startDate) {
+      throw new AppError("End date cannot be before start date", 400);
+    }
 
     const medicine = await prisma.medicine.create({
       data: {
@@ -197,7 +273,7 @@ export const medicineService = {
   },
 
   async getTodayMedicines(patientId: string) {
-    const { start, end } = getTodayRange();
+    const { start, end } = getUpcomingRange();
     const now = new Date();
 
     const medicines = await prisma.medicine.findMany({
@@ -209,6 +285,19 @@ export const medicineService = {
         reminders: {
           where: {
             isActive: true,
+            startDate: {
+              lt: end,
+            },
+            OR: [
+              {
+                endDate: null,
+              },
+              {
+                endDate: {
+                  gte: start,
+                },
+              },
+            ],
           },
           include: {
             doseLogs: {
@@ -231,60 +320,59 @@ export const medicineService = {
       },
     });
 
-    const todayItems = medicines.flatMap((medicine) => {
-      return medicine.reminders.map((reminder) => {
-        const scheduledFor = getScheduledDateTimeForToday(reminder.timeOfDay);
-        const doseLog = reminder.doseLogs[0];
+    const upcomingItems = medicines.flatMap((medicine) => {
+      return medicine.reminders.flatMap((reminder) => {
+        const items = [];
 
-        const status =
-          doseLog?.status || (scheduledFor < now ? "MISSED" : "PENDING");
+        for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+          const targetDate = addDays(start, dayOffset);
 
-        return {
-          medicineId: medicine.id,
-          reminderId: reminder.id,
-          name: medicine.name,
-          dose: medicine.dose,
-          instructions: medicine.instructions,
-          source: medicine.source,
-          frequency: reminder.frequency,
-          customFrequency: reminder.customFrequency,
-          timeOfDay: reminder.timeOfDay,
-          period: getPeriodFromTime(reminder.timeOfDay),
-          scheduledFor,
-          status,
-          takenAt: doseLog?.takenAt || null,
-          snoozedUntil: doseLog?.snoozedUntil || null,
-        };
+          if (!isReminderActiveOnDate(reminder, targetDate)) {
+            continue;
+          }
+
+          const scheduledFor = getScheduledDateTimeForDate(
+            targetDate,
+            reminder.timeOfDay
+          );
+
+          const doseLog = reminder.doseLogs.find((log) => {
+            return isSameScheduledDateTime(log.scheduledFor, scheduledFor);
+          });
+
+          const status =
+            doseLog?.status || (scheduledFor < now ? "MISSED" : "PENDING");
+
+          items.push({
+            medicineId: medicine.id,
+            reminderId: reminder.id,
+            name: medicine.name,
+            dose: medicine.dose,
+            instructions: medicine.instructions,
+            source: medicine.source,
+            frequency: reminder.frequency,
+            customFrequency: reminder.customFrequency,
+            timeOfDay: reminder.timeOfDay,
+            period: getPeriodFromTime(reminder.timeOfDay),
+
+            scheduledFor,
+            scheduledDate: getDateKey(scheduledFor),
+            startDate: reminder.startDate,
+            endDate: reminder.endDate,
+
+            status,
+            takenAt: doseLog?.takenAt || null,
+            snoozedUntil: doseLog?.snoozedUntil || null,
+          });
+        }
+
+        return items;
       });
     });
 
-    const takenCount = todayItems.filter((item) => item.status === "TAKEN")
-      .length;
-
-    const pendingCount = todayItems.filter((item) => item.status === "PENDING")
-      .length;
-
-    const missedCount = todayItems.filter((item) => item.status === "MISSED")
-      .length;
-
-    const snoozedCount = todayItems.filter((item) => item.status === "SNOOZED")
-      .length;
-
-    const totalCount = todayItems.length;
-
-    const progressPercentage =
-      totalCount === 0 ? 0 : Math.round((takenCount / totalCount) * 100);
-
     return {
-      summary: {
-        totalCount,
-        takenCount,
-        pendingCount,
-        missedCount,
-        snoozedCount,
-        progressPercentage,
-      },
-      medicines: todayItems,
+      summary: buildSummary(upcomingItems),
+      medicines: upcomingItems,
     };
   },
 
@@ -365,20 +453,28 @@ export const medicineService = {
 
       const reminder = medicine.reminders[0];
 
+      const parsedStartDate =
+        data.startDate !== undefined ? parseDate(data.startDate) : undefined;
+
+      const parsedEndDate =
+        data.endDate !== undefined
+          ? data.endDate
+            ? parseDate(data.endDate)
+            : null
+          : undefined;
+
+      if (parsedStartDate && parsedEndDate && parsedEndDate < parsedStartDate) {
+        throw new AppError("End date cannot be before start date", 400);
+      }
+
       const reminderData = {
-        ...(data.frequency !== undefined
-          ? { frequency: data.frequency }
-          : {}),
+        ...(data.frequency !== undefined ? { frequency: data.frequency } : {}),
         ...(data.customFrequency !== undefined
           ? { customFrequency: data.customFrequency.trim() || null }
           : {}),
         ...(data.timeOfDay !== undefined ? { timeOfDay: data.timeOfDay } : {}),
-        ...(data.startDate !== undefined
-          ? { startDate: parseDate(data.startDate) }
-          : {}),
-        ...(data.endDate !== undefined
-          ? { endDate: data.endDate ? parseDate(data.endDate) : null }
-          : {}),
+        ...(parsedStartDate !== undefined ? { startDate: parsedStartDate } : {}),
+        ...(parsedEndDate !== undefined ? { endDate: parsedEndDate } : {}),
         ...(data.sendToDoctorForReview !== undefined
           ? {
               sendToDoctorForReview: data.sendToDoctorForReview,
@@ -455,7 +551,13 @@ export const medicineService = {
   async markReminderTaken(patientId: string, reminderId: string) {
     const reminder = await getReminderForPatient(reminderId, patientId);
 
-    const scheduledFor = getScheduledDateTimeForToday(reminder.timeOfDay);
+    const today = getStartOfDay(new Date());
+
+    if (!isReminderActiveOnDate(reminder, today)) {
+      throw new AppError("This reminder is not scheduled for today", 400);
+    }
+
+    const scheduledFor = getScheduledDateTimeForDate(today, reminder.timeOfDay);
 
     const doseLog = await prisma.medicineDoseLog.upsert({
       where: {
@@ -491,7 +593,13 @@ export const medicineService = {
   ) {
     const reminder = await getReminderForPatient(reminderId, patientId);
 
-    const scheduledFor = getScheduledDateTimeForToday(reminder.timeOfDay);
+    const today = getStartOfDay(new Date());
+
+    if (!isReminderActiveOnDate(reminder, today)) {
+      throw new AppError("This reminder is not scheduled for today", 400);
+    }
+
+    const scheduledFor = getScheduledDateTimeForDate(today, reminder.timeOfDay);
     const snoozedUntil = parseDateTime(data.snoozedUntil);
 
     const doseLog = await prisma.medicineDoseLog.upsert({

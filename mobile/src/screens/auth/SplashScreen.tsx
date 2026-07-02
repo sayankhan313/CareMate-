@@ -1,10 +1,5 @@
 import { useEffect } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -51,7 +46,7 @@ export const SplashScreen = ({ navigation }: SplashScreenProps) => {
           index: 0,
           routes: [
             {
-              name: "PatientDashboard",
+              name: "PatientTabs",
               params: {
                 user: json.data.user,
               },
@@ -72,7 +67,7 @@ export const SplashScreen = ({ navigation }: SplashScreenProps) => {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <View style={styles.container}>
         <View style={styles.logoCircle}>
           <Text style={styles.logoText}>♡</Text>
