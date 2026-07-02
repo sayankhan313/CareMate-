@@ -3,11 +3,18 @@ import { Router } from "express";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
 import { medicineController } from "./medicine.controller.js";
+import { vitalsController } from "./vitals.controller.js";
 
 const router = Router();
 
 router.use(authMiddleware);
 router.use(authorizeRoles("PATIENT"));
+
+router.post("/vitals/readings", vitalsController.createReading);
+
+router.get("/vitals/latest", vitalsController.getLatestReading);
+
+router.get("/vitals/history", vitalsController.getReadingHistory);
 
 router.post("/medicines", medicineController.createMedicine);
 

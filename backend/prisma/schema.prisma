@@ -52,28 +52,50 @@ enum DoseLogStatus {
   SNOOZED
 }
 
+enum VitalStatus {
+  STABLE
+  WARNING
+  CRITICAL
+}
+
+enum VitalSource {
+  HEALTH_CONNECT
+  SIMULATED
+  MANUAL
+}
+
+enum MedicineOrderStatus {
+  RECEIVED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
 model User {
-  id                              String        @id @default(uuid())
-  fullName                        String
-  email                           String        @unique
-  passwordHash                    String
-  role                            UserRole
-  accountStatus                   AccountStatus @default(ACTIVE)
-  isEmailVerified                 Boolean       @default(false)
+  id              String        @id @default(uuid())
+  fullName        String
+  email           String        @unique
+  passwordHash    String
+  role            UserRole
+  accountStatus   AccountStatus @default(ACTIVE)
+  isEmailVerified Boolean       @default(false)
 
   emailVerificationToken          String?
   emailVerificationTokenExpiresAt DateTime?
 
-  passwordResetToken              String?
-  passwordResetTokenExpiresAt     DateTime?
+  passwordResetToken          String?
+  passwordResetTokenExpiresAt DateTime?
 
-  patientProfile                  PatientProfile?
-  medicines                       Medicine[]
-medicineDoseLogs                  MedicineDoseLog[]
-  
+  patientProfile   PatientProfile?
+  medicines        Medicine[]
+  medicineDoseLogs MedicineDoseLog[]
+  vitalReadings    PatientVitalReading[]
+  doctorNotes      PatientDoctorNote[]
+  medicineOrders   MedicineOrder[]
 
-  createdAt                       DateTime      @default(now())
-  updatedAt                       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PatientProfile {
@@ -88,6 +110,7 @@ model PatientProfile {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Medicine {
   id           String         @id @default(uuid())
   patientId    String
@@ -145,4 +168,56 @@ model MedicineDoseLog {
   @@unique([reminderId, scheduledFor])
   @@index([patientId])
   @@index([scheduledFor])
+}
+
+model PatientVitalReading {
+  id           String      @id @default(uuid())
+  patientId    String
+  heartRate    Int?
+  spo2         Int?
+  bpSystolic   Int?
+  bpDiastolic  Int?
+  glucose      Float?
+  temperature  Float?
+  status       VitalStatus
+  source       VitalSource
+  deviceSource String?
+  recordedAt   DateTime    @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([recordedAt])
+  @@index([status])
+}
+
+model PatientDoctorNote {
+  id        String @id @default(uuid())
+  patientId String
+  note      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([createdAt])
+}
+
+model MedicineOrder {
+  id        String              @id @default(uuid())
+  patientId String
+  status    MedicineOrderStatus @default(RECEIVED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([status])
 }
