@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 
+
 const getStartOfDay = (date: Date) => {
   const start = new Date(date);
 
