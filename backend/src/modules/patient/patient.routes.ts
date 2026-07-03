@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
+import { dashboardController } from "./dashboard.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 
@@ -9,6 +10,8 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(authorizeRoles("PATIENT"));
+
+router.get("/dashboard", dashboardController.getDashboard);
 
 router.post("/vitals/readings", vitalsController.createReading);
 
