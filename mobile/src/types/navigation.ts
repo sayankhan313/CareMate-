@@ -48,4 +48,5 @@ export type RootStackParamList = {
   ConfirmReminder: {
     medicineDraft: MedicineDraft;
   };
+   ConnectedDevice: undefined;
 };

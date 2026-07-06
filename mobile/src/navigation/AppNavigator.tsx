@@ -12,13 +12,18 @@ import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
 import { AddMedicineScreen } from "../screens/patient/AddMedicineScreen";
 import { ConfirmReminderScreen } from "../screens/patient/ConfirmReminderScreen";
 import { PatientTabNavigator } from "./PatientTabNavigator";
-
+import { ConnectedDeviceScreen } from "../screens/patient/ConnectedDeviceScreen";
 import type { RootStackParamList } from "../types/navigation";
+import { HealthConnectDeviceProvider } from "../context/HealthConnectDeviceContext";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator = () => {
   return (
+    
+<HealthConnectDeviceProvider>
+
+
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName="Splash"
@@ -51,7 +56,14 @@ export const AppNavigator = () => {
           name="ConfirmReminder"
           component={ConfirmReminderScreen}
         />
+
+        <Stack.Screen
+  name="ConnectedDevice"
+  component={ConnectedDeviceScreen}
+  options={{ headerShown: false }}
+/>
       </Stack.Navigator>
     </NavigationContainer>
+    </HealthConnectDeviceProvider>
   );
 };

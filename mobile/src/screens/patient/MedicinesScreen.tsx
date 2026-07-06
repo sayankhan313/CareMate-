@@ -16,6 +16,7 @@ import {
 } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import Svg, { Circle } from "react-native-svg";
 
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../../services/tokenStorage";
@@ -69,6 +70,12 @@ type TodayMedicineResponse = {
   summary: TodayMedicineSummary;
   medicines: TodayMedicine[];
 };
+
+const PROGRESS_RING_SIZE = 104;
+const PROGRESS_RING_STROKE = 10;
+const PROGRESS_RING_RADIUS = 42;
+const PROGRESS_RING_CENTER = PROGRESS_RING_SIZE / 2;
+const PROGRESS_RING_CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RING_RADIUS;
 
 const emptySummary: TodayMedicineSummary = {
   totalCount: 0,
@@ -253,6 +260,95 @@ const getCardKey = (medicine: TodayMedicine, index: number) => {
   const dateKey = getMedicineDateKey(medicine);
 
   return `${medicine.medicineId}-${medicine.reminderId}-${dateKey}-${medicine.timeOfDay}-${index}`;
+};
+
+const ProgressRing = ({
+  summary,
+  progress,
+}: {
+  summary: TodayMedicineSummary;
+  progress: number;
+}) => {
+  const total = summary.totalCount;
+
+  const segments = [
+    {
+      key: "taken",
+      count: summary.takenCount,
+      color: "#22C55E",
+    },
+    {
+      key: "pending",
+      count: summary.pendingCount,
+      color: "#3B82F6",
+    },
+    {
+      key: "missed",
+      count: summary.missedCount,
+      color: "#EF4444",
+    },
+    {
+      key: "snoozed",
+      count: summary.snoozedCount,
+      color: "#6366F1",
+    },
+  ].filter((segment) => segment.count > 0);
+
+  let accumulatedLength = 0;
+
+  return (
+    <View style={styles.progressRingContainer}>
+      <Svg
+        width={PROGRESS_RING_SIZE}
+        height={PROGRESS_RING_SIZE}
+        viewBox={`0 0 ${PROGRESS_RING_SIZE} ${PROGRESS_RING_SIZE}`}
+      >
+        <Circle
+          cx={PROGRESS_RING_CENTER}
+          cy={PROGRESS_RING_CENTER}
+          r={PROGRESS_RING_RADIUS}
+          stroke="#E5E7EB"
+          strokeWidth={PROGRESS_RING_STROKE}
+          fill="none"
+        />
+
+        {total > 0
+          ? segments.map((segment) => {
+              const segmentLength =
+                (segment.count / total) * PROGRESS_RING_CIRCUMFERENCE;
+
+              const strokeDashoffset = -accumulatedLength;
+
+              accumulatedLength += segmentLength;
+
+              return (
+                <Circle
+                  key={segment.key}
+                  cx={PROGRESS_RING_CENTER}
+                  cy={PROGRESS_RING_CENTER}
+                  r={PROGRESS_RING_RADIUS}
+                  stroke={segment.color}
+                  strokeWidth={PROGRESS_RING_STROKE}
+                  fill="none"
+                  strokeDasharray={`${segmentLength} ${
+                    PROGRESS_RING_CIRCUMFERENCE - segmentLength
+                  }`}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  originX={PROGRESS_RING_CENTER}
+                  originY={PROGRESS_RING_CENTER}
+                />
+              );
+            })
+          : null}
+      </Svg>
+
+      <View style={styles.progressRingCenter}>
+        <Text style={styles.progressPercentage}>{progress}%</Text>
+      </View>
+    </View>
+  );
 };
 
 export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
@@ -467,11 +563,7 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         <Text style={styles.progressTitle}>{getProgressTitle(selectedTab)}</Text>
 
         <View style={styles.progressContent}>
-          <View style={styles.progressCircleOuter}>
-            <View style={styles.progressCircleInner}>
-              <Text style={styles.progressPercentage}>{progress}%</Text>
-            </View>
-          </View>
+          <ProgressRing summary={summary} progress={progress} />
 
           <View style={styles.legendContainer}>
             <View style={styles.legendRow}>
@@ -530,118 +622,118 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
       </View>
     );
   };
-const renderMedicineCard = (medicine: TodayMedicine, index: number) => {
-  const isTaken = medicine.status === "TAKEN";
-  const isPending = medicine.status === "PENDING";
-  const isMissed = medicine.status === "MISSED";
-  const isSnoozed = medicine.status === "SNOOZED";
 
-  const shouldShowActions =
-    selectedTab === "TODAY" &&
-    (medicine.status === "PENDING" ||
-      medicine.status === "SNOOZED" ||
-      medicine.status === "MISSED");
+  const renderMedicineCard = (medicine: TodayMedicine, index: number) => {
+    const isTaken = medicine.status === "TAKEN";
+    const isPending = medicine.status === "PENDING";
+    const isMissed = medicine.status === "MISSED";
+    const isSnoozed = medicine.status === "SNOOZED";
 
-  const isTakenButtonDisabled = isActionLoading || isMissed;
-  const isSnoozeButtonDisabled = isActionLoading || isMissed || isSnoozed;
+    const shouldShowActions =
+      selectedTab === "TODAY" &&
+      (medicine.status === "PENDING" ||
+        medicine.status === "SNOOZED" ||
+        medicine.status === "MISSED");
 
-  return (
-    <View key={getCardKey(medicine, index)} style={styles.medicineCard}>
-      <View style={styles.medicineCardRow}>
-        <View
-          style={[
-            styles.iconCircle,
-            isTaken ? styles.iconCircleTaken : undefined,
-            isPending ? styles.iconCirclePending : undefined,
-            isMissed ? styles.iconCircleMissed : undefined,
-            isSnoozed ? styles.iconCircleSnoozed : undefined,
-          ]}
-        >
-          <Text style={styles.iconText}>💊</Text>
-        </View>
+    const isTakenButtonDisabled = isActionLoading || isMissed;
+    const isSnoozeButtonDisabled = isActionLoading || isMissed || isSnoozed;
 
-        <View style={styles.medicineContent}>
-          <View style={styles.medicineTopRow}>
-            <View style={styles.medicineNameBlock}>
-              <Text style={styles.medicineName}>
-                {medicine.name} {medicine.dose}
-              </Text>
-
-              <Text style={styles.medicineMeta}>
-                {getMedicineMetaText(medicine)}
-              </Text>
-            </View>
-
-            {renderStatusBadge(medicine.status)}
+    return (
+      <View key={getCardKey(medicine, index)} style={styles.medicineCard}>
+        <View style={styles.medicineCardRow}>
+          <View
+            style={[
+              styles.iconCircle,
+              isTaken ? styles.iconCircleTaken : undefined,
+              isPending ? styles.iconCirclePending : undefined,
+              isMissed ? styles.iconCircleMissed : undefined,
+              isSnoozed ? styles.iconCircleSnoozed : undefined,
+            ]}
+          >
+            <Text style={styles.iconText}>💊</Text>
           </View>
 
-          {shouldShowActions ? (
-            <View style={styles.actionsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  styles.takenActionButton,
-                  isTakenButtonDisabled ? styles.disabledButton : undefined,
-                  isMissed ? styles.missedDisabledActionButton : undefined,
-                ]}
-                disabled={isTakenButtonDisabled}
-                onPress={() => markTaken(medicine.reminderId)}
-                activeOpacity={0.85}
-              >
-                <Text
-                  style={[
-                    styles.takenActionText,
-                    isMissed ? styles.missedDisabledActionText : undefined,
-                  ]}
-                >
-                  Taken
+          <View style={styles.medicineContent}>
+            <View style={styles.medicineTopRow}>
+              <View style={styles.medicineNameBlock}>
+                <Text style={styles.medicineName}>
+                  {medicine.name} {medicine.dose}
                 </Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  styles.snoozeActionButton,
-                  isSnoozeButtonDisabled ? styles.disabledButton : undefined,
-                  isMissed || isSnoozed
-                    ? styles.missedDisabledActionButton
-                    : undefined,
-                ]}
-                disabled={isSnoozeButtonDisabled}
-                onPress={() => snoozeReminder(medicine.reminderId)}
-                activeOpacity={0.85}
-              >
-                <Text
+                <Text style={styles.medicineMeta}>
+                  {getMedicineMetaText(medicine)}
+                </Text>
+              </View>
+
+              {renderStatusBadge(medicine.status)}
+            </View>
+
+            {shouldShowActions ? (
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
                   style={[
-                    styles.snoozeActionText,
+                    styles.actionButton,
+                    styles.takenActionButton,
+                    isTakenButtonDisabled ? styles.disabledButton : undefined,
+                    isMissed ? styles.missedDisabledActionButton : undefined,
+                  ]}
+                  disabled={isTakenButtonDisabled}
+                  onPress={() => markTaken(medicine.reminderId)}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.takenActionText,
+                      isMissed ? styles.missedDisabledActionText : undefined,
+                    ]}
+                  >
+                    Taken
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.snoozeActionButton,
+                    isSnoozeButtonDisabled ? styles.disabledButton : undefined,
                     isMissed || isSnoozed
-                      ? styles.missedDisabledActionText
+                      ? styles.missedDisabledActionButton
                       : undefined,
                   ]}
+                  disabled={isSnoozeButtonDisabled}
+                  onPress={() => snoozeReminder(medicine.reminderId)}
+                  activeOpacity={0.85}
                 >
-                  Snooze
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+                  <Text
+                    style={[
+                      styles.snoozeActionText,
+                      isMissed || isSnoozed
+                        ? styles.missedDisabledActionText
+                        : undefined,
+                    ]}
+                  >
+                    Snooze
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
-          {isMissed ? (
-            <Text style={styles.missedHelpText}>
-              This dose was missed, so actions are disabled.
-            </Text>
-          ) : null}
+            {isMissed ? (
+              <Text style={styles.missedHelpText}>
+                This dose was missed, so actions are disabled.
+              </Text>
+            ) : null}
 
-          {isSnoozed ? (
-            <Text style={styles.snoozedHelpText}>
-              Snoozed reminder. You can still mark it as taken.
-            </Text>
-          ) : null}
+            {isSnoozed ? (
+              <Text style={styles.snoozedHelpText}>
+                Snoozed reminder. You can still mark it as taken.
+              </Text>
+            ) : null}
+          </View>
         </View>
       </View>
-    </View>
-  );
-};
- 
+    );
+  };
 
   const renderPeriodSection = (period: MedicinePeriod) => {
     const periodMedicines = getMedicinesByPeriod(period);
@@ -853,21 +945,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  progressCircleOuter: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 8,
-    borderColor: "#3B82F6",
+  progressRingContainer: {
+    width: PROGRESS_RING_SIZE,
+    height: PROGRESS_RING_SIZE,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 26,
-    backgroundColor: "#FFFFFF",
+    position: "relative",
   },
-  progressCircleInner: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+  progressRingCenter: {
+    position: "absolute",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
@@ -1103,24 +1193,21 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   missedDisabledActionButton: {
-  backgroundColor: "#E5E7EB",
-},
-
-missedDisabledActionText: {
-  color: "#9CA3AF",
-},
-
-missedHelpText: {
-  color: "#DC2626",
-  fontSize: 13,
-  fontWeight: "700",
-  marginTop: 10,
-},
-
-snoozedHelpText: {
-  color: "#4F46E5",
-  fontSize: 13,
-  fontWeight: "700",
-  marginTop: 10,
-},
+    backgroundColor: "#E5E7EB",
+  },
+  missedDisabledActionText: {
+    color: "#9CA3AF",
+  },
+  missedHelpText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 10,
+  },
+  snoozedHelpText: {
+    color: "#4F46E5",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 10,
+  },
 });
