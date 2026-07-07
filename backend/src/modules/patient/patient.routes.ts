@@ -2,8 +2,11 @@ import { Router } from "express";
 
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
+
+import { consultationController } from "./consultation.controller.js";
 import { dashboardController } from "./dashboard.controller.js";
 import { medicineController } from "./medicine.controller.js";
+import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 
 const router = Router();
@@ -18,6 +21,34 @@ router.post("/vitals/readings", vitalsController.createReading);
 router.get("/vitals/latest", vitalsController.getLatestReading);
 
 router.get("/vitals/history", vitalsController.getReadingHistory);
+
+router.post("/safety-alerts", safetyController.createSafetyAlert);
+
+router.get("/safety-alerts/active", safetyController.getActiveSafetyAlert);
+
+router.post("/safety-alerts/:alertId/cancel", safetyController.cancelSafetyAlert);
+
+router.post(
+  "/safety-alerts/:alertId/escalate",
+  safetyController.escalateSafetyAlert
+);
+
+router.post(
+  "/consultations/manual",
+  consultationController.createManualConsultation
+);
+
+router.get("/consultations", consultationController.listConsultations);
+
+router.get(
+  "/consultations/:consultationId",
+  consultationController.getConsultationById
+);
+
+router.get(
+  "/consultations/:consultationId/join",
+  consultationController.getPatientJoinConfig
+);
 
 router.post("/medicines", medicineController.createMedicine);
 

@@ -7,12 +7,20 @@ import type { CreateVitalReadingPayload, VitalReading } from "../types/vitals";
 const LAST_HEALTH_CONNECT_SIGNATURE_KEY =
   "@caremate_last_health_connect_signature";
 
-const normaliseValue = (value?: number) => {
+const normaliseValue = (value?: number | null) => {
   if (typeof value === "number" && !Number.isNaN(value)) {
     return value;
   }
 
   return null;
+};
+
+const toPayloadValue = (value?: number | null) => {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+
+  return undefined;
 };
 
 const buildHealthConnectSignature = (payload: CreateVitalReadingPayload) => {
@@ -37,14 +45,63 @@ const getTimeValue = (value?: string | null) => {
   return Number.isNaN(time) ? 0 : time;
 };
 
+const mergeHealthConnectPayloadWithLastKnownVitals = (
+  payload: CreateVitalReadingPayload,
+  latestBackendReading: VitalReading | null
+): CreateVitalReadingPayload => {
+  if (!latestBackendReading) {
+    return payload;
+  }
+
+  const mergedPayload: CreateVitalReadingPayload = {
+    ...payload,
+
+    heartRate:
+      payload.heartRate !== undefined
+        ? payload.heartRate
+        : toPayloadValue(latestBackendReading.heartRate),
+
+    spo2:
+      payload.spo2 !== undefined
+        ? payload.spo2
+        : toPayloadValue(latestBackendReading.spo2),
+
+    bpSystolic:
+      payload.bpSystolic !== undefined
+        ? payload.bpSystolic
+        : toPayloadValue(latestBackendReading.bpSystolic),
+
+    bpDiastolic:
+      payload.bpDiastolic !== undefined
+        ? payload.bpDiastolic
+        : toPayloadValue(latestBackendReading.bpDiastolic),
+
+    glucose:
+      payload.glucose !== undefined
+        ? payload.glucose
+        : toPayloadValue(latestBackendReading.glucose),
+
+    temperature:
+      payload.temperature !== undefined
+        ? payload.temperature
+        : toPayloadValue(latestBackendReading.temperature),
+
+    deviceSource: payload.deviceSource
+      ? `${payload.deviceSource} + last known vitals`
+      : "Android Health Connect + last known vitals",
+  };
+
+  return mergedPayload;
+};
+
 export const vitalsSyncService = {
   async syncLatestVitalsFromHealthConnect(): Promise<VitalReading | null> {
-    const payload =
+    const healthConnectPayload =
       await healthConnectService.readLatestVitalsFromHealthConnect();
 
     const latestBackendReading = await vitalsApi.getLatestReading();
 
-    const healthConnectTime = getTimeValue(payload.recordedAt);
+    const healthConnectTime = getTimeValue(healthConnectPayload.recordedAt);
     const backendLatestTime = getTimeValue(latestBackendReading?.recordedAt);
 
     if (latestBackendReading && healthConnectTime <= backendLatestTime) {
@@ -55,7 +112,12 @@ export const vitalsSyncService = {
       return null;
     }
 
-    const currentSignature = buildHealthConnectSignature(payload);
+    const mergedPayload = mergeHealthConnectPayloadWithLastKnownVitals(
+      healthConnectPayload,
+      latestBackendReading
+    );
+
+    const currentSignature = buildHealthConnectSignature(mergedPayload);
 
     const previousSignature = await AsyncStorage.getItem(
       LAST_HEALTH_CONNECT_SIGNATURE_KEY
@@ -69,7 +131,7 @@ export const vitalsSyncService = {
       return null;
     }
 
-    const savedReading = await vitalsApi.createReading(payload);
+    const savedReading = await vitalsApi.createReading(mergedPayload);
 
     await AsyncStorage.setItem(
       LAST_HEALTH_CONNECT_SIGNATURE_KEY,

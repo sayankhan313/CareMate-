@@ -72,6 +72,27 @@ enum MedicineOrderStatus {
   CANCELLED
 }
 
+enum SafetyAlertStatus {
+  ACTIVE
+  CANCELLED
+  ESCALATED
+  RESOLVED
+}
+
+enum ConsultationType {
+  EMERGENCY
+  MANUAL
+}
+
+enum ConsultationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -93,6 +114,12 @@ model User {
   vitalReadings    PatientVitalReading[]
   doctorNotes      PatientDoctorNote[]
   medicineOrders   MedicineOrder[]
+
+  patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
+  doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
+
+  patientConsultations Consultation[] @relation("PatientConsultations")
+  doctorConsultations  Consultation[] @relation("DoctorConsultations")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,7 +214,8 @@ model PatientVitalReading {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient      User          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  safetyAlerts SafetyAlert[]
 
   @@index([patientId])
   @@index([recordedAt])
@@ -220,4 +248,70 @@ model MedicineOrder {
 
   @@index([patientId])
   @@index([status])
+}
+
+model SafetyAlert {
+  id             String            @id @default(uuid())
+  patientId      String
+  doctorId       String?
+  vitalReadingId String?
+  status         SafetyAlertStatus @default(ACTIVE)
+
+  reason      String
+  timerEndsAt DateTime
+
+  cancelledAt DateTime?
+  escalatedAt DateTime?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient      User                 @relation("PatientSafetyAlerts", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       User?                @relation("DoctorSafetyAlerts", fields: [doctorId], references: [id], onDelete: SetNull)
+  vitalReading PatientVitalReading? @relation(fields: [vitalReadingId], references: [id], onDelete: SetNull)
+  consultation Consultation?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([vitalReadingId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Consultation {
+  id            String  @id @default(uuid())
+  patientId     String
+  doctorId      String?
+  safetyAlertId String? @unique
+
+  type   ConsultationType
+  status ConsultationStatus @default(PENDING)
+
+  reason        String
+  preferredAt   DateTime?
+  notes         String?
+  doctorName    String?
+  rejectionNote String?
+
+  jaasRoomName String
+
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient     User         @relation("PatientConsultations", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      User?        @relation("DoctorConsultations", fields: [doctorId], references: [id], onDelete: SetNull)
+  safetyAlert SafetyAlert? @relation(fields: [safetyAlertId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
 }
