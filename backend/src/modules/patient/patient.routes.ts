@@ -8,7 +8,7 @@ import { dashboardController } from "./dashboard.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
-
+import { medicineReferenceController } from "./medicine-reference.controller.js";
 const router = Router();
 
 router.use(authMiddleware);
@@ -70,6 +70,15 @@ router.post(
 router.post(
   "/medicine-reminders/:reminderId/snooze",
   medicineController.snoozeReminder
+);
+router.get(
+  "/medicine-references/search",
+  medicineReferenceController.searchMedicineReferences
+);
+
+router.post(
+  "/medicine-scan/parse",
+  medicineReferenceController.parseMedicineScan
 );
 
 export default router;

@@ -93,6 +93,11 @@ enum ConsultationStatus {
   CANCELLED
 }
 
+enum MedicineSafetyLevel {
+  STANDARD
+  DOCTOR_REVIEW_RECOMMENDED
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -314,4 +319,30 @@ model Consultation {
   @@index([status])
   @@index([type])
   @@index([createdAt])
+}
+
+model MedicineReference {
+  id                  String              @id @default(uuid())
+  slug                String              @unique
+  brandName           String
+  genericName         String
+  aliases             String[]
+  commonStrengths     String[]
+  form                String
+  category            String
+  usedFor             String
+  commonSideEffects   String[]
+  defaultInstructions String
+  defaultFrequency    MedicineFrequency   @default(ONCE_DAILY)
+  defaultTimeOfDay    String              @default("08:00")
+  safetyLevel         MedicineSafetyLevel @default(STANDARD)
+  safetyNote          String
+  isActive            Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandName])
+  @@index([genericName])
+  @@index([isActive])
 }
