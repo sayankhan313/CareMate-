@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { PatientBottomTabBar } from "../components/patient/PatientBottomTabBar";
-import { ConsultationsScreen } from "../screens/patient/ConsultationsScreen";
+import  ConsultationsScreen  from "../screens/patient/ConsultationsScreen";
 import { MedicinesScreen } from "../screens/patient/MedicinesScreen";
 import { PatientDashboardScreen } from "../screens/patient/PatientDashboardScreen";
 import { PatientOrdersScreen } from "../screens/patient/PatientOrdersScreen";

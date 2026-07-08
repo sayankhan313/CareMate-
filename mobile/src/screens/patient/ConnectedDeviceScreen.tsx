@@ -28,7 +28,8 @@ import {
 } from "lucide-react-native";
 
 import type { RootStackParamList } from "../../types/navigation";
-import type {VitalSimulationMode} from "../../types/vitals";
+import type { VitalReading, VitalSimulationMode } from "../../types/vitals";
+
 import { useHealthConnectDevice } from "../../context/HealthConnectDeviceContext";
 import { healthConnectService } from "../../services/healthConnectService";
 import { vitalsApi } from "../../services/vitalsApi";
@@ -72,7 +73,6 @@ const getModeColors = (mode: VitalSimulationMode) => {
   };
 };
 
-
 const formatTime = (dateValue: string | null) => {
   if (!dateValue) return "Not synced yet";
 
@@ -87,12 +87,11 @@ export const ConnectedDeviceScreen = ({
   navigation,
 }: ConnectedDeviceScreenProps) => {
   const insets = useSafeAreaInsets();
+
   const [selectedMode, setSelectedMode] =
     useState<VitalSimulationMode>("NORMAL");
 
   const [isStartingSimulation, setIsStartingSimulation] = useState(false);
-
-
   const [lastScreenMessage, setLastScreenMessage] = useState("");
 
   const {
@@ -113,11 +112,30 @@ export const ConnectedDeviceScreen = ({
 
   const modeColors = getModeColors(selectedMode);
 
+  const openSafetyResponseIfCritical = (
+    savedReading: VitalReading | null,
+    sourceLabel: string
+  ) => {
+    if (savedReading?.status !== "CRITICAL") {
+      return false;
+    }
+
+    setLastScreenMessage(
+      "Critical vital reading detected. Opening Safety Response."
+    );
+
+    navigation.navigate("SafetyResponse", {
+      vitalReading: savedReading,
+      triggerSource: sourceLabel,
+    });
+
+    return true;
+  };
+
   const connectOrDisconnect = async () => {
     if (isHealthConnectConnected) {
       await disconnectHealthConnect();
 
-     
       setLastScreenMessage("Health Connect has been disconnected.");
 
       Alert.alert(
@@ -134,6 +152,10 @@ export const ConnectedDeviceScreen = ({
       const savedReading = await connectHealthConnect();
 
       if (savedReading) {
+        if (openSafetyResponseIfCritical(savedReading, "Health Connect")) {
+          return;
+        }
+
         const message = `Health Connect connected. Latest reading saved as ${savedReading.status}.`;
 
         setLastScreenMessage(message);
@@ -167,16 +189,20 @@ export const ConnectedDeviceScreen = ({
 
       const savedReading = await syncHealthConnectNow("manual");
 
-     if (!savedReading) {
-  const message =
-    "No new Health Connect reading detected. Latest reading is already saved.";
+      if (!savedReading) {
+        const message =
+          "No new Health Connect reading detected. Latest reading is already saved.";
 
-  setLastScreenMessage(message);
+        setLastScreenMessage(message);
 
-  Alert.alert("Health Connect", message);
+        Alert.alert("Health Connect", message);
 
-  return;
-}
+        return;
+      }
+
+      if (openSafetyResponseIfCritical(savedReading, "Health Connect")) {
+        return;
+      }
 
       const message = `Latest reading saved as ${savedReading.status}.`;
 
@@ -203,6 +229,15 @@ export const ConnectedDeviceScreen = ({
       const payload = getSimulatedVitalReading(selectedMode);
 
       const savedReading = await vitalsApi.createReading(payload);
+
+      if (
+        openSafetyResponseIfCritical(
+          savedReading,
+          "CareMate Watch Simulator"
+        )
+      ) {
+        return;
+      }
 
       const message = `${getModeLabel(selectedMode)} reading saved as ${
         savedReading.status
@@ -232,19 +267,19 @@ export const ConnectedDeviceScreen = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top","bottom"]}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
 
       <ScrollView
-  style={styles.screen}
-  contentContainerStyle={[
-    styles.content,
-    {
-      paddingBottom: Math.max(insets.bottom + 34, 54),
-    },
-  ]}
-  showsVerticalScrollIndicator={false}
->
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom: Math.max(insets.bottom + 34, 54),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <LinearGradient
           colors={["#3B82F6", "#2563EB"]}
           start={{ x: 0, y: 0 }}
@@ -421,7 +456,6 @@ export const ConnectedDeviceScreen = ({
             </TouchableOpacity>
           ) : null}
 
-
           <TouchableOpacity
             style={styles.outlineButton}
             activeOpacity={0.85}
@@ -564,7 +598,19 @@ export const ConnectedDeviceScreen = ({
           </TouchableOpacity>
         </View>
 
-      
+        {lastScreenMessage || lastSyncError ? (
+          <View style={styles.infoCard}>
+            <Activity size={19} color="#2563EB" strokeWidth={2.4} />
+            <Text
+              style={[
+                styles.infoText,
+                lastSyncError ? styles.errorMessage : null,
+              ]}
+            >
+              {lastSyncError || lastScreenMessage}
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -777,6 +823,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     marginTop: 18,
+    backgroundColor: "#2563EB",
   },
   connectButton: {
     backgroundColor: "#2563EB",
@@ -807,23 +854,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginLeft: 8,
   },
-  debugButton: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    borderWidth: 1.5,
-    borderColor: "#BFDBFE",
-    marginTop: 12,
-  },
-  debugButtonText: {
-    color: "#2563EB",
-    fontSize: 14,
-    fontWeight: "900",
-    marginLeft: 8,
-  },
   outlineButton: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -840,53 +870,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     marginLeft: 8,
-  },
-  debugCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-  },
-  debugHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  debugTitle: {
-    color: "#111827",
-    fontSize: 16,
-    fontWeight: "900",
-    marginLeft: 8,
-  },
-  debugMessage: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  errorMessage: {
-    color: "#DC2626",
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  debugPayloadBox: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  debugPayloadText: {
-    color: "#0F172A",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
   },
   sectionTitle: {
     color: "#111827",
@@ -1019,5 +1002,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 21,
     marginLeft: 10,
+  },
+  errorMessage: {
+    color: "#DC2626",
   },
 });

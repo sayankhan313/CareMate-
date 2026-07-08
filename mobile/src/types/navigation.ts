@@ -1,28 +1,10 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
 
-export type User = {
-  id: string;
-  fullName: string;
-  email: string;
-  role: string;
-  accountStatus: string;
-  isEmailVerified: boolean;
-};
-
-export type MedicineDraft = {
-  name: string;
-  dose: string;
-  instructions?: string;
-  frequency: string;
-  timeOfDay: string;
-  selectedTimes: string[];
-  startDate: string;
-  endDate?: string;
-  sendToDoctorForReview: boolean;
-};
+import type { VitalReading } from "./vitals";
+import type { MeetingConfig } from "../services/safetyApi";
 
 export type PatientTabParamList = {
-  Home: { user?: User } | undefined;
+  Home: { user?: any } | undefined;
   Medicines: undefined;
   Vitals: undefined;
   Consultations: undefined;
@@ -35,18 +17,35 @@ export type RootStackParamList = {
   Login: undefined;
   RoleSelection: undefined;
   PatientSignup: undefined;
-  EmailVerification: { email: string };
+  EmailVerification: {
+    email?: string;
+  };
   ForgotPassword: undefined;
 
   PatientTabs:
-    | (NavigatorScreenParams<PatientTabParamList> & {
-        user?: User;
-      })
-    | undefined;
+  | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+  | undefined;
 
   AddMedicine: undefined;
-  ConfirmReminder: {
-    medicineDraft: MedicineDraft;
+  ConfirmReminder: undefined;
+  ConnectedDevice: undefined;
+
+  SafetyResponse: {
+    vitalReading: VitalReading;
+    triggerSource?: string;
   };
-   ConnectedDevice: undefined;
+
+  VideoConsultation: {
+    consultationId: string;
+    consultationType?: "EMERGENCY" | "MANUAL";
+    patientMeeting?: MeetingConfig;
+    doctorMeeting?: MeetingConfig;
+    patientMeetingUrl?: string;
+    doctorMeetingUrl?: string;
+  };
+
+  ConsultationEnded: {
+    consultationId: string;
+    consultationType?: "EMERGENCY" | "MANUAL";
+  };
 };
