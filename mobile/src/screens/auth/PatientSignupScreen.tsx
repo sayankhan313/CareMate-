@@ -9,12 +9,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
 import { colors } from "../../constants/colors";
 import type { RootStackParamList } from "../../types/navigation";
+
+type PatientGender = "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_TO_SAY";
 
 type PatientSignupFormValues = {
   fullName: string;
@@ -22,8 +27,14 @@ type PatientSignupFormValues = {
   phoneNumber: string;
   password: string;
   dateOfBirth: string;
+  gender: PatientGender;
   medicalConditions: string;
   emergencyContact: string;
+};
+
+type GenderOption = {
+  label: string;
+  value: PatientGender;
 };
 
 type PatientSignupScreenProps = NativeStackScreenProps<
@@ -31,9 +42,30 @@ type PatientSignupScreenProps = NativeStackScreenProps<
   "PatientSignup"
 >;
 
+const genderOptions: GenderOption[] = [
+  {
+    label: "Male",
+    value: "MALE",
+  },
+  {
+    label: "Female",
+    value: "FEMALE",
+  },
+  {
+    label: "Other",
+    value: "OTHER",
+  },
+  {
+    label: "Prefer not to say",
+    value: "PREFER_NOT_TO_SAY",
+  },
+];
+
 export const PatientSignupScreen = ({
   navigation,
 }: PatientSignupScreenProps) => {
+  const insets = useSafeAreaInsets();
+
   const {
     control,
     handleSubmit,
@@ -45,6 +77,7 @@ export const PatientSignupScreen = ({
       phoneNumber: "",
       password: "",
       dateOfBirth: "",
+      gender: "PREFER_NOT_TO_SAY",
       medicalConditions: "",
       emergencyContact: "",
     },
@@ -64,12 +97,19 @@ export const PatientSignupScreen = ({
           role: "PATIENT",
           phoneNumber: formData.phoneNumber.trim(),
           dateOfBirth: formData.dateOfBirth.trim(),
+          gender: formData.gender,
           medicalConditions: formData.medicalConditions.trim(),
           emergencyContact: formData.emergencyContact.trim(),
         }),
       });
 
-      const registerJson = await registerResponse.json();
+      let registerJson: any = {};
+
+      try {
+        registerJson = await registerResponse.json();
+      } catch (error) {
+        registerJson = {};
+      }
 
       if (!registerResponse.ok || !registerJson.success) {
         throw new Error(registerJson.message || "Registration failed.");
@@ -90,7 +130,12 @@ export const PatientSignupScreen = ({
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingBottom: Math.max(36, insets.bottom + 36),
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -99,11 +144,12 @@ export const PatientSignupScreen = ({
             style={styles.backIconButton}
             onPress={() => navigation.goBack()}
             disabled={isSubmitting}
+            activeOpacity={0.8}
           >
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
 
-          <View>
+          <View style={styles.headerTextBlock}>
             <Text style={styles.headerTitle}>Patient Signup</Text>
             <Text style={styles.headerSubtitle}>Create your patient account</Text>
           </View>
@@ -138,6 +184,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 style={[
                   styles.input,
                   errors.fullName ? styles.inputError : undefined,
@@ -167,6 +214,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 style={[
@@ -194,6 +242,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 keyboardType="phone-pad"
                 style={[
                   styles.input,
@@ -224,6 +273,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 secureTextEntry
                 style={[
                   styles.input,
@@ -246,10 +296,11 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="dd/mm/yyyy"
-                placeholderTextColor="#0F172A"
+                placeholderTextColor="#8A94A6"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 keyboardType="numbers-and-punctuation"
                 style={[
                   styles.input,
@@ -260,6 +311,52 @@ export const PatientSignupScreen = ({
           />
           {errors.dateOfBirth ? (
             <Text style={styles.errorText}>{errors.dateOfBirth.message}</Text>
+          ) : null}
+
+          <Text style={styles.label}>Gender</Text>
+          <Controller
+            control={control}
+            name="gender"
+            rules={{
+              required: "Gender is required.",
+            }}
+            render={({ field }) => (
+              <View style={styles.genderGrid}>
+                {genderOptions.map((option, index) => {
+                  const isSelected = field.value === option.value;
+                  const isRightColumn = index % 2 === 1;
+
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.genderOption,
+                        isRightColumn ? styles.genderOptionRight : undefined,
+                        isSelected ? styles.genderOptionSelected : undefined,
+                        isSubmitting ? styles.disabledGenderOption : undefined,
+                      ]}
+                      activeOpacity={0.85}
+                      disabled={isSubmitting}
+                      onPress={() => field.onChange(option.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.genderOptionText,
+                          isSelected
+                            ? styles.genderOptionTextSelected
+                            : undefined,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          />
+          {errors.gender ? (
+            <Text style={styles.errorText}>{errors.gender.message}</Text>
           ) : null}
 
           <Text style={styles.label}>
@@ -275,6 +372,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 multiline
                 textAlignVertical="top"
                 style={styles.textArea}
@@ -296,6 +394,7 @@ export const PatientSignupScreen = ({
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
+                editable={!isSubmitting}
                 style={[
                   styles.input,
                   errors.emergencyContact ? styles.inputError : undefined,
@@ -327,6 +426,7 @@ export const PatientSignupScreen = ({
           ]}
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting}
+          activeOpacity={0.88}
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -340,7 +440,11 @@ export const PatientSignupScreen = ({
             Already have an account?{" "}
             <Text
               style={styles.loginLink}
-              onPress={() => navigation.navigate("Login")}
+              onPress={() => {
+                if (!isSubmitting) {
+                  navigation.navigate("Login");
+                }
+              }}
             >
               Login
             </Text>
@@ -360,9 +464,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#EEF5FC",
   },
-  container: {
-    paddingBottom: 34,
-  },
+  container: {},
   header: {
     backgroundColor: "#2563EB",
     paddingHorizontal: 24,
@@ -370,6 +472,9 @@ const styles = StyleSheet.create({
     paddingBottom: 66,
     flexDirection: "row",
     alignItems: "center",
+  },
+  headerTextBlock: {
+    flex: 1,
   },
   backIconButton: {
     width: 34,
@@ -434,6 +539,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 14,
     fontWeight: "600",
+    flex: 1,
   },
   statusActive: {
     color: "#10B981",
@@ -489,6 +595,43 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     backgroundColor: "#FFFFFF",
     marginBottom: 28,
+  },
+  genderGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 20,
+  },
+  genderOption: {
+    width: "48%",
+    borderWidth: 1,
+    borderColor: "#DDE7F3",
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    marginRight: "4%",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  genderOptionRight: {
+    marginRight: 0,
+  },
+  genderOptionSelected: {
+    borderColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
+  },
+  disabledGenderOption: {
+    opacity: 0.7,
+  },
+  genderOptionText: {
+    color: "#60728E",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  genderOptionTextSelected: {
+    color: "#2563EB",
   },
   inputError: {
     borderColor: colors.danger,

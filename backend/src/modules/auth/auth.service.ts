@@ -86,6 +86,7 @@ const getPatientProfileData = (data: RegisterInput) => {
   return {
     phoneNumber: data.phoneNumber.trim(),
     dateOfBirth: parseDateOfBirth(data.dateOfBirth.trim()),
+    gender: data.gender || "PREFER_NOT_TO_SAY",
     medicalConditions: data.medicalConditions?.trim() || null,
     emergencyContact: data.emergencyContact.trim(),
   };

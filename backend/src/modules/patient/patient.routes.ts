@@ -9,12 +9,15 @@ import { medicineController } from "./medicine.controller.js";
 import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
+import { profileController } from "./profile.controller.js";
 const router = Router();
 
 router.use(authMiddleware);
 router.use(authorizeRoles("PATIENT"));
 
 router.get("/dashboard", dashboardController.getDashboard);
+
+router.get("/profile", profileController.getProfile);
 
 router.post("/vitals/readings", vitalsController.createReading);
 
@@ -81,4 +84,8 @@ router.post(
   medicineReferenceController.parseMedicineScan
 );
 
+router.post(
+  "/medicine-scan/prescription/parse",
+  medicineReferenceController.parsePrescriptionScan
+);
 export default router;

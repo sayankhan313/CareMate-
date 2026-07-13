@@ -17,17 +17,19 @@ import {
 } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import type { RootStackParamList } from "../../types/navigation";
+import type { MedicineDraft, RootStackParamList } from "../../types/navigation";
 
 type AddMedicineScreenProps = NativeStackScreenProps<
   RootStackParamList,
   "AddMedicine"
 >;
 
+type MedicineFrequency = MedicineDraft["frequency"];
+
 type AddMedicineFormValues = {
   name: string;
   dose: string;
-  frequency: string;
+  frequency: MedicineFrequency;
   selectedTimes: string[];
   startDate: string;
   endDate: string;
@@ -37,8 +39,10 @@ type AddMedicineFormValues = {
 
 type DropdownOption = {
   label: string;
-  value: string;
+  value: MedicineFrequency;
 };
+
+const HEADER_BLUE = "#2563EB";
 
 const frequencyOptions: DropdownOption[] = [
   { label: "Once daily", value: "ONCE_DAILY" },
@@ -47,10 +51,12 @@ const frequencyOptions: DropdownOption[] = [
   { label: "As needed", value: "AS_NEEDED" },
 ];
 
-const timeOptions: DropdownOption[] = [
+const timeOptions = [
   { label: "08:00", value: "08:00" },
   { label: "12:00", value: "12:00" },
+  { label: "13:00", value: "13:00" },
   { label: "18:00", value: "18:00" },
+  { label: "20:00", value: "20:00" },
   { label: "21:00", value: "21:00" },
 ];
 
@@ -73,7 +79,7 @@ const isValidDateText = (date: string) => {
   );
 };
 
-const getRequiredTimeCount = (frequency: string) => {
+const getRequiredTimeCount = (frequency: MedicineFrequency) => {
   if (frequency === "TWICE_DAILY") {
     return 2;
   }
@@ -85,19 +91,19 @@ const getRequiredTimeCount = (frequency: string) => {
   return 1;
 };
 
-const getDefaultTimesForFrequency = (frequency: string) => {
+const getDefaultTimesForFrequency = (frequency: MedicineFrequency) => {
   if (frequency === "TWICE_DAILY") {
-    return ["08:00", "21:00"];
+    return ["08:00", "20:00"];
   }
 
   if (frequency === "THREE_TIMES_DAILY") {
-    return ["08:00", "12:00", "21:00"];
+    return ["08:00", "13:00", "20:00"];
   }
 
   return ["08:00"];
 };
 
-const getTimeRequirementText = (frequency: string) => {
+const getTimeRequirementText = (frequency: MedicineFrequency) => {
   const requiredCount = getRequiredTimeCount(frequency);
 
   if (requiredCount === 1) {
@@ -107,8 +113,29 @@ const getTimeRequirementText = (frequency: string) => {
   return `Select exactly ${requiredCount} reminder times.`;
 };
 
-export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
+const getInitialSelectedTimes = (medicineDraft?: MedicineDraft) => {
+  if (medicineDraft?.selectedTimes && medicineDraft.selectedTimes.length > 0) {
+    return medicineDraft.selectedTimes;
+  }
+
+  if (medicineDraft?.timeOfDay) {
+    return [medicineDraft.timeOfDay];
+  }
+
+  return getDefaultTimesForFrequency(
+    medicineDraft?.frequency ? medicineDraft.frequency : "ONCE_DAILY"
+  );
+};
+
+export const AddMedicineScreen = ({
+  navigation,
+  route,
+}: AddMedicineScreenProps) => {
   const insets = useSafeAreaInsets();
+
+  const medicineDraft = route.params?.medicineDraft;
+  const isEditDraftMode = route.params?.mode === "EDIT_DRAFT";
+  const initialFrequency = medicineDraft?.frequency || "ONCE_DAILY";
 
   const [isFrequencyDropdownOpen, setIsFrequencyDropdownOpen] = useState(false);
 
@@ -120,14 +147,14 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
     formState: { errors, isSubmitting },
   } = useForm<AddMedicineFormValues>({
     defaultValues: {
-      name: "",
-      dose: "",
-      frequency: "ONCE_DAILY",
-      selectedTimes: ["08:00"],
-      startDate: getTodayDateForInput(),
-      endDate: "",
-      instructions: "",
-      sendToDoctorForReview: false,
+      name: medicineDraft?.name || "",
+      dose: medicineDraft?.dose || "",
+      frequency: initialFrequency,
+      selectedTimes: getInitialSelectedTimes(medicineDraft),
+      startDate: medicineDraft?.startDate || getTodayDateForInput(),
+      endDate: medicineDraft?.endDate || "",
+      instructions: medicineDraft?.instructions || "",
+      sendToDoctorForReview: medicineDraft?.sendToDoctorForReview || false,
     },
   });
 
@@ -145,7 +172,7 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
     return getRequiredTimeCount(frequency);
   }, [frequency]);
 
-  const handleFrequencySelect = (value: string) => {
+  const handleFrequencySelect = (value: MedicineFrequency) => {
     setValue("frequency", value, {
       shouldValidate: true,
       shouldDirty: true,
@@ -218,6 +245,7 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
         startDate: trimmedStartDate,
         endDate: trimmedEndDate || undefined,
         instructions: trimmedInstructions || undefined,
+        prescriptionPattern: medicineDraft?.prescriptionPattern ?? null,
         sendToDoctorForReview: formData.sendToDoctorForReview,
       },
     });
@@ -225,7 +253,7 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+      <StatusBar backgroundColor={HEADER_BLUE} barStyle="light-content" />
 
       <View style={styles.screen}>
         <View style={styles.header}>
@@ -239,9 +267,13 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
           </TouchableOpacity>
 
           <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Add Medicine</Text>
+            <Text style={styles.headerTitle}>
+              {isEditDraftMode ? "Edit Medicine" : "Add Medicine"}
+            </Text>
             <Text style={styles.headerSubtitle}>
-              Create a reminder schedule
+              {isEditDraftMode
+                ? "Update scanned reminder details"
+                : "Create a reminder schedule"}
             </Text>
           </View>
         </View>
@@ -252,6 +284,21 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {isEditDraftMode ? (
+            <View style={styles.prefillNoticeCard}>
+              <View style={styles.prefillIconCircle}>
+                <Text style={styles.prefillIcon}>✓</Text>
+              </View>
+
+              <View style={styles.prefillTextBlock}>
+                <Text style={styles.prefillTitle}>Auto-filled from scan</Text>
+                <Text style={styles.prefillSubtitle}>
+                  Review and edit the details before confirming the reminder.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.formCard}>
             <Text style={styles.label}>Medicine Name</Text>
 
@@ -502,7 +549,7 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
                     false: "#D1D5DB",
                     true: "#BFDBFE",
                   }}
-                  thumbColor={field.value ? "#2563EB" : "#F9FAFB"}
+                  thumbColor={field.value ? HEADER_BLUE : "#F9FAFB"}
                 />
               )}
             />
@@ -513,7 +560,7 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
           style={[
             styles.footer,
             {
-              paddingBottom: Math.max(insets.bottom + 12 , 34),
+              paddingBottom: Math.max(insets.bottom + 12, 34),
             },
           ]}
         >
@@ -526,7 +573,9 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
             activeOpacity={0.85}
             disabled={isSubmitting}
           >
-            <Text style={styles.primaryButtonText}>Create Reminder</Text>
+            <Text style={styles.primaryButtonText}>
+              {isEditDraftMode ? "Update Reminder Details" : "Create Reminder"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -537,14 +586,14 @@ export const AddMedicineScreen = ({ navigation }: AddMedicineScreenProps) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: HEADER_BLUE,
   },
   screen: {
     flex: 1,
     backgroundColor: "#F5F7FB",
   },
   header: {
-    backgroundColor: "#2563EB",
+    backgroundColor: HEADER_BLUE,
     paddingHorizontal: 22,
     paddingTop: 18,
     paddingBottom: 28,
@@ -586,6 +635,45 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 120,
+  },
+  prefillNoticeCard: {
+    backgroundColor: "#ECFDF5",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  prefillIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#10B981",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  prefillIcon: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  prefillTextBlock: {
+    flex: 1,
+  },
+  prefillTitle: {
+    color: "#047857",
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  prefillSubtitle: {
+    color: "#047857",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
   },
   formCard: {
     backgroundColor: "#FFFFFF",
@@ -700,7 +788,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   dropdownOptionTextSelected: {
-    color: "#2563EB",
+    color: HEADER_BLUE,
   },
   timeGrid: {
     flexDirection: "row",
@@ -728,7 +816,7 @@ const styles = StyleSheet.create({
   },
   timeButtonSelected: {
     backgroundColor: "#EFF6FF",
-    borderColor: "#2563EB",
+    borderColor: HEADER_BLUE,
   },
   timeButtonText: {
     color: "#64748B",
@@ -736,7 +824,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   timeButtonTextSelected: {
-    color: "#2563EB",
+    color: HEADER_BLUE,
   },
   helperText: {
     color: "#64748B",
@@ -746,7 +834,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   selectedTimeText: {
-    color: "#2563EB",
+    color: HEADER_BLUE,
     fontSize: 13,
     fontWeight: "900",
     marginTop: 6,
@@ -798,11 +886,11 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
   },
   primaryButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: HEADER_BLUE,
     borderRadius: 18,
     paddingVertical: 17,
     alignItems: "center",
-    shadowColor: "#2563EB",
+    shadowColor: HEADER_BLUE,
     shadowOffset: {
       width: 0,
       height: 8,

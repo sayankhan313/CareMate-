@@ -132,7 +132,7 @@ const getCriticalVitalInfo = (reading: VitalReading) => {
 
 export const SafetyResponseScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
-  const { vitalReading, triggerSource } = route.params;
+  const { vitalReading, triggerSource ,manualCriticalInfo} = route.params;
 
   const [safetyAlert, setSafetyAlert] = useState<SafetyAlert | null>(null);
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER_SECONDS);
@@ -142,10 +142,9 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const hasEscalatedRef = useRef(false);
-
   const vitalInfo = useMemo(() => {
-    return getCriticalVitalInfo(vitalReading);
-  }, [vitalReading]);
+    return manualCriticalInfo || getCriticalVitalInfo(vitalReading);
+  }, [manualCriticalInfo, vitalReading]);
 
  const progressWidth = useMemo<DimensionValue>(() => {
   const percentage = Math.max(

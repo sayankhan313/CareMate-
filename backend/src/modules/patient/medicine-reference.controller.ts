@@ -26,6 +26,7 @@ export const medicineReferenceController = {
 
   async parseMedicineScan(req: Request, res: Response) {
     const detectedText = String(req.body.detectedText || "").trim();
+
     const ocrConfidence =
       typeof req.body.ocrConfidence === "number"
         ? req.body.ocrConfidence
@@ -48,6 +49,33 @@ export const medicineReferenceController = {
       message: result.matched
         ? "Medicine matched successfully."
         : "Medicine needs manual review.",
+      data: result,
+    });
+  },
+
+  async parsePrescriptionScan(req: Request, res: Response) {
+    const detectedText = String(req.body.detectedText || "").trim();
+
+    const ocrConfidence =
+      typeof req.body.ocrConfidence === "number"
+        ? req.body.ocrConfidence
+        : 82;
+
+    if (detectedText.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Detected prescription text is required.",
+      });
+    }
+
+    const result = await medicineReferenceService.parsePrescriptionScan({
+      detectedText,
+      ocrConfidence,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Prescription scan parsed successfully.",
       data: result,
     });
   },

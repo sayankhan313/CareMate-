@@ -5,7 +5,13 @@ const userRoleSchema = z.enum([
   "DOCTOR",
   "CAREGIVER",
   "PHARMACY",
-  
+]);
+
+const patientGenderSchema = z.enum([
+  "MALE",
+  "FEMALE",
+  "OTHER",
+  "PREFER_NOT_TO_SAY",
 ]);
 
 export const registerSchema = z
@@ -21,15 +27,15 @@ export const registerSchema = z
       .toLowerCase()
       .email("Please enter a valid email address."),
 
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters."),
+    password: z.string().min(8, "Password must be at least 8 characters."),
 
     role: userRoleSchema,
 
     phoneNumber: z.string().trim().optional(),
 
     dateOfBirth: z.string().trim().optional(),
+
+    gender: patientGenderSchema.optional(),
 
     medicalConditions: z.string().trim().optional(),
 
@@ -99,9 +105,7 @@ export const resetPasswordSchema = z
   .object({
     token: z.string().min(1, "Password reset token is required."),
 
-    newPassword: z
-      .string()
-      .min(8, "Password must be at least 8 characters."),
+    newPassword: z.string().min(8, "Password must be at least 8 characters."),
 
     confirmPassword: z.string().min(1, "Please confirm your password."),
   })

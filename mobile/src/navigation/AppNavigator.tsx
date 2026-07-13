@@ -21,6 +21,11 @@ import {ConnectedDeviceScreen} from "../screens/patient/ConnectedDeviceScreen";
 import { SafetyResponseScreen } from "../screens/patient/SafetyResponseScreen";
 import VideoConsultationScreen from "../screens/patient/VideoConsultationScreen";
 import ConsultationEndedScreen from "../screens/patient/ConsultationEndedScreen";
+import ScanMedicineScreen from "../screens/patient/ScanMedicineScreen";
+import ScanMedicineResultScreen from "../screens/patient/ScanMedicineResultScreen";
+import PrescriptionScanResultScreen from "../screens/patient/PrescriptionScanResultScreen";
+import { ManualSafetyResponseScreen } from "../screens/patient/ManualSafetyResponseScreen";
+import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
 
 import { PatientTabNavigator } from "./PatientTabNavigator";
 
@@ -119,6 +124,7 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen name="PatientTabs" component={PatientTabNavigator} />
+            <Stack.Screen name="PatientProfile" component={PatientProfileScreen} />
 
             <Stack.Screen name="AddMedicine" component={AddMedicineScreen} />
 
@@ -130,6 +136,10 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="ConnectedDevice"
               component={ConnectedDeviceStackScreen}
+            />
+            <Stack.Screen
+              name="ManualSafetyResponse"
+              component={ManualSafetyResponseScreen}
             />
 
             <Stack.Screen
@@ -146,6 +156,17 @@ export const AppNavigator = () => {
               name="ConsultationEnded"
               component={ConsultationEndedScreen}
               options={{ headerShown: false }}
+            />
+            <Stack.Screen name="ScanMedicine" component={ScanMedicineScreen} />
+
+            <Stack.Screen
+              name="ScanMedicineResult"
+              component={ScanMedicineResultScreen}
+            />
+
+            <Stack.Screen
+              name="PrescriptionScanResult"
+              component={PrescriptionScanResultScreen}
             />
           </Stack.Navigator>
         </NavigationContainer>

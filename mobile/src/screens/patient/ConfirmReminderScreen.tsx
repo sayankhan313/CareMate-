@@ -18,12 +18,15 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../../services/tokenStorage";
-import type { RootStackParamList } from "../../types/navigation";
+import type { MedicineDraft, RootStackParamList } from "../../types/navigation";
 
 type ConfirmReminderScreenProps = NativeStackScreenProps<
   RootStackParamList,
   "ConfirmReminder"
 >;
+
+const HEADER_BLUE = "#2563EB";
+const BODY_BACKGROUND = "#F5F7FB";
 
 const getFrequencyLabel = (frequency: string) => {
   switch (frequency) {
@@ -58,6 +61,88 @@ const formatDateForBackend = (date: string) => {
   }
 
   return trimmedDate;
+};
+
+const getDateForBackendFromDate = (date: Date) => {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
+};
+
+const getTodayDateForBackend = () => {
+  return getDateForBackendFromDate(new Date());
+};
+
+const getTomorrowDateForBackend = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return getDateForBackendFromDate(tomorrow);
+};
+
+const isTodayDate = (dateText: string) => {
+  return formatDateForBackend(dateText) === getTodayDateForBackend();
+};
+
+const hasTimeAlreadyPassedToday = (timeOfDay: string) => {
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeOfDay.trim());
+
+  if (!timeMatch) {
+    return false;
+  }
+
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return false;
+  }
+
+  const now = new Date();
+  const scheduledToday = new Date();
+
+  scheduledToday.setHours(hour, minute, 0, 0);
+
+  return scheduledToday <= now;
+};
+
+const getAdjustedStartDateForTime = (startDate: string, timeOfDay: string) => {
+  const backendStartDate = formatDateForBackend(startDate);
+
+  if (!isTodayDate(startDate)) {
+    return backendStartDate;
+  }
+
+  if (hasTimeAlreadyPassedToday(timeOfDay)) {
+    return getTomorrowDateForBackend();
+  }
+
+  return backendStartDate;
+};
+
+const getSchedulePreviewText = (startDate: string, selectedTimes: string[]) => {
+  const adjustedDates = selectedTimes.map((time) =>
+    getAdjustedStartDateForTime(startDate, time)
+  );
+
+  const uniqueAdjustedDates = Array.from(new Set(adjustedDates));
+
+  if (uniqueAdjustedDates.length === 1) {
+    return uniqueAdjustedDates[0];
+  }
+
+  return selectedTimes
+    .map((time) => `${time} starts ${getAdjustedStartDateForTime(startDate, time)}`)
+    .join("\n");
 };
 
 const getErrorMessage = (result: any) => {
@@ -99,6 +184,34 @@ export const ConfirmReminderScreen = ({
     return getFrequencyLabel(medicineDraft.frequency);
   }, [medicineDraft.frequency]);
 
+  const scheduleStartPreview = useMemo(() => {
+    return getSchedulePreviewText(medicineDraft.startDate, selectedTimes);
+  }, [medicineDraft.startDate, selectedTimes]);
+
+  const hasAutoAdjustedStartDate = useMemo(() => {
+    const originalStartDate = formatDateForBackend(medicineDraft.startDate);
+
+    return selectedTimes.some((time) => {
+      return getAdjustedStartDateForTime(medicineDraft.startDate, time) !== originalStartDate;
+    });
+  }, [medicineDraft.startDate, selectedTimes]);
+
+  const getEditableDraft = (): MedicineDraft => {
+    return {
+      ...medicineDraft,
+      timeOfDay: selectedTimes[0],
+      selectedTimes,
+      sendToDoctorForReview: doctorReviewEnabled,
+    };
+  };
+
+  const handleEditDetails = () => {
+    navigation.replace("AddMedicine", {
+      medicineDraft: getEditableDraft(),
+      mode: "EDIT_DRAFT",
+    });
+  };
+
   const handleSaveReminder = async () => {
     try {
       setIsSaving(true);
@@ -123,7 +236,10 @@ export const ConfirmReminderScreen = ({
             instructions: medicineDraft.instructions || undefined,
             frequency: medicineDraft.frequency,
             timeOfDay: time,
-            startDate: formatDateForBackend(medicineDraft.startDate),
+            startDate: getAdjustedStartDateForTime(
+              medicineDraft.startDate,
+              time
+            ),
             endDate: medicineDraft.endDate
               ? formatDateForBackend(medicineDraft.endDate)
               : undefined,
@@ -174,7 +290,7 @@ export const ConfirmReminderScreen = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor="#1E40AF" barStyle="light-content" />
+      <StatusBar backgroundColor={HEADER_BLUE} barStyle="light-content" />
 
       <View style={styles.screen}>
         <View style={styles.header}>
@@ -216,16 +332,33 @@ export const ConfirmReminderScreen = ({
           </View>
 
           <View style={styles.detailsCard}>
-            <Text style={styles.cardTitle}>Reminder Details</Text>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>Reminder Details</Text>
+
+              <TouchableOpacity
+                style={styles.smallEditButton}
+                onPress={handleEditDetails}
+                disabled={isSaving}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.smallEditButtonText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
 
             <DetailRow label="Frequency" value={frequencyLabel} />
 
             <DetailRow label="Time" value={selectedTimes.join(", ")} />
 
-            <DetailRow
-              label="Start Date"
-              value={formatDateForBackend(medicineDraft.startDate)}
-            />
+            <DetailRow label="Start Date" value={scheduleStartPreview} />
+
+            {hasAutoAdjustedStartDate ? (
+              <View style={styles.scheduleNotice}>
+                <Text style={styles.scheduleNoticeText}>
+                  Some selected times have already passed today, so those reminders
+                  will start from tomorrow.
+                </Text>
+              </View>
+            ) : null}
 
             <DetailRow
               label="End Date"
@@ -259,7 +392,7 @@ export const ConfirmReminderScreen = ({
                 false: "#D1D5DB",
                 true: "#BFDBFE",
               }}
-              thumbColor={doctorReviewEnabled ? "#2563EB" : "#F9FAFB"}
+              thumbColor={doctorReviewEnabled ? HEADER_BLUE : "#F9FAFB"}
             />
           </View>
         </ScrollView>
@@ -268,10 +401,19 @@ export const ConfirmReminderScreen = ({
           style={[
             styles.footer,
             {
-              paddingBottom: Math.max(insets.bottom, 22),
+              paddingBottom: Math.max(insets.bottom + 12, 26),
             },
           ]}
         >
+          <TouchableOpacity
+            style={styles.editDetailsButton}
+            onPress={handleEditDetails}
+            disabled={isSaving}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.editDetailsButtonText}>Edit Details</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[
               styles.primaryButton,
@@ -286,15 +428,6 @@ export const ConfirmReminderScreen = ({
             ) : (
               <Text style={styles.primaryButtonText}>Save Reminder</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => navigation.goBack()}
-            disabled={isSaving}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.editButtonText}>Edit Details</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -327,14 +460,14 @@ const DetailRow = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#1E40AF",
+    backgroundColor: HEADER_BLUE,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: BODY_BACKGROUND,
   },
   header: {
-    backgroundColor: "#1E40AF",
+    backgroundColor: HEADER_BLUE,
     paddingHorizontal: 22,
     paddingTop: 18,
     paddingBottom: 28,
@@ -375,7 +508,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 22,
-    paddingBottom: 150,
+    paddingBottom: 178,
   },
   mainCard: {
     backgroundColor: "#FFFFFF",
@@ -442,11 +575,29 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 18,
   },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
   cardTitle: {
     color: "#111827",
     fontSize: 20,
     fontWeight: "900",
-    marginBottom: 12,
+  },
+  smallEditButton: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  smallEditButtonText: {
+    color: HEADER_BLUE,
+    fontSize: 12,
+    fontWeight: "900",
   },
   detailRow: {
     paddingVertical: 14,
@@ -471,6 +622,22 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     flex: 1,
     textAlign: "right",
+  },
+  scheduleNotice: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  scheduleNoticeText: {
+    color: HEADER_BLUE,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
   },
   reviewCard: {
     backgroundColor: "#FFFFFF",
@@ -513,16 +680,30 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 22,
-    paddingTop: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
+  editDetailsButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  editDetailsButtonText: {
+    color: HEADER_BLUE,
+    fontSize: 16,
+    fontWeight: "900",
+  },
   primaryButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: HEADER_BLUE,
     borderRadius: 18,
     paddingVertical: 17,
     alignItems: "center",
-    shadowColor: "#2563EB",
+    shadowColor: HEADER_BLUE,
     shadowOffset: {
       width: 0,
       height: 8,
@@ -538,14 +719,5 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.65,
-  },
-  editButton: {
-    alignItems: "center",
-    paddingTop: 14,
-  },
-  editButtonText: {
-    color: "#2563EB",
-    fontSize: 15,
-    fontWeight: "900",
   },
 });

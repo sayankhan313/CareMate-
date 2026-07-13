@@ -36,6 +36,8 @@ type DateTab = "TODAY" | "TOMORROW" | "WEEK";
 
 type MedicinePeriod = "Morning" | "Afternoon" | "Evening";
 
+type ActionLoadingType = "TAKEN" | "SNOOZE";
+
 type TodayMedicine = {
   medicineId: string;
   reminderId: string;
@@ -76,15 +78,6 @@ const PROGRESS_RING_STROKE = 10;
 const PROGRESS_RING_RADIUS = 42;
 const PROGRESS_RING_CENTER = PROGRESS_RING_SIZE / 2;
 const PROGRESS_RING_CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RING_RADIUS;
-
-const emptySummary: TodayMedicineSummary = {
-  totalCount: 0,
-  takenCount: 0,
-  pendingCount: 0,
-  missedCount: 0,
-  snoozedCount: 0,
-  progressPercentage: 0,
-};
 
 const getDateKeyFromOffset = (offsetDays: number) => {
   const date = new Date();
@@ -154,6 +147,77 @@ const getAllowedDateKeys = (selectedTab: DateTab) => {
     getDateKeyFromOffset(5),
     getDateKeyFromOffset(6),
   ];
+};
+
+const getTimeMinutes = (timeValue?: string | null) => {
+  if (!timeValue) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const match = /^(\d{1,2}):(\d{2})/.exec(timeValue.trim());
+
+  if (!match) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return hour * 60 + minute;
+};
+
+const getDateSortValue = (medicine: TodayMedicine) => {
+  const dateKey = getMedicineDateKey(medicine);
+
+  if (!dateKey) {
+    return 0;
+  }
+
+  const parsedDate = new Date(`${dateKey}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 0;
+  }
+
+  return parsedDate.getTime();
+};
+
+const sortMedicinesBySchedule = (medicines: TodayMedicine[]) => {
+  return medicines
+    .map((medicine, index) => ({
+      medicine,
+      index,
+    }))
+    .sort((first, second) => {
+      const dateDifference =
+        getDateSortValue(first.medicine) - getDateSortValue(second.medicine);
+
+      if (dateDifference !== 0) {
+        return dateDifference;
+      }
+
+      const timeDifference =
+        getTimeMinutes(first.medicine.timeOfDay) -
+        getTimeMinutes(second.medicine.timeOfDay);
+
+      if (timeDifference !== 0) {
+        return timeDifference;
+      }
+
+      return first.index - second.index;
+    })
+    .map((item) => item.medicine);
 };
 
 const buildSummaryFromMedicines = (
@@ -355,7 +419,11 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
   const [selectedTab, setSelectedTab] = useState<DateTab>("TODAY");
   const [allMedicines, setAllMedicines] = useState<TodayMedicine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [actionLoadingReminderId, setActionLoadingReminderId] = useState<
+    string | null
+  >(null);
+  const [actionLoadingType, setActionLoadingType] =
+    useState<ActionLoadingType | null>(null);
 
   const filteredMedicines = useMemo(() => {
     const allowedDateKeys = getAllowedDateKeys(selectedTab);
@@ -366,7 +434,7 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
     });
 
     if (selectedTab !== "WEEK") {
-      return dateFilteredMedicines;
+      return sortMedicinesBySchedule(dateFilteredMedicines);
     }
 
     const uniqueReminderMap = new Map<string, TodayMedicine>();
@@ -379,60 +447,78 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
       }
     });
 
-    return Array.from(uniqueReminderMap.values());
+    return sortMedicinesBySchedule(Array.from(uniqueReminderMap.values()));
   }, [allMedicines, selectedTab]);
 
   const summary = useMemo(() => {
     return buildSummaryFromMedicines(filteredMedicines);
   }, [filteredMedicines]);
 
-  const fetchMedicines = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  const fetchMedicines = useCallback(
+    async (mode: "initial" | "silent" = "initial") => {
+      try {
+        if (mode === "initial") {
+          setIsLoading(true);
+        }
 
-      const token = await tokenStorage.getToken();
+        const token = await tokenStorage.getToken();
 
-      if (!token) {
-        Alert.alert("Session expired", "Please login again.");
-        return;
+        if (!token) {
+          Alert.alert("Session expired", "Please login again.");
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/patient/medicines/today`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        let result: any = {};
+
+        try {
+          result = await response.json();
+        } catch (error) {
+          result = {};
+        }
+
+        if (!response.ok) {
+          Alert.alert(
+            "Unable to fetch medicines",
+            result.message || "Please try again."
+          );
+          return;
+        }
+
+        const data: TodayMedicineResponse = result.data;
+
+        setAllMedicines(Array.isArray(data.medicines) ? data.medicines : []);
+      } catch (error) {
+        Alert.alert("Network error", "Unable to connect to server.");
+      } finally {
+        if (mode === "initial") {
+          setIsLoading(false);
+        }
       }
-
-      const response = await fetch(`${API_BASE_URL}/patient/medicines/today`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        Alert.alert(
-          "Unable to fetch medicines",
-          result.message || "Please try again."
-        );
-        return;
-      }
-
-      const data: TodayMedicineResponse = result.data;
-
-      setAllMedicines(Array.isArray(data.medicines) ? data.medicines : []);
-    } catch (error) {
-      Alert.alert("Network error", "Unable to connect to server.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
-      fetchMedicines();
+      fetchMedicines("initial");
     }, [fetchMedicines])
   );
 
   const markTaken = async (reminderId: string) => {
+    if (actionLoadingReminderId) {
+      return;
+    }
+
     try {
-      setIsActionLoading(true);
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("TAKEN");
 
       const token = await tokenStorage.getToken();
 
@@ -451,7 +537,13 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         }
       );
 
-      const result = await response.json();
+      let result: any = {};
+
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = {};
+      }
 
       if (!response.ok) {
         Alert.alert(
@@ -461,17 +553,36 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         return;
       }
 
-      await fetchMedicines();
+      setAllMedicines((currentMedicines) =>
+        currentMedicines.map((medicine) =>
+          medicine.reminderId === reminderId
+            ? {
+                ...medicine,
+                status: "TAKEN",
+                takenAt: new Date().toISOString(),
+                snoozedUntil: null,
+              }
+            : medicine
+        )
+      );
+
+      await fetchMedicines("silent");
     } catch (error) {
       Alert.alert("Network error", "Unable to connect to server.");
     } finally {
-      setIsActionLoading(false);
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
     }
   };
 
   const snoozeReminder = async (reminderId: string) => {
+    if (actionLoadingReminderId) {
+      return;
+    }
+
     try {
-      setIsActionLoading(true);
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("SNOOZE");
 
       const token = await tokenStorage.getToken();
 
@@ -496,7 +607,13 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         }
       );
 
-      const result = await response.json();
+      let result: any = {};
+
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = {};
+      }
 
       if (!response.ok) {
         Alert.alert(
@@ -506,11 +623,24 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         return;
       }
 
-      await fetchMedicines();
+      setAllMedicines((currentMedicines) =>
+        currentMedicines.map((medicine) =>
+          medicine.reminderId === reminderId
+            ? {
+                ...medicine,
+                status: "SNOOZED",
+                snoozedUntil,
+              }
+            : medicine
+        )
+      );
+
+      await fetchMedicines("silent");
     } catch (error) {
       Alert.alert("Network error", "Unable to connect to server.");
     } finally {
-      setIsActionLoading(false);
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
     }
   };
 
@@ -635,8 +765,18 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
         medicine.status === "SNOOZED" ||
         medicine.status === "MISSED");
 
-    const isTakenButtonDisabled = isActionLoading || isMissed;
-    const isSnoozeButtonDisabled = isActionLoading || isMissed || isSnoozed;
+    const isCurrentMedicineActionLoading =
+      actionLoadingReminderId === medicine.reminderId;
+
+    const isTakingThisMedicine =
+      isCurrentMedicineActionLoading && actionLoadingType === "TAKEN";
+
+    const isSnoozingThisMedicine =
+      isCurrentMedicineActionLoading && actionLoadingType === "SNOOZE";
+
+    const isTakenButtonDisabled = isCurrentMedicineActionLoading || isMissed;
+    const isSnoozeButtonDisabled =
+      isCurrentMedicineActionLoading || isMissed || isSnoozed;
 
     return (
       <View key={getCardKey(medicine, index)} style={styles.medicineCard}>
@@ -674,7 +814,7 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
                   style={[
                     styles.actionButton,
                     styles.takenActionButton,
-                    isTakenButtonDisabled ? styles.disabledButton : undefined,
+                    isTakingThisMedicine ? styles.disabledButton : undefined,
                     isMissed ? styles.missedDisabledActionButton : undefined,
                   ]}
                   disabled={isTakenButtonDisabled}
@@ -687,7 +827,7 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
                       isMissed ? styles.missedDisabledActionText : undefined,
                     ]}
                   >
-                    Taken
+                    {isTakingThisMedicine ? "Saving..." : "Taken"}
                   </Text>
                 </TouchableOpacity>
 
@@ -695,7 +835,9 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
                   style={[
                     styles.actionButton,
                     styles.snoozeActionButton,
-                    isSnoozeButtonDisabled ? styles.disabledButton : undefined,
+                    isSnoozingThisMedicine
+                      ? styles.disabledButton
+                      : undefined,
                     isMissed || isSnoozed
                       ? styles.missedDisabledActionButton
                       : undefined,
@@ -712,7 +854,7 @@ export const MedicinesScreen = ({ navigation }: MedicinesScreenProps) => {
                         : undefined,
                     ]}
                   >
-                    Snooze
+                    {isSnoozingThisMedicine ? "Snoozing..." : "Snooze"}
                   </Text>
                 </TouchableOpacity>
               </View>

@@ -11,7 +11,10 @@ import {
   View,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView} from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   useFocusEffect,
   type CompositeScreenProps,
@@ -52,6 +55,8 @@ type PatientDashboardScreenProps = CompositeScreenProps<
 type DashboardStatus = "STABLE" | "WARNING" | "CRITICAL" | "NO_DATA";
 
 type MedicineStatus = "PENDING" | "TAKEN" | "MISSED" | "SNOOZED";
+
+type DashboardMedicineActionType = "TAKEN" | "SNOOZE";
 
 type DashboardMedicine = {
   medicineId: string;
@@ -261,10 +266,17 @@ export const PatientDashboardScreen = ({
   navigation,
   route,
 }: PatientDashboardScreenProps) => {
+  const insets = useSafeAreaInsets();
+
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [actionLoadingReminderId, setActionLoadingReminderId] = useState<
+    string | null
+  >(null);
+  const [actionLoadingType, setActionLoadingType] =
+    useState<DashboardMedicineActionType | null>(null);
 
   const resetToLogin = useCallback(async () => {
     await tokenStorage.removeToken();
@@ -283,15 +295,19 @@ export const PatientDashboardScreen = ({
   }, [navigation]);
 
   const loadDashboard = useCallback(
-    async (mode: "initial" | "refresh" = "initial") => {
+    async (mode: "initial" | "refresh" | "silent" = "initial") => {
       try {
         if (mode === "initial") {
           setIsLoading(true);
-        } else {
+        }
+
+        if (mode === "refresh") {
           setIsRefreshing(true);
         }
 
-        setErrorMessage("");
+        if (mode !== "silent") {
+          setErrorMessage("");
+        }
 
         const token = await tokenStorage.getToken();
 
@@ -324,10 +340,17 @@ export const PatientDashboardScreen = ({
         const message =
           error instanceof Error ? error.message : "Unable to load dashboard.";
 
-        setErrorMessage(message);
+        if (mode !== "silent") {
+          setErrorMessage(message);
+        }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (mode === "initial") {
+          setIsLoading(false);
+        }
+
+        if (mode === "refresh") {
+          setIsRefreshing(false);
+        }
       }
     },
     [resetToLogin]
@@ -339,19 +362,198 @@ export const PatientDashboardScreen = ({
     }, [loadDashboard])
   );
 
+  const removeMedicineFromDashboardCard = (reminderId: string) => {
+    setDashboard((currentDashboard) => {
+      if (!currentDashboard?.nextMedicineGroup) {
+        return currentDashboard;
+      }
+
+      const updatedMedicines = currentDashboard.nextMedicineGroup.medicines.filter(
+        (medicine) => medicine.reminderId !== reminderId
+      );
+
+      if (updatedMedicines.length === 0) {
+        return {
+          ...currentDashboard,
+          nextMedicineGroup: null,
+        };
+      }
+
+      return {
+        ...currentDashboard,
+        nextMedicineGroup: {
+          ...currentDashboard.nextMedicineGroup,
+          count: updatedMedicines.length,
+          medicines: updatedMedicines,
+        },
+      };
+    });
+  };
+
+  const markDashboardMedicineTaken = async (reminderId: string) => {
+    if (actionLoadingReminderId) {
+      return;
+    }
+
+    try {
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("TAKEN");
+
+      const token = await tokenStorage.getToken();
+
+      if (!token) {
+        Alert.alert("Session expired", "Please login again.");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      let result: any = {};
+
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = {};
+      }
+
+      if (!response.ok) {
+        Alert.alert(
+          "Unable to update medicine",
+          result.message || "Please try again."
+        );
+        return;
+      }
+
+      removeMedicineFromDashboardCard(reminderId);
+
+      await loadDashboard("silent");
+    } catch (error) {
+      Alert.alert("Network error", "Unable to connect to server.");
+    } finally {
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
+    }
+  };
+
+  const snoozeDashboardMedicine = async (reminderId: string) => {
+    if (actionLoadingReminderId) {
+      return;
+    }
+
+    try {
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("SNOOZE");
+
+      const token = await tokenStorage.getToken();
+
+      if (!token) {
+        Alert.alert("Session expired", "Please login again.");
+        return;
+      }
+
+      const snoozedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+      const response = await fetch(
+        `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            snoozedUntil,
+          }),
+        }
+      );
+
+      let result: any = {};
+
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = {};
+      }
+
+      if (!response.ok) {
+        Alert.alert(
+          "Unable to snooze medicine",
+          result.message || "Please try again."
+        );
+        return;
+      }
+
+      removeMedicineFromDashboardCard(reminderId);
+
+      await loadDashboard("silent");
+    } catch (error) {
+      Alert.alert("Network error", "Unable to connect to server.");
+    } finally {
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
+    }
+  };
+
+  const getRootNavigation = () => {
+    return navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  };
+
   const openAddMedicineScreen = () => {
-    const rootNavigation =
-      navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+    const rootNavigation = getRootNavigation();
 
     rootNavigation?.navigate("AddMedicine");
+  };
+ const openPatientProfileScreen = () => {
+  const rootNavigation = getRootNavigation();
+
+  if (!rootNavigation) {
+    Alert.alert("Unable to open", "Profile screen is not available right now.");
+    return;
+  }
+
+  rootNavigation.navigate("PatientProfile", {
+    user: dashboard?.patient || route.params?.user,
+  });
+};
+
+  const openScanMedicineScreen = () => {
+    const rootNavigation = getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Medicine scanner is not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.navigate("ScanMedicine");
+  };
+
+  const openEmergencyResponseScreen = () => {
+    const rootNavigation = getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Safety Response screen is not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.navigate("ManualSafetyResponse");
   };
 
   const openMedicinesScreen = () => {
     navigation.navigate("Medicines");
-  };
-
-  const openVitalsScreen = () => {
-    navigation.navigate("Vitals");
   };
 
   const openConsultationsScreen = () => {
@@ -379,6 +581,17 @@ export const PatientDashboardScreen = ({
 
   const nextMedicineGroup = dashboard?.nextMedicineGroup || null;
   const firstMedicine = nextMedicineGroup?.medicines[0];
+
+  const isNextMedicineActionLoading =
+    firstMedicine?.reminderId === actionLoadingReminderId;
+
+  const isTakingNextMedicine =
+    isNextMedicineActionLoading && actionLoadingType === "TAKEN";
+
+  const isSnoozingNextMedicine =
+    isNextMedicineActionLoading && actionLoadingType === "SNOOZE";
+
+  const isMedicineActionDisabled = Boolean(actionLoadingReminderId);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -410,19 +623,28 @@ export const PatientDashboardScreen = ({
               <View style={styles.notificationDot} />
             </TouchableOpacity>
 
-            <View style={styles.profileCircle}>
+            <TouchableOpacity
+              style={styles.profileCircle}
+              activeOpacity={0.85}
+              onPress={openPatientProfileScreen}
+            >
               {patientInitial ? (
                 <Text style={styles.profileInitial}>{patientInitial}</Text>
               ) : (
                 <UserRound size={20} color="#2563EB" />
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         </LinearGradient>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(32, insets.bottom + 108),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -612,19 +834,41 @@ export const PatientDashboardScreen = ({
                     {nextMedicineGroup.count === 1 ? (
                       <View style={styles.medicineButtonRow}>
                         <TouchableOpacity
-                          style={styles.takenButton}
+                          style={[
+                            styles.takenButton,
+                            isTakingNextMedicine
+                              ? styles.disabledMedicineButton
+                              : undefined,
+                          ]}
                           activeOpacity={0.85}
-                          onPress={openMedicinesScreen}
+                          disabled={isMedicineActionDisabled}
+                          onPress={() =>
+                            markDashboardMedicineTaken(firstMedicine.reminderId)
+                          }
                         >
-                          <Text style={styles.takenButtonText}>Taken</Text>
+                          <Text style={styles.takenButtonText}>
+                            {isTakingNextMedicine ? "Saving..." : "Taken"}
+                          </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.snoozeButton}
+                          style={[
+                            styles.snoozeButton,
+                            isSnoozingNextMedicine
+                              ? styles.disabledMedicineButton
+                              : undefined,
+                          ]}
                           activeOpacity={0.85}
-                          onPress={openMedicinesScreen}
+                          disabled={isMedicineActionDisabled}
+                          onPress={() =>
+                            snoozeDashboardMedicine(firstMedicine.reminderId)
+                          }
                         >
-                          <Text style={styles.snoozeButtonText}>Snooze</Text>
+                          <Text style={styles.snoozeButtonText}>
+                            {isSnoozingNextMedicine
+                              ? "Snoozing..."
+                              : "Snooze"}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -671,7 +915,7 @@ export const PatientDashboardScreen = ({
                   title="Scan Medicine"
                   icon={<Camera size={24} color="#2563EB" />}
                   iconBackground="#EFF6FF"
-                  onPress={() => showComingSoon("Medicine scanner")}
+                  onPress={openScanMedicineScreen}
                 />
 
                 <QuickAction
@@ -692,7 +936,7 @@ export const PatientDashboardScreen = ({
                   title="Safety Response"
                   icon={<ShieldAlert size={24} color="#DC2626" />}
                   iconBackground="#FEF2F2"
-                  onPress={() => showComingSoon("Safety response")}
+                  onPress={openEmergencyResponseScreen}
                 />
               </View>
 
@@ -927,7 +1171,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 32,
   },
   loadingCard: {
     backgroundColor: "#FFFFFF",
@@ -1179,6 +1422,9 @@ const styles = StyleSheet.create({
     color: "#2563EB",
     fontSize: 16,
     fontWeight: "900",
+  },
+  disabledMedicineButton: {
+    opacity: 0.55,
   },
   viewMedicinesButton: {
     backgroundColor: "#2563EB",

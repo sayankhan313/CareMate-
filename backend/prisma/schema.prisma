@@ -38,6 +38,13 @@ enum MedicineFrequency {
   CUSTOM
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum MedicineReviewStatus {
   NOT_REQUESTED
   PENDING
@@ -135,6 +142,7 @@ model PatientProfile {
   userId            String   @unique
   phoneNumber       String
   dateOfBirth       DateTime
+  gender            Gender?
   medicalConditions String?
   emergencyContact  String
   createdAt         DateTime @default(now())
@@ -337,8 +345,11 @@ model MedicineReference {
   defaultTimeOfDay    String              @default("08:00")
   safetyLevel         MedicineSafetyLevel @default(STANDARD)
   safetyNote          String
-  isActive            Boolean             @default(true)
 
+  imageUrl     String?
+  imageAltText String?
+
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

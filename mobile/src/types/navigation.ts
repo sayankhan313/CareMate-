@@ -11,29 +11,81 @@ export type PatientTabParamList = {
   PatientOrders: undefined;
 };
 
+export type MedicineDraft = {
+  name: string;
+  dose: string;
+  instructions?: string;
+  frequency: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY" | "AS_NEEDED";
+  timeOfDay: string;
+  selectedTimes?: string[];
+  startDate: string;
+  endDate?: string;
+  prescriptionPattern?: string | null;
+  sendToDoctorForReview: boolean;
+};
+
+export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
+
 export type RootStackParamList = {
   Splash: undefined;
   Welcome: undefined;
   Login: undefined;
   RoleSelection: undefined;
   PatientSignup: undefined;
+
   EmailVerification: {
     email?: string;
   };
+
   ForgotPassword: undefined;
 
   PatientTabs:
-  | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+    | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+    | undefined;
+
+  PatientProfile:
+  | {
+    user?: any;
+  }
+  | undefined;
+  AddMedicine:
+  | {
+      medicineDraft?: MedicineDraft;
+      mode?: "CREATE" | "EDIT_DRAFT";
+    }
   | undefined;
 
-  AddMedicine: undefined;
-  ConfirmReminder: undefined;
-  ConnectedDevice: undefined;
-
-  SafetyResponse: {
-    vitalReading: VitalReading;
-    triggerSource?: string;
+  ConfirmReminder: {
+    medicineDraft: MedicineDraft;
   };
+
+  ScanMedicine: undefined;
+
+ ScanMedicineResult: {
+  detectedText: string;
+  ocrConfidence?: number;
+  source?: ScanMedicineSource;
+  scannedImageUri?: string;
+};
+
+PrescriptionScanResult: {
+  detectedText: string;
+  ocrConfidence?: number;
+  source?: ScanMedicineSource;
+};
+
+  ConnectedDevice: undefined;
+  ManualSafetyResponse: undefined;
+
+ SafetyResponse: {
+  vitalReading: VitalReading;
+  triggerSource?: string;
+  manualCriticalInfo?: {
+    title: string;
+    value: string;
+    reason: string;
+  };
+};
 
   VideoConsultation: {
     consultationId: string;
