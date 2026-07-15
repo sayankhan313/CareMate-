@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,8 +16,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  FileText,
+  HelpCircle,
+  Info,
+  Pill,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Stethoscope,
+} from "lucide-react-native";
 
 import {
   medicineScanApi,
@@ -21,16 +46,54 @@ import type { RootStackParamList } from "../../types/navigation";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ScanMedicineResult">;
 
-const HEADER_BLUE = "#2563EB";
-const BODY_BACKGROUND = "#F8FAFC";
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_DARK = "#167A58";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const WARNING = "#F6A545";
+const WARNING_DARK = "#A85A13";
+const WARNING_LIGHT = "#FFF3E2";
+
+const DANGER = "#EF4D56";
+const DANGER_DARK = "#B42318";
+const DANGER_LIGHT = "#FFEDEE";
+
+const formatConfidence = (value?: number | null) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "Not available";
+  }
+
+  if (value <= 1) {
+    return `${Math.round(value * 100)}%`;
+  }
+
+  return `${Math.round(value)}%`;
+};
 
 const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
+  const insets = useSafeAreaInsets();
+
   const [scanResult, setScanResult] = useState<ParsedMedicineScan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [screenError, setScreenError] = useState("");
 
   const scannedImageUri = route.params.scannedImageUri;
   const isMatched = Boolean(scanResult?.matched);
+
+  const confidenceText = useMemo(() => {
+    return formatConfidence(route.params.ocrConfidence);
+  }, [route.params.ocrConfidence]);
 
   const loadScanResult = useCallback(async () => {
     try {
@@ -94,9 +157,20 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
     }
 
     return (
-      <View style={styles.scheduleCard}>
-        <View style={styles.scheduleHeaderRow}>
-          <Text style={styles.scheduleTitle}>Schedule Detected</Text>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelTitleRow}>
+            <View style={styles.panelIconCircle}>
+              <Clock3 size={20} color={PRIMARY} strokeWidth={2.6} />
+            </View>
+
+            <View style={styles.panelTitleBlock}>
+              <Text style={styles.panelTitle}>Dose timing detected</Text>
+              <Text style={styles.panelSubtitle}>
+                Prescription pattern converted into reminder times
+              </Text>
+            </View>
+          </View>
 
           <View style={styles.patternBadge}>
             <Text style={styles.patternBadgeText}>
@@ -105,307 +179,458 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
           </View>
         </View>
 
-        <View style={styles.timeRow}>
-          <View
-            style={[
-              styles.timePill,
-              scanResult.prescriptionSchedule.morning && styles.activeTimePill,
-            ]}
-          >
-            <Text
-              style={[
-                styles.timePillText,
-                scanResult.prescriptionSchedule.morning &&
-                  styles.activeTimePillText,
-              ]}
-            >
-              Morning
-            </Text>
-          </View>
+        <View style={styles.timelineBox}>
+          <TimelineItem
+            label="Morning"
+            active={scanResult.prescriptionSchedule.morning}
+          />
 
-          <View
-            style={[
-              styles.timePill,
-              scanResult.prescriptionSchedule.afternoon &&
-                styles.activeTimePill,
-            ]}
-          >
-            <Text
-              style={[
-                styles.timePillText,
-                scanResult.prescriptionSchedule.afternoon &&
-                  styles.activeTimePillText,
-              ]}
-            >
-              Lunch
-            </Text>
-          </View>
+          <View style={styles.timelineConnector} />
 
-          <View
-            style={[
-              styles.timePill,
-              scanResult.prescriptionSchedule.night && styles.activeTimePill,
-            ]}
-          >
-            <Text
-              style={[
-                styles.timePillText,
-                scanResult.prescriptionSchedule.night &&
-                  styles.activeTimePillText,
-              ]}
-            >
-              Night
-            </Text>
-          </View>
+          <TimelineItem
+            label="Lunch"
+            active={scanResult.prescriptionSchedule.afternoon}
+          />
+
+          <View style={styles.timelineConnector} />
+
+          <TimelineItem
+            label="Night"
+            active={scanResult.prescriptionSchedule.night}
+          />
         </View>
 
-        <Text style={styles.scheduleInfoText}>
-          {scanResult.prescriptionSchedule.instructionText}
-        </Text>
+        <View style={styles.detectedInstructionBox}>
+          <FileText size={17} color={PRIMARY_DARK} strokeWidth={2.5} />
+          <Text style={styles.detectedInstructionText}>
+            {scanResult.prescriptionSchedule.instructionText}
+          </Text>
+        </View>
       </View>
     );
   };
 
-  return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={HEADER_BLUE} />
+  const shouldShowFooter = !isLoading && !screenError && Boolean(scanResult);
 
-      <SafeAreaView style={styles.headerSafeArea} edges={["top"]}>
-        <View style={styles.header}>
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
             activeOpacity={0.85}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.7} />
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Medicine Scan Result</Text>
-            <Text style={styles.headerSubtitle}>
-              Matched medicine from catalogue
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Scan Result</Text>
+            <Text style={styles.appBarSubtitle}>
+              Smart medicine recognition
             </Text>
           </View>
         </View>
-      </SafeAreaView>
 
-      <SafeAreaView style={styles.bodySafeArea} edges={["bottom"]}>
-        <View style={styles.body}>
-          {isLoading ? (
-            <View style={styles.centerState}>
-              <ActivityIndicator size="large" color={HEADER_BLUE} />
-              <Text style={styles.centerTitle}>Analysing medicine...</Text>
-              <Text style={styles.centerSubtitle}>
-                Matching scan with medicine catalogue
-              </Text>
-            </View>
-          ) : screenError ? (
-            <View style={styles.centerState}>
-              <Text style={styles.errorIcon}>!</Text>
-              <Text style={styles.centerTitle}>Unable to analyse scan</Text>
-              <Text style={styles.centerSubtitle}>{screenError}</Text>
+        {isLoading ? (
+          <CenterState
+            icon={<ActivityIndicator size="large" color={PRIMARY} />}
+            title="Analysing medicine..."
+            subtitle="CareMate+ is checking the scanned text against the medicine catalogue."
+          />
+        ) : screenError ? (
+          <CenterState
+            icon={
+              <View style={styles.errorStateIcon}>
+                <AlertCircle size={30} color={DANGER} strokeWidth={2.7} />
+              </View>
+            }
+            title="Unable to analyse scan"
+            subtitle={screenError}
+            actionLabel="Try Again"
+            onAction={loadScanResult}
+          />
+        ) : scanResult ? (
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingBottom: shouldShowFooter
+                  ? Math.max(insets.bottom + 132, 150)
+                  : Math.max(insets.bottom + 34, 64),
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.scanPreviewCard}>
+              <View style={styles.scanPreviewTopRow}>
+                <View>
+                  <Text style={styles.scanPreviewTitle}>Captured scan</Text>
+                  <Text style={styles.scanPreviewSubtitle}>
+                    OCR confidence {confidenceText}
+                  </Text>
+                </View>
 
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={loadScanResult}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.retryButtonText}>Try Again</Text>
-              </TouchableOpacity>
-            </View>
-          ) : scanResult ? (
-            <ScrollView
-              style={styles.content}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.imageCard}>
-                <Text style={styles.cardTitle}>Scanned Medicine</Text>
-
-                <View style={styles.scannedImageBox}>
-                  {scannedImageUri ? (
-                    <Image
-                      source={{ uri: scannedImageUri }}
-                      style={styles.scannedImage}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View style={styles.noImageBox}>
-                      <Text style={styles.noImageIcon}>⌁</Text>
-                      <Text style={styles.noImageText}>
-                        Preview unavailable
-                      </Text>
-                    </View>
-                  )}
+                <View style={styles.ocrBadge}>
+                  <Sparkles size={14} color={PRIMARY} strokeWidth={2.6} />
+                  
                 </View>
               </View>
 
-              <View style={styles.medicineHeroCard}>
+              <View style={styles.scannedImageBox}>
+                {scannedImageUri ? (
+                  <Image
+                    source={{ uri: scannedImageUri }}
+                    style={styles.scannedImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.noImageBox}>
+                    <Camera size={34} color={MUTED} strokeWidth={2.5} />
+                    <Text style={styles.noImageText}>Preview unavailable</Text>
+                  </View>
+                )}
+
                 <View
                   style={[
-                    styles.matchPill,
+                    styles.floatingResultBadge,
                     isMatched
-                      ? styles.matchPillSuccess
-                      : styles.matchPillWarning,
+                      ? styles.floatingResultBadgeSuccess
+                      : styles.floatingResultBadgeWarning,
                   ]}
                 >
+                  {isMatched ? (
+                    <CheckCircle2
+                      size={17}
+                      color={SUCCESS_DARK}
+                      strokeWidth={2.7}
+                    />
+                  ) : (
+                    <AlertCircle
+                      size={17}
+                      color={WARNING_DARK}
+                      strokeWidth={2.7}
+                    />
+                  )}
+
                   <Text
                     style={[
-                      styles.matchPillText,
+                      styles.floatingResultText,
                       isMatched
-                        ? styles.matchPillSuccessText
-                        : styles.matchPillWarningText,
+                        ? styles.floatingResultTextSuccess
+                        : styles.floatingResultTextWarning,
                     ]}
                   >
-                    {isMatched ? "Matched" : "Not Found"}
+                    {isMatched ? "Medicine matched" : "No confident match"}
                   </Text>
                 </View>
-
-                {isMatched ? (
-                  <>
-                    <Text style={styles.medicineName}>
-                      {scanResult.brandName}
-                    </Text>
-
-                    <Text style={styles.genericText}>
-                      {scanResult.genericName}
-                    </Text>
-
-                    <View style={styles.keyInfoRow}>
-                      <View style={styles.keyInfoBox}>
-                        <Text style={styles.keyInfoLabel}>Dose</Text>
-                        <Text style={styles.keyInfoValue}>
-                          {scanResult.dose}
-                        </Text>
-                      </View>
-
-                      <View style={styles.keyInfoBoxLast}>
-                        <Text style={styles.keyInfoLabel}>Form</Text>
-                        <Text style={styles.keyInfoValue}>
-                          {scanResult.form}
-                        </Text>
-                      </View>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.notFoundTitle}>
-                      Medicine not found in catalogue
-                    </Text>
-                    <Text style={styles.notFoundText}>
-                      The scan did not confidently match a saved medicine.
-                      Please scan again with better lighting or add the medicine
-                      manually.
-                    </Text>
-                  </>
-                )}
               </View>
 
-              {renderSchedule()}
+              
+            </View>
 
-              {isMatched ? (
-                <View style={styles.infoCard}>
-                  <Text style={styles.infoCardTitle}>
-                    Medicine Information
-                  </Text>
-
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoIconCircle}>
-                      <Text style={styles.infoIcon}>i</Text>
+            {isMatched ? (
+              <>
+                <View style={styles.medicinePassportCard}>
+                  <View style={styles.passportTopRow}>
+                    <View style={styles.passportIconCircle}>
+                      <Pill size={27} color={PRIMARY} strokeWidth={2.8} />
                     </View>
 
-                    <View style={styles.infoTextBlock}>
-                      <Text style={styles.infoLabel}>Category</Text>
-                      <Text style={styles.infoText}>{scanResult.category}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoIconCircleGreen}>
-                      <Text style={styles.infoIconGreen}>✓</Text>
-                    </View>
-
-                    <View style={styles.infoTextBlock}>
-                      <Text style={styles.infoLabel}>Used for</Text>
-                      <Text style={styles.infoText}>{scanResult.usedFor}</Text>
+                    <View style={styles.passportTextBlock}>
+                      <Text style={styles.passportLabel}>Matched medicine</Text>
+                      <Text style={styles.medicineName}>
+                        {scanResult.brandName}
+                      </Text>
+                      <Text style={styles.genericName}>
+                        {scanResult.genericName}
+                      </Text>
                     </View>
                   </View>
 
-                  <View style={styles.sideEffectBlock}>
-                    <Text style={styles.sideEffectTitle}>
-                      Common Side Effects
-                    </Text>
+                  <View style={styles.passportDivider} />
 
-                    <View style={styles.sideEffectRow}>
-                      {scanResult.commonSideEffects.length > 0 ? (
-                        scanResult.commonSideEffects.map((sideEffect) => (
-                          <View key={sideEffect} style={styles.sideEffectChip}>
-                            <Text style={styles.sideEffectText}>
-                              {sideEffect}
-                            </Text>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.noSideEffectText}>
-                          No common side effects listed.
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.instructionBlock}>
-                    <Text style={styles.instructionTitle}>Instructions</Text>
-                    <Text style={styles.instructionText}>
-                      {scanResult.instructions}
-                    </Text>
+                  <View style={styles.factGrid}>
+                    <FactTile label="Dose" value={scanResult.dose} />
+                    <FactTile label="Form" value={scanResult.form} />
                   </View>
                 </View>
-              ) : null}
 
-              {isMatched ? (
+                {renderSchedule()}
+
+                <View style={styles.panel}>
+                  <View style={styles.panelHeaderSimple}>
+                    <View style={styles.panelTitleRow}>
+                      <View style={styles.panelIconCircle}>
+                        <Info size={20} color={PRIMARY} strokeWidth={2.6} />
+                      </View>
+
+                      <View style={styles.panelTitleBlock}>
+                        <Text style={styles.panelTitle}>
+                          Medicine information
+                        </Text>
+                        <Text style={styles.panelSubtitle}>
+                          Catalogue details shown for patient awareness
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <InfoRow
+                    label="Category"
+                    value={scanResult.category}
+                    icon={<Pill size={19} color={PRIMARY} strokeWidth={2.5} />}
+                  />
+
+                  <InfoRow
+                    label="Used for"
+                    value={scanResult.usedFor}
+                    icon={
+                      <Stethoscope
+                        size={19}
+                        color={PRIMARY}
+                        strokeWidth={2.5}
+                      />
+                    }
+                    isLast
+                  />
+                </View>
+
+                <View style={styles.panel}>
+                  <View style={styles.panelHeaderSimple}>
+                    <View style={styles.panelTitleRow}>
+                      <View style={styles.dangerIconCircle}>
+                        <AlertCircle
+                          size={20}
+                          color={DANGER}
+                          strokeWidth={2.6}
+                        />
+                      </View>
+
+                      <View style={styles.panelTitleBlock}>
+                        <Text style={styles.panelTitle}>
+                          Common side effects
+                        </Text>
+                        <Text style={styles.panelSubtitle}>
+                          Review before creating the reminder
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.sideEffectWrap}>
+                    {scanResult.commonSideEffects.length > 0 ? (
+                      scanResult.commonSideEffects.map((sideEffect) => (
+                        <View key={sideEffect} style={styles.sideEffectChip}>
+                          <Text style={styles.sideEffectText}>{sideEffect}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyInlineText}>
+                        No common side effects listed.
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.instructionsCard}>
+                  <Text style={styles.instructionsTitle}>Instructions</Text>
+                  <Text style={styles.instructionsText}>
+                    {scanResult.instructions}
+                  </Text>
+                </View>
+
                 <View style={styles.safetyCard}>
                   <View style={styles.safetyIconCircle}>
-                    <Text style={styles.safetyIcon}>!</Text>
+                    <ShieldAlert size={23} color={DANGER} strokeWidth={2.7} />
                   </View>
 
                   <View style={styles.safetyTextBlock}>
-                    <Text style={styles.safetyTitle}>Safety Note</Text>
+                    <Text style={styles.safetyTitle}>Safety note</Text>
                     <Text style={styles.safetyText}>
                       {scanResult.safetyNote}
                     </Text>
                   </View>
                 </View>
-              ) : null}
+              </>
+            ) : (
+              <>
+                <View style={styles.notFoundCard}>
+                  <View style={styles.notFoundIconCircle}>
+                    <AlertCircle
+                      size={30}
+                      color={WARNING}
+                      strokeWidth={2.8}
+                    />
+                  </View>
 
-              {isMatched ? (
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleAddToReminder}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryButtonText}>Add to Reminder</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleScanAgain}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryButtonText}>Scan Again</Text>
-                </TouchableOpacity>
-              )}
+                  <Text style={styles.notFoundTitle}>
+                    Medicine not found in catalogue
+                  </Text>
 
+                  <Text style={styles.notFoundText}>
+                    The scan did not confidently match a saved medicine. Try
+                    scanning again with clearer lighting, or confirm with a
+                    doctor or pharmacist before saving.
+                  </Text>
+                </View>
+
+                <View style={styles.quickTipsCard}>
+                  <Text style={styles.quickTipsTitle}>Scan tips</Text>
+
+                  <TipRow text="Place the medicine label flat and avoid glare." />
+                  <TipRow text="Keep the brand name and strength clearly visible." />
+                  <TipRow text="Use good lighting and hold the camera steady." />
+                </View>
+              </>
+            )}
+          </ScrollView>
+        ) : null}
+
+        {shouldShowFooter && scanResult ? (
+         <View
+  style={[
+    styles.footer,
+    {
+      paddingBottom: Math.max(insets.bottom + 6, 14),
+    },
+  ]}
+>
+            {isMatched ? (
               <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={handleAskDoctor}
-                activeOpacity={0.85}
+                style={styles.primaryButton}
+                activeOpacity={0.86}
+                onPress={handleAddToReminder}
               >
-                <Text style={styles.secondaryButtonText}>Ask Doctor</Text>
+                <Text style={styles.primaryButtonText}>Add to Reminder</Text>
+                <ChevronRight size={20} color={SURFACE} strokeWidth={2.7} />
               </TouchableOpacity>
-            </ScrollView>
-          ) : null}
-        </View>
-      </SafeAreaView>
+            ) : (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                activeOpacity={0.86}
+                onPress={handleScanAgain}
+              >
+                <RefreshCw size={19} color={SURFACE} strokeWidth={2.6} />
+                <Text style={styles.primaryButtonText}>Scan Again</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={handleAskDoctor}
+            >
+              <HelpCircle size={19} color={TEXT} strokeWidth={2.5} />
+              <Text style={styles.secondaryButtonText}>Ask Doctor</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const CenterState = ({
+  icon,
+  title,
+  subtitle,
+  actionLabel,
+  onAction,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) => {
+  return (
+    <View style={styles.centerState}>
+      {icon}
+
+      <Text style={styles.centerTitle}>{title}</Text>
+      <Text style={styles.centerSubtitle}>{subtitle}</Text>
+
+      {actionLabel && onAction ? (
+        <TouchableOpacity
+          style={styles.retryButton}
+          activeOpacity={0.85}
+          onPress={onAction}
+        >
+          <RefreshCw size={18} color={SURFACE} strokeWidth={2.5} />
+          <Text style={styles.retryButtonText}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+};
+
+const FactTile = ({ label, value }: { label: string; value: string }) => {
+  return (
+    <View style={styles.factTile}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+};
+
+const TimelineItem = ({ label, active }: { label: string; active: boolean }) => {
+  return (
+    <View style={styles.timelineItem}>
+      <View
+        style={[
+          styles.timelineDot,
+          active ? styles.timelineDotActive : styles.timelineDotInactive,
+        ]}
+      >
+        {active ? <CheckCircle2 size={14} color={SURFACE} strokeWidth={3} /> : null}
+      </View>
+
+      <Text
+        style={[
+          styles.timelineLabel,
+          active ? styles.timelineLabelActive : undefined,
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+};
+
+const InfoRow = ({
+  label,
+  value,
+  icon,
+  isLast,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  isLast?: boolean;
+}) => {
+  return (
+    <View style={[styles.infoRow, isLast ? styles.rowLast : undefined]}>
+      <View style={styles.infoRowIcon}>{icon}</View>
+
+      <View style={styles.infoTextBlock}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value}</Text>
+      </View>
+    </View>
+  );
+};
+
+const TipRow = ({ text }: { text: string }) => {
+  return (
+    <View style={styles.tipRow}>
+      <View style={styles.tipDot} />
+      <Text style={styles.tipText}>{text}</Text>
     </View>
   );
 };
@@ -413,55 +638,44 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 export default ScanMedicineResultScreen;
 
 const styles = StyleSheet.create({
-  root: {
+  safeArea: {
     flex: 1,
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: BACKGROUND,
   },
-  headerSafeArea: {
-    backgroundColor: HEADER_BLUE,
-  },
-  bodySafeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: BODY_BACKGROUND,
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: HEADER_BLUE,
+  appBar: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
-  body: {
-    flex: 1,
-    backgroundColor: BODY_BACKGROUND,
-  },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  backButtonText: {
-    color: "#FFFFFF",
-    fontSize: 30,
-    fontWeight: "300",
-    marginTop: -2,
-  },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 20,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 27,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 12,
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
     fontWeight: "700",
     marginTop: 3,
   },
@@ -469,8 +683,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 18,
-    paddingBottom: 34,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
   centerState: {
     flex: 1,
@@ -479,317 +693,398 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   centerTitle: {
-    color: "#0F172A",
-    fontSize: 18,
+    color: TEXT,
+    fontSize: 19,
     fontWeight: "900",
     marginTop: 18,
     textAlign: "center",
   },
   centerSubtitle: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
   },
-  errorIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#FEE2E2",
-    color: "#DC2626",
-    textAlign: "center",
-    textAlignVertical: "center",
-    fontSize: 30,
-    fontWeight: "900",
+  errorStateIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: DANGER_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
   },
   retryButton: {
     marginTop: 22,
-    backgroundColor: HEADER_BLUE,
-    borderRadius: 14,
-    paddingHorizontal: 24,
+    backgroundColor: PRIMARY,
+    borderRadius: 15,
+    paddingHorizontal: 18,
     paddingVertical: 13,
+    flexDirection: "row",
+    alignItems: "center",
   },
   retryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 14,
     fontWeight: "900",
+    marginLeft: 8,
   },
-  imageCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
+  scanPreviewCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 26,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: BORDER,
     marginBottom: 14,
   },
-  cardTitle: {
-    color: "#0F172A",
-    fontSize: 16,
-    fontWeight: "900",
+  scanPreviewTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 12,
+  },
+  scanPreviewTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+  },
+  scanPreviewSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  ocrBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  ocrBadgeText: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "900",
+    marginLeft: 5,
   },
   scannedImageBox: {
     width: "100%",
-    height: 230,
-    borderRadius: 17,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 2,
-    borderColor: "#CBD5E1",
+    height: 245,
+    borderRadius: 22,
+    backgroundColor: SOFT_PANEL,
     overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   scannedImage: {
     width: "100%",
     height: "100%",
   },
   noImageBox: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  noImageIcon: {
-    color: "#94A3B8",
-    fontSize: 26,
-    fontWeight: "900",
-  },
   noImageText: {
-    color: "#94A3B8",
+    color: MUTED,
     fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  medicineHeroCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 14,
-  },
-  matchPill: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 12,
-  },
-  matchPillSuccess: {
-    backgroundColor: "#DCFCE7",
-  },
-  matchPillWarning: {
-    backgroundColor: "#FEF3C7",
-  },
-  matchPillText: {
-    fontSize: 11,
     fontWeight: "900",
+    marginTop: 8,
   },
-  matchPillSuccessText: {
-    color: "#15803D",
-  },
-  matchPillWarningText: {
-    color: "#B45309",
-  },
-  medicineName: {
-    color: "#0F172A",
-    fontSize: 25,
-    fontWeight: "900",
-  },
-  genericText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 20,
-    marginTop: 4,
-    marginBottom: 14,
-  },
-  keyInfoRow: {
+  floatingResultBadge: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     flexDirection: "row",
-  },
-  keyInfoBox: {
-    flex: 1,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 14,
-    padding: 12,
-    marginRight: 10,
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
   },
-  keyInfoBoxLast: {
-    flex: 1,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 14,
+  floatingResultBadgeSuccess: {
+    backgroundColor: "rgba(234,248,242,0.96)",
+    borderColor: "#B7E8D3",
+  },
+  floatingResultBadgeWarning: {
+    backgroundColor: "rgba(255,243,226,0.96)",
+    borderColor: "#FED7AA",
+  },
+  floatingResultText: {
+    fontSize: 13,
+    fontWeight: "900",
+    marginLeft: 8,
+  },
+  floatingResultTextSuccess: {
+    color: SUCCESS_DARK,
+  },
+  floatingResultTextWarning: {
+    color: WARNING_DARK,
+  },
+  detectedTextBox: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: BORDER,
+    marginTop: 12,
   },
-  keyInfoLabel: {
-    color: "#2563EB",
+  detectedTextLabel: {
+    color: MUTED,
     fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
-  keyInfoValue: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  notFoundTitle: {
-    color: "#0F172A",
-    fontSize: 20,
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  notFoundText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-  scheduleCard: {
-    backgroundColor: "#ECFDF5",
-    borderRadius: 16,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-    marginBottom: 14,
-  },
-  scheduleHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  scheduleTitle: {
-    color: "#047857",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  patternBadge: {
-    backgroundColor: "#10B981",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  patternBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  timeRow: {
-    flexDirection: "row",
-    marginTop: 12,
-  },
-  timePill: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D1FAE5",
-    borderRadius: 999,
-    paddingVertical: 8,
-    alignItems: "center",
-    marginRight: 7,
-  },
-  activeTimePill: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
-  },
-  timePillText: {
-    color: "#64748B",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  activeTimePillText: {
-    color: "#FFFFFF",
-  },
-  scheduleInfoText: {
-    color: "#047857",
+  detectedTextValue: {
+    color: TEXT,
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 18,
-    marginTop: 10,
   },
-  infoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
+  medicinePassportCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 26,
+    padding: 17,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     marginBottom: 14,
   },
-  infoCardTitle: {
-    color: "#0F172A",
+  passportTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passportIconCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+  },
+  passportTextBlock: {
+    flex: 1,
+  },
+  passportLabel: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  medicineName: {
+    color: TEXT,
+    fontSize: 25,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  genericName: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  passportDivider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginVertical: 16,
+  },
+  factGrid: {
+    flexDirection: "row",
+  },
+  factTile: {
+    flex: 1,
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 17,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginRight: 10,
+  },
+  factLabel: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  factValue: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  panel: {
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  panelHeaderSimple: {
+    marginBottom: 5,
+  },
+  panelTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 10,
+  },
+  panelIconCircle: {
+    width: 43,
+    height: 43,
+    borderRadius: 16,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  dangerIconCircle: {
+    width: 43,
+    height: 43,
+    borderRadius: 16,
+    backgroundColor: DANGER_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  panelTitleBlock: {
+    flex: 1,
+  },
+  panelTitle: {
+    color: TEXT,
     fontSize: 17,
     fontWeight: "900",
-    marginBottom: 14,
+    letterSpacing: -0.2,
+  },
+  panelSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  patternBadge: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  patternBadgeText: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  timelineBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  timelineItem: {
+    alignItems: "center",
+    minWidth: 64,
+  },
+  timelineDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 7,
+  },
+  timelineDotActive: {
+    backgroundColor: PRIMARY,
+  },
+  timelineDotInactive: {
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  timelineLabel: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  timelineLabelActive: {
+    color: TEXT,
+  },
+  timelineConnector: {
+    flex: 1,
+    height: 2,
+    backgroundColor: "#DDE3EF",
+    marginBottom: 28,
+  },
+  detectedInstructionBox: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 12,
+  },
+  detectedInstructionText: {
+    flex: 1,
+    color: PRIMARY_DARK,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+    marginLeft: 8,
   },
   infoRow: {
     flexDirection: "row",
-    marginBottom: 14,
+    alignItems: "flex-start",
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  infoIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#DBEAFE",
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  infoRowIcon: {
+    width: 37,
+    height: 37,
+    borderRadius: 14,
+    backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
-  },
-  infoIcon: {
-    color: "#2563EB",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  infoIconCircleGreen: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  infoIconGreen: {
-    color: "#15803D",
-    fontSize: 15,
-    fontWeight: "900",
+    marginRight: 11,
   },
   infoTextBlock: {
     flex: 1,
   },
   infoLabel: {
-    color: "#0F172A",
+    color: TEXT,
     fontSize: 13,
     fontWeight: "900",
     marginBottom: 4,
   },
-  infoText: {
-    color: "#64748B",
+  infoValue: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 20,
+    lineHeight: 19,
   },
-  sideEffectBlock: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    marginTop: 2,
-  },
-  sideEffectTitle: {
-    color: "#991B1B",
-    fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 10,
-  },
-  sideEffectRow: {
+  sideEffectWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
+    marginTop: 10,
   },
   sideEffectChip: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: DANGER_LIGHT,
     borderRadius: 999,
     paddingHorizontal: 11,
     paddingVertical: 7,
@@ -797,99 +1092,179 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sideEffectText: {
-    color: "#B91C1C",
+    color: DANGER_DARK,
     fontSize: 12,
     fontWeight: "900",
   },
-  noSideEffectText: {
-    color: "#B91C1C",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  instructionBlock: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginTop: 14,
-  },
-  instructionTitle: {
-    color: "#0F172A",
+  emptyInlineText: {
+    color: MUTED,
     fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 6,
+    fontWeight: "700",
   },
-  instructionText: {
-    color: "#64748B",
+  instructionsCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  instructionsTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 7,
+  },
+  instructionsText: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 20,
   },
   safetyCard: {
-    backgroundColor: "#FFF7ED",
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 22,
+    padding: 15,
     borderWidth: 1,
-    borderColor: "#FB923C",
+    borderColor: "#FECACA",
     flexDirection: "row",
     marginBottom: 14,
   },
   safetyIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#FED7AA",
+    width: 43,
+    height: 43,
+    borderRadius: 16,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-  },
-  safetyIcon: {
-    color: "#EA580C",
-    fontSize: 17,
-    fontWeight: "900",
+    borderWidth: 1,
+    borderColor: "#FECACA",
   },
   safetyTextBlock: {
     flex: 1,
   },
   safetyTitle: {
-    color: "#9A3412",
-    fontSize: 13,
+    color: DANGER_DARK,
+    fontSize: 14,
     fontWeight: "900",
     marginBottom: 5,
   },
   safetyText: {
-    color: "#C2410C",
+    color: DANGER_DARK,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     lineHeight: 18,
   },
-  primaryButton: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: HEADER_BLUE,
+  notFoundCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 26,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  notFoundIconCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 22,
+    backgroundColor: WARNING_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    marginBottom: 14,
+  },
+  notFoundTitle: {
+    color: TEXT,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  notFoundText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  quickTipsCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  quickTipsTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 12,
+  },
+  tipRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+  },
+  tipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PRIMARY,
+    marginTop: 5,
+    marginRight: 10,
+  },
+  tipText: {
+    flex: 1,
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: SURFACE,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  primaryButton: {
+    minHeight: 52,
+    borderRadius: 17,
+    backgroundColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    paddingHorizontal: 16,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 15,
     fontWeight: "900",
+    marginHorizontal: 8,
   },
   secondaryButton: {
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    minHeight: 50,
+    borderRadius: 17,
+    backgroundColor: SOFT_PANEL,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    marginTop: 12,
+    borderColor: BORDER,
+    marginTop: 10,
+    flexDirection: "row",
   },
   secondaryButtonText: {
-    color: "#64748B",
+    color: TEXT,
     fontSize: 15,
     fontWeight: "900",
+    marginLeft: 8,
   },
 });

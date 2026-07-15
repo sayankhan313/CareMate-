@@ -9,12 +9,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Activity,
+  AlertCircle,
   ArrowLeft,
+  ChevronRight,
   Droplet,
   HeartPulse,
   ShieldAlert,
@@ -37,10 +41,20 @@ type ManualCriticalVitalOption = {
   manualDisplayValue: string;
   manualReason: string;
   icon: ReactNode;
-  iconBackground: string;
-  iconColor: string;
   hiddenCriticalPayload: Record<string, number>;
 };
+
+const BACKGROUND = "#FFF5F5";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111827";
+const MUTED = "#6B7280";
+const BORDER = "#F4C7C7";
+
+const RED = "#DC2626";
+const RED_DARK = "#991B1B";
+const RED_LIGHT = "#FEE2E2";
+const RED_SOFT = "#FEF2F2";
+const RED_BORDER = "#FCA5A5";
 
 const criticalVitalOptions: ManualCriticalVitalOption[] = [
   {
@@ -50,9 +64,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Oxygen Level Concern",
     manualDisplayValue: "Patient reported oxygen level concern",
     manualReason: "Manual safety response selected for oxygen level concern",
-    icon: <Activity size={24} color="#2563EB" strokeWidth={2.6} />,
-    iconBackground: "#DBEAFE",
-    iconColor: "#2563EB",
+    icon: <Activity size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       spo2: 88,
     },
@@ -64,9 +76,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Heart Rate Concern",
     manualDisplayValue: "Patient reported heart rate concern",
     manualReason: "Manual safety response selected for heart rate concern",
-    icon: <HeartPulse size={24} color="#DC2626" strokeWidth={2.6} />,
-    iconBackground: "#FEE2E2",
-    iconColor: "#DC2626",
+    icon: <HeartPulse size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       heartRate: 135,
     },
@@ -78,9 +88,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Blood Pressure Concern",
     manualDisplayValue: "Patient reported blood pressure concern",
     manualReason: "Manual safety response selected for blood pressure concern",
-    icon: <Droplet size={24} color="#9333EA" strokeWidth={2.6} />,
-    iconBackground: "#F3E8FF",
-    iconColor: "#9333EA",
+    icon: <Droplet size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       bpSystolic: 180,
       bpDiastolic: 120,
@@ -93,9 +101,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Glucose Concern",
     manualDisplayValue: "Patient reported glucose concern",
     manualReason: "Manual safety response selected for glucose concern",
-    icon: <Droplet size={24} color="#F97316" strokeWidth={2.6} />,
-    iconBackground: "#FFEDD5",
-    iconColor: "#F97316",
+    icon: <Droplet size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       glucose: 260,
     },
@@ -107,9 +113,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Temperature Concern",
     manualDisplayValue: "Patient reported temperature concern",
     manualReason: "Manual safety response selected for temperature concern",
-    icon: <Thermometer size={24} color="#0F766E" strokeWidth={2.6} />,
-    iconBackground: "#CCFBF1",
-    iconColor: "#0F766E",
+    icon: <Thermometer size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       temperature: 39.2,
     },
@@ -121,9 +125,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Other Critical Concern",
     manualDisplayValue: "Patient reported another urgent safety concern",
     manualReason: "Manual safety response selected for another urgent concern",
-    icon: <ShieldAlert size={24} color="#B91C1C" strokeWidth={2.6} />,
-    iconBackground: "#FEE2E2",
-    iconColor: "#B91C1C",
+    icon: <ShieldAlert size={22} color={RED} strokeWidth={2.6} />,
     hiddenCriticalPayload: {
       heartRate: 135,
     },
@@ -179,112 +181,114 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <StatusBar backgroundColor="#DC2626" barStyle="light-content" />
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-              <LinearGradient
-                  colors={["#EF4444", "#DC2626"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[
-                      styles.header,
-                      {
-                          paddingTop: insets.top + 22,
-                      },
-                  ]}
-              >
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.85}
             onPress={() => navigation.goBack()}
             disabled={isSubmitting}
           >
-            <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.7} />
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.7} />
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Manual Safety Response</Text>
-            <Text style={styles.headerSubtitle}>
-              Choose the reason to start the safety response
-            </Text>
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Manual Safety</Text>
+            <Text style={styles.appBarSubtitle}>Start emergency response</Text>
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView
           style={styles.content}
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(insets.bottom + 28, 48),
+              paddingBottom: Math.max(insets.bottom + 28, 56),
             },
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.infoCard}>
-            <View style={styles.infoIconCircle}>
-              <ShieldAlert size={26} color="#DC2626" strokeWidth={2.6} />
+          <View style={styles.alertStrip}>
+            <View style={styles.alertIconCircle}>
+              <ShieldAlert size={27} color={SURFACE} strokeWidth={2.7} />
             </View>
 
-            <View style={styles.infoTextBlock}>
-              <Text style={styles.infoTitle}>Manual trigger</Text>
-              <Text style={styles.infoText}>
-                Select which vital or concern looks critical. CareMate+ will
-                start the same safety response timer flow.
+            <View style={styles.alertTextBlock}>
+              <Text style={styles.alertTitle}>Manual emergency trigger</Text>
+              <Text style={styles.alertText}>
+                Choose the concern that best matches the situation. CareMate+
+                will start the safety timer flow.
               </Text>
             </View>
           </View>
 
           {errorMessage ? (
             <View style={styles.errorCard}>
+              <AlertCircle size={19} color={RED_DARK} strokeWidth={2.6} />
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Select Safety Concern</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>What looks unsafe?</Text>
+            <Text style={styles.sectionSubtitle}>
+              Tap one option to create a manual critical alert.
+            </Text>
+          </View>
 
-          {criticalVitalOptions.map((option) => {
-            const isSelected = selectedOptionId === option.id;
+          <View style={styles.optionPanel}>
+            {criticalVitalOptions.map((option, index) => {
+              const isSelected = selectedOptionId === option.id;
+              const isLast = index === criticalVitalOptions.length - 1;
 
-            return (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.optionCard,
-                  isSelected ? styles.optionCardSelected : undefined,
-                ]}
-                activeOpacity={0.86}
-                onPress={() => startManualSafetyResponse(option)}
-                disabled={isSubmitting}
-              >
-                <View
+              return (
+                <TouchableOpacity
+                  key={option.id}
                   style={[
-                    styles.optionIconCircle,
-                    {
-                      backgroundColor: option.iconBackground,
-                    },
+                    styles.optionRow,
+                    isSelected ? styles.optionRowSelected : undefined,
+                    isLast ? styles.rowLast : undefined,
                   ]}
+                  activeOpacity={0.86}
+                  onPress={() => startManualSafetyResponse(option)}
+                  disabled={isSubmitting}
                 >
-                  {option.icon}
-                </View>
+                  <View style={styles.optionIconCircle}>{option.icon}</View>
 
-                <View style={styles.optionTextBlock}>
-                  <Text style={styles.optionTitle}>{option.title}</Text>
-                  <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
-                </View>
-
-                {isSelected ? (
-                  <ActivityIndicator color="#DC2626" />
-                ) : (
-                  <View style={styles.selectPill}>
-                    <Text style={styles.selectPillText}>Trigger</Text>
+                  <View style={styles.optionTextBlock}>
+                    <Text style={styles.optionTitle}>{option.title}</Text>
+                    <Text style={styles.optionSubtitle}>
+                      {option.subtitle}
+                    </Text>
                   </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
 
-          
+                  {isSelected ? (
+                    <ActivityIndicator color={RED} />
+                  ) : (
+                    <View style={styles.actionCircle}>
+                      <ChevronRight
+                        size={20}
+                        color={RED}
+                        strokeWidth={2.8}
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.noteBox}>
+            <AlertCircle size={18} color={RED_DARK} strokeWidth={2.5} />
+            <Text style={styles.noteText}>
+              This does not show fake values to the patient. It only creates the
+              required critical backend reading so the Safety Response workflow
+              can start correctly.
+            </Text>
+          </View>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -294,178 +298,192 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  header: {
+  appBar: {
     paddingHorizontal: 20,
-    
-    paddingBottom: 26,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 23,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 26,
     fontWeight: "900",
+    letterSpacing: -0.4,
   },
-  headerSubtitle: {
-    color: "#FEE2E2",
+  appBarSubtitle: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 19,
-    marginTop: 4,
+    marginTop: 3,
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  infoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+  alertStrip: {
+    backgroundColor: RED,
+    borderRadius: 24,
     padding: 18,
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 18,
+    marginBottom: 14,
   },
-  infoIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FEE2E2",
+  alertIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 13,
   },
-  infoTextBlock: {
+  alertTextBlock: {
     flex: 1,
   },
-  infoTitle: {
-    color: "#111827",
-    fontSize: 17,
+  alertTitle: {
+    color: SURFACE,
+    fontSize: 20,
     fontWeight: "900",
-    marginBottom: 6,
+    letterSpacing: -0.3,
   },
-  infoText: {
-    color: "#64748B",
+  alertText: {
+    color: "#FFECEC",
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 20,
+    lineHeight: 19,
+    marginTop: 6,
   },
   errorCard: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 16,
+    backgroundColor: RED_SOFT,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#FCA5A5",
-    marginBottom: 16,
+    borderColor: RED_BORDER,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
   },
   errorText: {
-    color: "#DC2626",
+    flex: 1,
+    color: RED_DARK,
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 19,
+    marginLeft: 10,
+  },
+  sectionHeader: {
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
   sectionTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 20,
     fontWeight: "900",
-    marginBottom: 12,
+    letterSpacing: -0.25,
   },
-  optionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 3,
+  },
+  optionPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
+  },
+  optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3DADA",
   },
-  optionCardSelected: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+  optionRowSelected: {
+    opacity: 0.72,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   optionIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: RED_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 12,
   },
   optionTextBlock: {
     flex: 1,
     paddingRight: 10,
   },
   optionTitle: {
-    color: "#111827",
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
     marginBottom: 4,
   },
   optionSubtitle: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 17,
   },
-  selectPill: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  selectPillText: {
-    color: "#DC2626",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  warningBox: {
-    backgroundColor: "#FFFBEB",
-    borderRadius: 18,
-    padding: 16,
+  actionCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: RED_SOFT,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#FDE68A",
-    marginTop: 6,
+    borderColor: RED_LIGHT,
   },
-  warningTitle: {
-    color: "#92400E",
-    fontSize: 14,
-    fontWeight: "900",
-    marginBottom: 5,
+  noteBox: {
+    backgroundColor: SURFACE,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 14,
   },
-  warningText: {
-    color: "#B45309",
+  noteText: {
+    flex: 1,
+    color: RED_DARK,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     lineHeight: 18,
+    marginLeft: 10,
   },
 });

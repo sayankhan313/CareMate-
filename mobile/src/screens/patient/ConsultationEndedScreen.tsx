@@ -6,14 +6,37 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Home,
+  MessageSquareText,
+  Video,
+} from "lucide-react-native";
 
 import type { RootStackParamList } from "../../types/navigation";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ConsultationEnded">;
 
-const HEADER_COLOR = "#2563EB";
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
 
 const ConsultationEndedScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
@@ -34,64 +57,126 @@ const ConsultationEndedScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={HEADER_COLOR} />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
 
-      <View
-        style={[
-          styles.header,
-          { paddingTop: Math.max(26, insets.top + 14) },
-        ]}
-      >
-        <Text style={styles.headerTitle}>Consultation Ended</Text>
-        <Text style={styles.headerSubtitle}>
-          Your CareMate+ video call has been closed.
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.content,
-          { paddingBottom: Math.max(24, insets.bottom + 18) },
-        ]}
-      >
-        <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>✓</Text>
-        </View>
-
-        <Text style={styles.title}>Video Call Ended</Text>
-
-        <Text style={styles.description}>
-          The consultation session has ended. You can return to your dashboard or
-          review your consultation history.
-        </Text>
-
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Type</Text>
-            <Text style={styles.summaryValue}>
-              {consultationType === "EMERGENCY" ? "Emergency" : "Manual"}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Consultation ID</Text>
-            <Text style={styles.summaryValue}>
-              {consultationId.slice(0, 8)}
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
+          <View>
+            <Text style={styles.appBarTitle}>Consultation Ended</Text>
+            <Text style={styles.appBarSubtitle}>
+              Your CareMate+ video call has been closed
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={goHome}>
-          <Text style={styles.primaryButtonText}>Back to Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={goConsultations}
+        <View
+          style={[
+            styles.content,
+            {
+              paddingBottom: Math.max(28, insets.bottom + 24),
+            },
+          ]}
         >
-          <Text style={styles.secondaryButtonText}>Back to Consultations</Text>
-        </TouchableOpacity>
+          <View style={styles.successPanel}>
+            <View style={styles.successIconCircle}>
+              <CheckCircle2 size={48} color={SUCCESS} strokeWidth={2.8} />
+            </View>
+
+            <Text style={styles.title}>Video call ended</Text>
+
+            <Text style={styles.description}>
+              The consultation session has ended. You can return to your
+              dashboard or review your consultation history.
+            </Text>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <View style={styles.summaryIconCircle}>
+                <Video size={22} color={PRIMARY} strokeWidth={2.7} />
+              </View>
+
+              <View style={styles.summaryHeaderText}>
+                <Text style={styles.summaryTitle}>Session summary</Text>
+                <Text style={styles.summarySubtitle}>
+                  Consultation details
+                </Text>
+              </View>
+            </View>
+
+            <SummaryRow
+              icon={
+                <MessageSquareText
+                  size={18}
+                  color={PRIMARY}
+                  strokeWidth={2.5}
+                />
+              }
+              label="Type"
+              value={consultationType === "EMERGENCY" ? "Emergency" : "Manual"}
+            />
+
+            <SummaryRow
+              icon={
+                <ClipboardList
+                  size={18}
+                  color={PRIMARY}
+                  strokeWidth={2.5}
+                />
+              }
+              label="Consultation ID"
+              value={consultationId.slice(0, 8)}
+              isLast
+            />
+          </View>
+
+          <View style={styles.actionPanel}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              activeOpacity={0.86}
+              onPress={goHome}
+            >
+              <Home size={20} color={SURFACE} strokeWidth={2.7} />
+              <Text style={styles.primaryButtonText}>Back to Home</Text>
+              <ChevronRight size={20} color={SURFACE} strokeWidth={2.8} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              activeOpacity={0.86}
+              onPress={goConsultations}
+            >
+              <MessageSquareText size={20} color={TEXT} strokeWidth={2.6} />
+              <Text style={styles.secondaryButtonText}>
+                Back to Consultations
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const SummaryRow = ({
+  icon,
+  label,
+  value,
+  isLast,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  isLast?: boolean;
+}) => {
+  return (
+    <View style={[styles.summaryRow, isLast ? styles.summaryRowLast : null]}>
+      <View style={styles.summaryRowIcon}>{icon}</View>
+
+      <View style={styles.summaryRowText}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue}>{value}</Text>
       </View>
     </View>
   );
@@ -100,110 +185,178 @@ const ConsultationEndedScreen = ({ navigation, route }: Props) => {
 export default ConsultationEndedScreen;
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
   screen: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: HEADER_COLOR,
-    paddingHorizontal: 24,
-    paddingBottom: 30,
+  appBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 26,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 27,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 14,
-    marginTop: 8,
-    lineHeight: 20,
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 3,
+    lineHeight: 18,
   },
   content: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 24,
-    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 8,
     justifyContent: "center",
   },
-  iconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "#DBEAFE",
+  successPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  successIconCircle: {
+    width: 92,
+    height: 92,
+    borderRadius: 32,
+    backgroundColor: SUCCESS_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 22,
-  },
-  iconText: {
-    color: HEADER_COLOR,
-    fontSize: 46,
-    fontWeight: "900",
+    marginBottom: 18,
   },
   title: {
+    color: TEXT,
     fontSize: 25,
     fontWeight: "900",
-    color: "#0F172A",
     textAlign: "center",
+    letterSpacing: -0.45,
   },
   description: {
-    marginTop: 12,
-    fontSize: 15,
-    color: "#64748B",
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: "700",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 21,
+    marginTop: 10,
   },
   summaryCard: {
-    width: "100%",
-    marginTop: 26,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  summaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  summaryIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 17,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  summaryHeaderText: {
+    flex: 1,
+  },
+  summaryTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  summarySubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
   },
   summaryRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
+    alignItems: "center",
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  summaryRowLast: {
+    borderBottomWidth: 0,
+  },
+  summaryRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 13,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  summaryRowText: {
+    flex: 1,
   },
   summaryLabel: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "700",
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 3,
   },
   summaryValue: {
-    color: "#0F172A",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "900",
   },
+  actionPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
   primaryButton: {
-    width: "100%",
-    marginTop: 28,
-    backgroundColor: HEADER_COLOR,
-    paddingVertical: 15,
-    borderRadius: 16,
+    minHeight: 52,
+    borderRadius: 17,
+    backgroundColor: PRIMARY,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    paddingHorizontal: 16,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+    color: SURFACE,
+    fontSize: 15,
     fontWeight: "900",
+    marginHorizontal: 8,
   },
   secondaryButton: {
-    width: "100%",
-    marginTop: 12,
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 15,
-    borderRadius: 16,
+    minHeight: 50,
+    borderRadius: 17,
+    backgroundColor: SOFT_PANEL,
     alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: BORDER,
+    marginTop: 10,
+    flexDirection: "row",
   },
   secondaryButtonText: {
-    color: HEADER_COLOR,
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
+    marginLeft: 8,
   },
 });

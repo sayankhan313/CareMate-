@@ -10,6 +10,7 @@ import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { profileController } from "./profile.controller.js";
+
 const router = Router();
 
 router.use(authMiddleware);
@@ -88,4 +89,5 @@ router.post(
   "/medicine-scan/prescription/parse",
   medicineReferenceController.parsePrescriptionScan
 );
+
 export default router;

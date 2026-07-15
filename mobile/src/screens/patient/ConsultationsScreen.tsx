@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,8 +18,26 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Clock3,
+  History,
+  MessageSquareText,
+  Plus,
+  RefreshCw,
+  Send,
+  Stethoscope,
+  Video,
+  X,
+} from "lucide-react-native";
 
 import { consultationsApi } from "../../services/consultationsApi";
 import type { Consultation } from "../../services/safetyApi";
@@ -23,7 +47,25 @@ type Props = BottomTabScreenProps<PatientTabParamList, "Consultations">;
 
 type DropdownType = "reason" | "date" | "time";
 
-const HEADER_BLUE = "#2563EB";
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
 
 const REASON_OPTIONS = [
   "High blood pressure",
@@ -57,59 +99,88 @@ const formatConsultationDate = (value?: string | null) => {
   return date.toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
 const getStatusLabel = (status: string) => {
-  if (status === "PENDING") {
-    return "Requested";
-  }
-
-  if (status === "ACCEPTED") {
-    return "Accepted";
-  }
-
-  if (status === "IN_PROGRESS") {
-    return "In progress";
-  }
-
-  if (status === "COMPLETED") {
-    return "Completed";
-  }
-
-  if (status === "CANCELLED") {
-    return "Cancelled";
-  }
-
-  if (status === "REJECTED") {
-    return "Rejected";
-  }
+  if (status === "PENDING") return "Requested";
+  if (status === "ACCEPTED") return "Accepted";
+  if (status === "IN_PROGRESS") return "In progress";
+  if (status === "COMPLETED") return "Completed";
+  if (status === "CANCELLED") return "Cancelled";
+  if (status === "REJECTED") return "Rejected";
 
   return status;
 };
 
-const getStatusStyles = (status: string) => {
+const getStatusTone = (status: string) => {
   if (status === "COMPLETED") {
     return {
-      circle: styles.completedCircle,
-      icon: styles.completedIcon,
-      iconText: "✓",
+      background: SUCCESS_LIGHT,
+      text: "#167A58",
+      dot: SUCCESS,
+      icon: "✓",
     };
   }
 
   if (status === "CANCELLED" || status === "REJECTED") {
     return {
-      circle: styles.cancelledCircle,
-      icon: styles.cancelledIcon,
-      iconText: "×",
+      background: DANGER_LIGHT,
+      text: "#B42318",
+      dot: DANGER,
+      icon: "×",
+    };
+  }
+
+  if (status === "ACCEPTED" || status === "IN_PROGRESS") {
+    return {
+      background: PRIMARY_LIGHT,
+      text: PRIMARY_DARK,
+      dot: PRIMARY,
+      icon: "•",
     };
   }
 
   return {
-    circle: styles.requestedCircle,
-    icon: styles.requestedIcon,
-    iconText: "•",
+    background: WARNING_LIGHT,
+    text: "#A85A13",
+    dot: WARNING,
+    icon: "•",
   };
+};
+
+const getConsultationTypeLabel = (type: string) => {
+  if (type === "EMERGENCY") {
+    return "Emergency consultation";
+  }
+
+  return "Manual consultation";
+};
+
+const getDropdownTitle = (activeDropdown: DropdownType | null) => {
+  if (activeDropdown === "reason") return "Select reason";
+  if (activeDropdown === "date") return "Select preferred date";
+  if (activeDropdown === "time") return "Select preferred time";
+
+  return "";
+};
+
+const getDropdownIcon = (activeDropdown: DropdownType | null) => {
+  if (activeDropdown === "reason") {
+    return <MessageSquareText size={20} color={PRIMARY} strokeWidth={2.6} />;
+  }
+
+  if (activeDropdown === "date") {
+    return <CalendarDays size={20} color={PRIMARY} strokeWidth={2.6} />;
+  }
+
+  if (activeDropdown === "time") {
+    return <Clock3 size={20} color={PRIMARY} strokeWidth={2.6} />;
+  }
+
+  return <CheckCircle2 size={20} color={PRIMARY} strokeWidth={2.6} />;
 };
 
 const ConsultationsScreen = ({ navigation }: Props) => {
@@ -131,6 +202,15 @@ const ConsultationsScreen = ({ navigation }: Props) => {
     null
   );
 
+  const activeConsultations = useMemo(() => {
+    return consultations.filter(
+      (consultation) =>
+        consultation.status === "PENDING" ||
+        consultation.status === "ACCEPTED" ||
+        consultation.status === "IN_PROGRESS"
+    );
+  }, [consultations]);
+
   const pastConsultations = useMemo(() => {
     return consultations.filter(
       (consultation) =>
@@ -141,35 +221,15 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   }, [consultations]);
 
   const dropdownOptions = useMemo(() => {
-    if (activeDropdown === "reason") {
-      return REASON_OPTIONS;
-    }
-
-    if (activeDropdown === "date") {
-      return DATE_OPTIONS;
-    }
-
-    if (activeDropdown === "time") {
-      return TIME_OPTIONS;
-    }
+    if (activeDropdown === "reason") return REASON_OPTIONS;
+    if (activeDropdown === "date") return DATE_OPTIONS;
+    if (activeDropdown === "time") return TIME_OPTIONS;
 
     return [];
   }, [activeDropdown]);
 
   const dropdownTitle = useMemo(() => {
-    if (activeDropdown === "reason") {
-      return "Select reason";
-    }
-
-    if (activeDropdown === "date") {
-      return "Select preferred date";
-    }
-
-    if (activeDropdown === "time") {
-      return "Select preferred time";
-    }
-
-    return "";
+    return getDropdownTitle(activeDropdown);
   }, [activeDropdown]);
 
   const loadConsultations = useCallback(async () => {
@@ -177,6 +237,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
       setScreenError("");
 
       const result = await consultationsApi.listConsultations();
+
       setConsultations(result);
     } catch (error) {
       setScreenError(
@@ -287,207 +348,468 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   ]);
 
   return (
-    <View style={styles.screen}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={HEADER_BLUE}
-        translucent={false}
-      />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
-      <View
-        style={[
-          styles.header,
-          { paddingTop: Math.max(24, insets.top + 12) },
-        ]}
-      >
-        <View>
-          <Text style={styles.headerTitle}>Consultations</Text>
-          <Text style={styles.headerSubtitle}>
-            Book and manage doctor calls
-          </Text>
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
+          <View>
+            <Text style={styles.appBarTitle}>Consultations</Text>
+            <Text style={styles.appBarSubtitle}>
+              Book and manage doctor calls
+            </Text>
+          </View>
+
+          
         </View>
 
-        <TouchableOpacity
-          style={styles.headerAddButton}
-          onPress={() => setActiveDropdown("reason")}
-        >
-          <Text style={styles.headerAddText}>+</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.body}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(96, insets.bottom + 84) },
+            {
+              paddingBottom: Math.max(36, insets.bottom + 112),
+            },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={refreshConsultations}
+              tintColor={PRIMARY}
+              colors={[PRIMARY]}
             />
           }
         >
-          <View style={styles.formCard}>
-            <Text style={styles.cardTitle}>Request Consultation</Text>
+          <View style={styles.summaryPanel}>
+            <View style={styles.summaryHeader}>
+              <View style={styles.summaryIconCircle}>
+                <Video size={24} color={PRIMARY} strokeWidth={2.7} />
+              </View>
 
-            <Text style={styles.inputLabel}>Reason</Text>
-            <TouchableOpacity
-              style={styles.selectBox}
+              <View style={styles.summaryTextBlock}>
+                <Text style={styles.summaryTitle}>Doctor consultation</Text>
+                <Text style={styles.summarySubtitle}>
+                  Request a video call and manage your consultation history.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryStatsRow}>
+              <SummaryStat label="Active" value={`${activeConsultations.length}`} />
+              <SummaryStat label="Past" value={`${pastConsultations.length}`} />
+              <SummaryStat label="Mode" value="Video" />
+            </View>
+          </View>
+
+          <View style={styles.formPanel}>
+            <SectionHeader
+              icon={<Stethoscope size={21} color={PRIMARY} strokeWidth={2.6} />}
+              title="Request consultation"
+              subtitle="Tell the doctor what help you need"
+            />
+
+            <SelectField
+              label="Reason"
+              value={selectedReason}
+              icon={
+                <MessageSquareText
+                  size={19}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
+              placeholder={false}
               onPress={() => setActiveDropdown("reason")}
-            >
-              <Text style={styles.selectText}>{selectedReason}</Text>
-              <Text style={styles.selectChevron}>⌄</Text>
-            </TouchableOpacity>
+            />
 
-            <Text style={styles.inputLabel}>Preferred Date</Text>
-            <TouchableOpacity
-              style={styles.selectBox}
+            <SelectField
+              label="Preferred date"
+              value={preferredDate}
+              icon={
+                <CalendarDays size={19} color={PRIMARY} strokeWidth={2.6} />
+              }
+              placeholder={preferredDate === "Select date"}
               onPress={() => setActiveDropdown("date")}
-            >
-              <Text
-                style={[
-                  styles.selectText,
-                  preferredDate === "Select date" && styles.placeholderText,
-                ]}
-              >
-                {preferredDate}
-              </Text>
-              <Text style={styles.selectChevron}>⌄</Text>
-            </TouchableOpacity>
+            />
 
-            <Text style={styles.inputLabel}>Preferred Time</Text>
-            <TouchableOpacity
-              style={styles.selectBox}
+            <SelectField
+              label="Preferred time"
+              value={preferredTime}
+              icon={<Clock3 size={19} color={PRIMARY} strokeWidth={2.6} />}
+              placeholder={preferredTime === "Select time"}
               onPress={() => setActiveDropdown("time")}
-            >
-              <Text
-                style={[
-                  styles.selectText,
-                  preferredTime === "Select time" && styles.placeholderText,
-                ]}
-              >
-                {preferredTime}
-              </Text>
-              <Text style={styles.selectChevron}>⌄</Text>
-            </TouchableOpacity>
+            />
 
-            <Text style={styles.inputLabel}>Notes Optional</Text>
+            <Text style={styles.inputLabel}>Notes optional</Text>
+
             <TextInput
               style={styles.notesInput}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Add any additional notes..."
-              placeholderTextColor="#9CA3AF"
+              placeholder="Add symptoms, questions, or medicine concerns..."
+              placeholderTextColor="#A8B0C2"
               multiline
               textAlignVertical="top"
             />
 
             <TouchableOpacity
               style={[
-                styles.sendRequestButton,
-                isSendingRequest && styles.disabledButton,
+                styles.primaryButton,
+                isSendingRequest ? styles.disabledButton : undefined,
               ]}
+              activeOpacity={0.85}
               onPress={sendConsultationRequest}
               disabled={isSendingRequest}
             >
               {isSendingRequest ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={SURFACE} />
               ) : (
-                <Text style={styles.sendRequestText}>Send Request</Text>
+                <>
+                  <Send size={19} color={SURFACE} strokeWidth={2.6} />
+                  <Text style={styles.primaryButtonText}>Send Request</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
 
           {screenError ? (
-            <View style={styles.errorBox}>
+            <View style={styles.errorPanel}>
+              <AlertCircle size={22} color={DANGER} strokeWidth={2.6} />
               <Text style={styles.errorText}>{screenError}</Text>
             </View>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Past Consultations</Text>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Active requests</Text>
+              <Text style={styles.sectionSubtitle}>
+                {activeConsultations.length > 0
+                  ? `${activeConsultations.length} active consultation${
+                      activeConsultations.length === 1 ? "" : "s"
+                    }`
+                  : "No active consultation right now"}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.refreshButton}
+              activeOpacity={0.85}
+              onPress={refreshConsultations}
+            >
+              <RefreshCw size={19} color={PRIMARY} strokeWidth={2.6} />
+            </TouchableOpacity>
+          </View>
 
           {isLoading ? (
-            <View style={styles.pastCard}>
-              <ActivityIndicator size="small" color={HEADER_BLUE} />
-
-              <View style={styles.pastInfo}>
-                <Text style={styles.pastTitle}>Loading consultations...</Text>
-                <Text style={styles.pastSubtitle}>Please wait</Text>
-              </View>
-            </View>
-          ) : pastConsultations.length === 0 ? (
-            <View style={styles.pastCard}>
-              <View style={styles.requestedCircle}>
-                <Text style={styles.requestedIcon}>•</Text>
-              </View>
-
-              <View style={styles.pastInfo}>
-                <Text style={styles.pastTitle}>No past consultations</Text>
-                <Text style={styles.pastSubtitle}>
-                  Completed consultations will appear here
-                </Text>
-              </View>
-            </View>
+            <LoadingRow title="Loading consultations..." />
+          ) : activeConsultations.length === 0 ? (
+            <EmptyRow
+              icon={<Video size={22} color={PRIMARY} strokeWidth={2.6} />}
+              title="No active requests"
+              subtitle="Send a request to start a doctor consultation."
+            />
           ) : (
-            pastConsultations.map((consultation) => {
-              const statusStyle = getStatusStyles(consultation.status);
+            <View style={styles.listPanel}>
+              {activeConsultations.map((consultation, index) => (
+                <ConsultationRow
+                  key={consultation.id}
+                  consultation={consultation}
+                  isLast={index === activeConsultations.length - 1}
+                />
+              ))}
+            </View>
+          )}
 
-              return (
-                <View key={consultation.id} style={styles.pastCard}>
-                  <View style={statusStyle.circle}>
-                    <Text style={statusStyle.icon}>
-                      {statusStyle.iconText}
-                    </Text>
-                  </View>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Past consultations</Text>
+              <Text style={styles.sectionSubtitle}>
+                Completed, cancelled and rejected requests
+              </Text>
+            </View>
 
-                  <View style={styles.pastInfo}>
-                    <Text style={styles.pastTitle}>
-                      {formatConsultationDate(consultation.createdAt)} •{" "}
-                      {consultation.type === "EMERGENCY"
-                        ? "Emergency consultation"
-                        : "Manual consultation"}
-                    </Text>
+            <View style={styles.historyIcon}>
+              <History size={20} color={PRIMARY} strokeWidth={2.6} />
+            </View>
+          </View>
 
-                    <Text style={styles.pastSubtitle}>
-                      {getStatusLabel(consultation.status)}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })
+          {isLoading ? (
+            <LoadingRow title="Loading history..." />
+          ) : pastConsultations.length === 0 ? (
+            <EmptyRow
+              icon={<History size={22} color={PRIMARY} strokeWidth={2.6} />}
+              title="No past consultations"
+              subtitle="Completed consultations will appear here."
+            />
+          ) : (
+            <View style={styles.listPanel}>
+              {pastConsultations.map((consultation, index) => (
+                <ConsultationRow
+                  key={consultation.id}
+                  consultation={consultation}
+                  isLast={index === pastConsultations.length - 1}
+                />
+              ))}
+            </View>
           )}
         </ScrollView>
+
+        <Modal
+          visible={activeDropdown !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActiveDropdown(null)}
+        >
+          <View style={styles.modalBackdrop}>
+            <TouchableOpacity
+              style={styles.modalDismissArea}
+              activeOpacity={1}
+              onPress={() => setActiveDropdown(null)}
+            />
+
+            <View
+              style={[
+                styles.modalCard,
+                {
+                  paddingBottom: Math.max(18, insets.bottom + 12),
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
+
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleRow}>
+                  <View style={styles.modalIconCircle}>
+                    {getDropdownIcon(activeDropdown)}
+                  </View>
+
+                  <Text style={styles.modalTitle}>{dropdownTitle}</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  activeOpacity={0.85}
+                  onPress={() => setActiveDropdown(null)}
+                >
+                  <X size={20} color={TEXT} strokeWidth={2.6} />
+                </TouchableOpacity>
+              </View>
+
+              {dropdownOptions.map((option, index) => {
+                const isSelected =
+                  option === selectedReason ||
+                  option === preferredDate ||
+                  option === preferredTime;
+
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.modalOption,
+                      index === dropdownOptions.length - 1
+                        ? styles.modalOptionLast
+                        : undefined,
+                      isSelected ? styles.modalOptionSelected : undefined,
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => selectDropdownOption(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        isSelected ? styles.modalOptionTextSelected : undefined,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+
+                    {isSelected ? (
+                      <CheckCircle2
+                        size={19}
+                        color={PRIMARY}
+                        strokeWidth={2.7}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const SummaryStat = ({ label, value }: { label: string; value: string }) => {
+  return (
+    <View style={styles.summaryStat}>
+      <Text style={styles.summaryStatValue}>{value}</Text>
+      <Text style={styles.summaryStatLabel}>{label}</Text>
+    </View>
+  );
+};
+
+const SectionHeader = ({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+}) => {
+  return (
+    <View style={styles.formHeader}>
+      <View style={styles.formIcon}>{icon}</View>
+
+      <View style={styles.formHeaderText}>
+        <Text style={styles.formTitle}>{title}</Text>
+        <Text style={styles.formSubtitle}>{subtitle}</Text>
+      </View>
+    </View>
+  );
+};
+
+const SelectField = ({
+  label,
+  value,
+  icon,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  placeholder: boolean;
+  onPress: () => void;
+}) => {
+  return (
+    <View style={styles.selectFieldBlock}>
+      <Text style={styles.inputLabel}>{label}</Text>
+
+      <TouchableOpacity
+        style={styles.selectBox}
+        activeOpacity={0.85}
+        onPress={onPress}
+      >
+        <View style={styles.selectLeft}>
+          <View style={styles.selectIcon}>{icon}</View>
+
+          <Text
+            style={[
+              styles.selectText,
+              placeholder ? styles.placeholderText : undefined,
+            ]}
+            numberOfLines={1}
+          >
+            {value}
+          </Text>
+        </View>
+
+        <ChevronDown size={21} color={MUTED} strokeWidth={2.7} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const ConsultationRow = ({
+  consultation,
+  isLast,
+}: {
+  consultation: Consultation;
+  isLast: boolean;
+}) => {
+  const tone = getStatusTone(consultation.status);
+
+  return (
+    <View style={[styles.consultationRow, isLast ? styles.rowLast : undefined]}>
+      <View
+        style={[
+          styles.statusIconCircle,
+          {
+            backgroundColor: tone.background,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.statusIconText,
+            {
+              color: tone.text,
+            },
+          ]}
+        >
+          {tone.icon}
+        </Text>
       </View>
 
-      <Modal
-        visible={activeDropdown !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActiveDropdown(null)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setActiveDropdown(null)}
-        >
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{dropdownTitle}</Text>
+      <View style={styles.consultationInfo}>
+        <Text style={styles.consultationTitle} numberOfLines={1}>
+          {getConsultationTypeLabel(consultation.type)}
+        </Text>
 
-            {dropdownOptions.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={styles.modalOption}
-                onPress={() => selectDropdownOption(option)}
-              >
-                <Text style={styles.modalOptionText}>{option}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        <Text style={styles.consultationSubtitle} numberOfLines={2}>
+          {formatConsultationDate(consultation.createdAt)}
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.consultationBadge,
+          {
+            backgroundColor: tone.background,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.consultationBadgeDot,
+            {
+              backgroundColor: tone.dot,
+            },
+          ]}
+        />
+        <Text
+          style={[
+            styles.consultationBadgeText,
+            {
+              color: tone.text,
+            },
+          ]}
+        >
+          {getStatusLabel(consultation.status)}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const LoadingRow = ({ title }: { title: string }) => {
+  return (
+    <View style={styles.emptyPanel}>
+      <ActivityIndicator size="small" color={PRIMARY} />
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyText}>Please wait a moment.</Text>
+    </View>
+  );
+};
+
+const EmptyRow = ({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+}) => {
+  return (
+    <View style={styles.emptyPanel}>
+      <View style={styles.emptyIconCircle}>{icon}</View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyText}>{subtitle}</Text>
     </View>
   );
 };
@@ -495,239 +817,464 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 export default ConsultationsScreen;
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
   screen: {
     flex: 1,
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: HEADER_BLUE,
+  appBar: {
     paddingHorizontal: 20,
-    paddingBottom: 22,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  body: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 24,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 28,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
+  appBarSubtitle: {
+    color: MUTED,
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
     marginTop: 3,
   },
-  headerAddButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.22)",
+  appBarButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerAddText: {
-    color: "#FFFFFF",
-    fontSize: 26,
-    fontWeight: "800",
-    marginTop: -3,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
+  summaryPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 18,
+    borderColor: BORDER,
   },
-  cardTitle: {
-    color: "#111827",
+  summaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  summaryIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 17,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  summaryTextBlock: {
+    flex: 1,
+  },
+  summaryTitle: {
+    color: TEXT,
     fontSize: 18,
     fontWeight: "900",
+    letterSpacing: -0.25,
+  },
+  summarySubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  summaryStatsRow: {
+    flexDirection: "row",
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 16,
+    padding: 10,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  summaryStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  summaryStatValue: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  summaryStatLabel: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  formPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  formHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  formIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  formHeaderText: {
+    flex: 1,
+  },
+  formTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+  },
+  formSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  selectFieldBlock: {
+    marginTop: 13,
   },
   inputLabel: {
-    color: "#374151",
-    fontSize: 14,
-    fontWeight: "800",
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "900",
     marginBottom: 8,
-    marginTop: 10,
   },
   selectBox: {
-    height: 48,
-    borderRadius: 12,
+    backgroundColor: SOFT_PANEL,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  selectText: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "600",
+  selectLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 10,
   },
-  placeholderText: {
-    color: "#9CA3AF",
-  },
-  selectChevron: {
-    color: "#6B7280",
-    fontSize: 20,
-    fontWeight: "900",
-    marginTop: -5,
-  },
-  notesInput: {
-    height: 108,
+  selectIcon: {
+    width: 34,
+    height: 34,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    color: "#111827",
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  sendRequestButton: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  selectText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  placeholderText: {
+    color: "#A8B0C2",
+  },
+  notesInput: {
+    minHeight: 108,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: SOFT_PANEL,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 13,
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+  },
+  primaryButton: {
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
     marginTop: 16,
   },
-  sendRequestText: {
-    color: "#FFFFFF",
+  primaryButtonText: {
+    color: SURFACE,
     fontSize: 15,
     fontWeight: "900",
+    marginLeft: 9,
   },
   disabledButton: {
     opacity: 0.65,
   },
-  errorBox: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
+  errorPanel: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: "#FECACA",
-    marginBottom: 18,
+    marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   errorText: {
-    color: "#B91C1C",
+    flex: 1,
+    color: "#B42318",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
+    marginLeft: 10,
+  },
+  sectionHeader: {
+    marginTop: 8,
+    marginBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sectionTitle: {
+    color: TEXT,
+    fontSize: 19,
+    fontWeight: "900",
+  },
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  historyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  listPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  consultationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  statusIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  statusIconText: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  consultationInfo: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  consultationTitle: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  consultationSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  consultationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  consultationBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  consultationBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  emptyPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  emptyIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 10,
+    textAlign: "center",
+  },
+  emptyText: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19,
-  },
-  sectionTitle: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900",
-    marginBottom: 12,
-  },
-  pastCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  requestedCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#DBEAFE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  requestedIcon: {
-    color: HEADER_BLUE,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  completedCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  completedIcon: {
-    color: "#16A34A",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  cancelledCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  cancelledIcon: {
-    color: "#DC2626",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  pastInfo: {
-    flex: 1,
-  },
-  pastTitle: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  pastSubtitle: {
-    color: "#6B7280",
-    fontSize: 13,
-    marginTop: 3,
+    textAlign: "center",
+    marginTop: 6,
   },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.38)",
-    justifyContent: "center",
-    paddingHorizontal: 28,
+    justifyContent: "flex-end",
+  },
+  modalDismissArea: {
+    flex: 1,
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
+    backgroundColor: SURFACE,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#D4DAE6",
+    marginBottom: 14,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 12,
+  },
+  modalTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  modalIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
   },
   modalTitle: {
-    color: "#111827",
-    fontSize: 17,
+    color: TEXT,
+    fontSize: 18,
     fontWeight: "900",
-    marginBottom: 8,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   modalOption: {
-    paddingVertical: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: BORDER,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 14,
+  },
+  modalOptionLast: {
+    borderBottomWidth: 0,
+  },
+  modalOptionSelected: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderBottomColor: "transparent",
+    marginBottom: 5,
   },
   modalOptionText: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
+  },
+  modalOptionTextSelected: {
+    color: PRIMARY_DARK,
+    fontWeight: "900",
   },
 });

@@ -15,8 +15,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   useFocusEffect,
   type CompositeScreenProps,
@@ -40,9 +42,11 @@ import {
   AlertCircle,
   Bluetooth,
   CheckCircle2,
+  ChevronRight,
   Droplet,
   HeartPulse,
   RefreshCw,
+  SlidersHorizontal,
   Thermometer,
 } from "lucide-react-native";
 
@@ -77,6 +81,42 @@ type TrendMetricOption = {
   softColor: string;
 };
 
+type VitalBarData = {
+  key: string;
+  label: string;
+  displayValue: string;
+  unit: string;
+  percentage: number;
+  color: string;
+  hasData: boolean;
+};
+
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
+
+const TEAL = "#0F766E";
+const TEAL_LIGHT = "#EAF8F2";
+
+const INDIGO = "#4F46E5";
+const INDIGO_LIGHT = "#EEF2FF";
+
 const CHART_WIDTH = 330;
 const CHART_HEIGHT = 210;
 const CHART_PADDING_LEFT = 38;
@@ -84,86 +124,110 @@ const CHART_PADDING_RIGHT = 20;
 const CHART_PADDING_TOP = 24;
 const CHART_PADDING_BOTTOM = 34;
 
+const BAR_MAX_HEIGHT = 128;
+
 const TREND_METRICS: TrendMetricOption[] = [
   {
     key: "heartRate",
     label: "Heart Rate",
-    shortLabel: "HR",
+    shortLabel: "Heart",
     unit: "bpm",
-    color: "#DC2626",
-    softColor: "#FEE2E2",
+    color: DANGER,
+    softColor: DANGER_LIGHT,
   },
   {
     key: "spo2",
-    label: "SpO2",
-    shortLabel: "SpO2",
+    label: "SpO₂",
+    shortLabel: "SpO₂",
     unit: "%",
-    color: "#2563EB",
-    softColor: "#DBEAFE",
+    color: PRIMARY,
+    softColor: PRIMARY_LIGHT,
   },
   {
     key: "bpSystolic",
     label: "Blood Pressure",
     shortLabel: "BP",
     unit: "mmHg",
-    color: "#9333EA",
-    softColor: "#F3E8FF",
+    color: INDIGO,
+    softColor: INDIGO_LIGHT,
   },
   {
     key: "glucose",
     label: "Glucose",
-    shortLabel: "Glucose",
+    shortLabel: "Sugar",
     unit: "mg/dL",
-    color: "#F97316",
-    softColor: "#FFEDD5",
+    color: WARNING,
+    softColor: WARNING_LIGHT,
   },
   {
     key: "temperature",
     label: "Temperature",
     shortLabel: "Temp",
     unit: "°C",
-    color: "#0F766E",
-    softColor: "#CCFBF1",
+    color: TEAL,
+    softColor: TEAL_LIGHT,
   },
 ];
+
+const clamp = (value: number, min: number, max: number) => {
+  return Math.min(Math.max(value, min), max);
+};
+
+const getPercentage = (
+  value: number | null,
+  minimum: number,
+  maximum: number
+) => {
+  if (value === null) {
+    return 12;
+  }
+
+  const percentage = ((value - minimum) / (maximum - minimum)) * 100;
+
+  return clamp(percentage, 18, 100);
+};
 
 const getStatusTheme = (status: VitalStatus) => {
   if (status === "STABLE") {
     return {
-      background: "#ECFDF5",
-      border: "#86EFAC",
-      pill: "#DCFCE7",
-      text: "#15803D",
+      badgeBackground: SUCCESS_LIGHT,
+      text: "#167A58",
+      dot: SUCCESS,
       label: "Stable",
+      title: "Vitals look stable",
+      flowLabel: "Good Flow",
     };
   }
 
   if (status === "WARNING") {
     return {
-      background: "#FFF7ED",
-      border: "#FDBA74",
-      pill: "#FFEDD5",
-      text: "#C2410C",
+      badgeBackground: WARNING_LIGHT,
+      text: "#A85A13",
+      dot: WARNING,
       label: "Warning",
+      title: "Needs attention",
+      flowLabel: "Check Flow",
     };
   }
 
   if (status === "CRITICAL") {
     return {
-      background: "#FEF2F2",
-      border: "#FCA5A5",
-      pill: "#FEE2E2",
-      text: "#B91C1C",
+      badgeBackground: DANGER_LIGHT,
+      text: "#B42318",
+      dot: DANGER,
       label: "Critical",
+      title: "Critical reading",
+      flowLabel: "Urgent Flow",
     };
   }
 
   return {
-    background: "#EFF6FF",
-    border: "#BFDBFE",
-    pill: "#DBEAFE",
-    text: "#1D4ED8",
+    badgeBackground: PRIMARY_LIGHT,
+    text: PRIMARY_DARK,
+    dot: PRIMARY,
     label: "No Data",
+    title: "No latest reading",
+    flowLabel: "No Flow",
   };
 };
 
@@ -171,6 +235,7 @@ const formatSource = (source?: string | null) => {
   if (source === "HEALTH_CONNECT") return "Health Connect";
   if (source === "SIMULATED") return "Simulator";
   if (source === "MANUAL") return "Manual";
+
   return "No source";
 };
 
@@ -241,6 +306,61 @@ const getNumberValue = (value?: number | null) => {
   return null;
 };
 
+const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
+  const heartRate = getNumberValue(reading?.heartRate);
+  const spo2 = getNumberValue(reading?.spo2);
+  const bpSystolic = getNumberValue(reading?.bpSystolic);
+  const glucose = getNumberValue(reading?.glucose);
+  const temperature = getNumberValue(reading?.temperature);
+
+  return [
+    {
+      key: "heartRate",
+      label: "Heart",
+      displayValue: heartRate === null ? "--" : `${heartRate}`,
+      unit: "bpm",
+      percentage: getPercentage(heartRate, 50, 150),
+      color: PRIMARY,
+      hasData: heartRate !== null,
+    },
+    {
+      key: "spo2",
+      label: "SpO₂",
+      displayValue: spo2 === null ? "--" : `${spo2}`,
+      unit: "%",
+      percentage: getPercentage(spo2, 85, 100),
+      color: PRIMARY,
+      hasData: spo2 !== null,
+    },
+    {
+      key: "bp",
+      label: "BP",
+      displayValue: formatBloodPressure(reading),
+      unit: "mmHg",
+      percentage: getPercentage(bpSystolic, 90, 180),
+      color: PRIMARY,
+      hasData: bpSystolic !== null,
+    },
+    {
+      key: "glucose",
+      label: "Sugar",
+      displayValue: glucose === null ? "--" : `${glucose}`,
+      unit: "mg/dL",
+      percentage: getPercentage(glucose, 60, 220),
+      color: PRIMARY,
+      hasData: glucose !== null,
+    },
+    {
+      key: "temperature",
+      label: "Temp",
+      displayValue: temperature === null ? "--" : `${temperature}`,
+      unit: "°C",
+      percentage: getPercentage(temperature, 35, 40),
+      color: PRIMARY,
+      hasData: temperature !== null,
+    },
+  ];
+};
 const getTrendMetricValue = (
   reading: VitalReading,
   metricKey: TrendMetricKey
@@ -297,7 +417,9 @@ const buildTrendChartData = (
     .map((reading, index) => {
       const value = getTrendMetricValue(reading, selectedMetric.key);
 
-      if (value === null) return null;
+      if (value === null) {
+        return null;
+      }
 
       return {
         reading,
@@ -397,7 +519,29 @@ const formatTrendNumber = (value: number, metricKey: TrendMetricKey) => {
   return `${Math.round(value)}`;
 };
 
+const getMetricShortcutIcon = (metricKey: TrendMetricKey) => {
+  if (metricKey === "heartRate") {
+    return <HeartPulse size={23} color={TEXT} strokeWidth={2.4} />;
+  }
+
+  if (metricKey === "spo2") {
+    return <ActivityIcon size={23} color={TEXT} strokeWidth={2.4} />;
+  }
+
+  if (metricKey === "bpSystolic") {
+    return <ActivityIcon size={23} color={TEXT} strokeWidth={2.4} />;
+  }
+
+  if (metricKey === "glucose") {
+    return <Droplet size={23} color={TEXT} strokeWidth={2.4} />;
+  }
+
+  return <Thermometer size={23} color={TEXT} strokeWidth={2.4} />;
+};
+
 export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
+  const insets = useSafeAreaInsets();
+
   const [latestReading, setLatestReading] = useState<VitalReading | null>(null);
   const [history, setHistory] = useState<VitalReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -481,288 +625,412 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => loadVitals("refresh")}
-          />
-        }
-      >
-        <LinearGradient
-          colors={["#3B82F6", "#2563EB"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Vitals</Text>
-            <Text style={styles.headerSubtitle}>
-              Health readings, trends and connected source
-            </Text>
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
+          <View>
+            <Text style={styles.appBarTitle}>Vitals</Text>
+            <Text style={styles.appBarSubtitle}>Track health readings</Text>
           </View>
 
           <TouchableOpacity
-            style={styles.headerButton}
+            style={styles.deviceButton}
             activeOpacity={0.85}
             onPress={openConnectedDevice}
           >
-            <Bluetooth size={22} color="#FFFFFF" strokeWidth={2.5} />
-          </TouchableOpacity>
-        </LinearGradient>
-
-        {isLoading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator color="#2563EB" />
-            <Text style={styles.loadingText}>Loading vitals...</Text>
-          </View>
-        ) : null}
-
-        {!isLoading && errorMessage ? (
-          <View style={styles.errorCard}>
-            <AlertCircle size={26} color="#DC2626" />
-            <Text style={styles.errorTitle}>Vitals unavailable</Text>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-
-            <TouchableOpacity
-              style={styles.retryButton}
-              activeOpacity={0.85}
-              onPress={() => loadVitals("initial")}
-            >
-              <RefreshCw size={18} color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {!isLoading && !errorMessage ? (
-          <>
-            <View
-              style={[
-                styles.statusCard,
-                {
-                  backgroundColor: statusTheme.background,
-                  borderColor: statusTheme.border,
-                },
-              ]}
-            >
-              <View style={styles.statusHeaderRow}>
-                <View style={styles.statusHeaderText}>
-                  <Text style={styles.statusTitle}>Overall Status</Text>
-                  <Text style={styles.statusSubtitle}>
-                    Last updated {formatTime(latestReading?.recordedAt)}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.statusPill,
-                    {
-                      backgroundColor: statusTheme.pill,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      {
-                        color: statusTheme.text,
-                      },
-                    ]}
-                  >
-                    {statusTheme.label}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.metricsGrid}>
-                <VitalMetricCard
-                  icon={<HeartPulse size={24} color="#DC2626" />}
-                  label="Heart Rate"
-                  value={
-                    latestReading?.heartRate !== null &&
-                    latestReading?.heartRate !== undefined
-                      ? `${latestReading.heartRate}`
-                      : "--"
-                  }
-                  unit="bpm"
-                />
-
-                <VitalMetricCard
-                  icon={<ActivityIcon size={24} color="#2563EB" />}
-                  label="SpO2"
-                  value={
-                    latestReading?.spo2 !== null &&
-                    latestReading?.spo2 !== undefined
-                      ? `${latestReading.spo2}`
-                      : "--"
-                  }
-                  unit="%"
-                />
-
-                <VitalMetricCard
-                  icon={<ActivityIcon size={24} color="#9333EA" />}
-                  label="Blood Pressure"
-                  value={formatBloodPressure(latestReading)}
-                  unit="mmHg"
-                />
-
-                <VitalMetricCard
-                  icon={<Droplet size={24} color="#F97316" />}
-                  label="Glucose"
-                  value={
-                    latestReading?.glucose !== null &&
-                    latestReading?.glucose !== undefined
-                      ? `${latestReading.glucose}`
-                      : "--"
-                  }
-                  unit="mg/dL"
-                />
-              </View>
-
-              <View style={styles.temperatureRow}>
-                <Thermometer size={20} color="#0F766E" />
-                <Text style={styles.temperatureText}>
-                  Temperature:{" "}
-                  {latestReading?.temperature !== null &&
-                  latestReading?.temperature !== undefined
-                    ? `${latestReading.temperature}°C`
-                    : "-- °C"}
-                </Text>
-              </View>
-
-              <View style={styles.sourceRow}>
-                <Text style={styles.sourceText}>
-                  Source: {formatSource(latestReading?.source)}
-                </Text>
-                <Text style={styles.sourceText}>
-                  Device: {latestReading?.deviceSource || "No device source"}
-                </Text>
-              </View>
-            </View>
-
-            <VitalsTrendChart
-              readings={graphReadings}
-              selectedMetricKey={selectedMetricKey}
-              onChangeMetric={setSelectedMetricKey}
+            <Bluetooth
+              size={22}
+              color={isHealthConnectConnected ? SUCCESS : PRIMARY}
+              strokeWidth={2.6}
             />
+          </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity
-              style={styles.connectedDeviceCard}
-              activeOpacity={0.85}
-              onPress={openConnectedDevice}
-            >
-              <View
-                style={[
-                  styles.connectedIconCircle,
-                  isHealthConnectConnected
-                    ? styles.connectedIconCircleActive
-                    : styles.connectedIconCircleInactive,
-                ]}
-              >
-                {isHealthConnectConnected ? (
-                  <CheckCircle2 size={26} color="#16A34A" strokeWidth={2.5} />
-                ) : (
-                  <Bluetooth size={26} color="#2563EB" strokeWidth={2.5} />
-                )}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingBottom: Math.max(36, insets.bottom + 112),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => loadVitals("refresh")}
+              tintColor={PRIMARY}
+              colors={[PRIMARY]}
+            />
+          }
+        >
+          {isLoading ? (
+            <View style={styles.statePanel}>
+              <ActivityIndicator color={PRIMARY} />
+              <Text style={styles.stateTitle}>Loading vitals...</Text>
+              <Text style={styles.stateText}>
+                Getting the latest saved health readings.
+              </Text>
+            </View>
+          ) : null}
+
+          {!isLoading && errorMessage ? (
+            <View style={styles.errorPanel}>
+              <View style={styles.errorIconCircle}>
+                <AlertCircle size={26} color={DANGER} strokeWidth={2.6} />
               </View>
 
-              <View style={styles.connectedTextBlock}>
-                <View style={styles.connectedTitleRow}>
-                  <Text style={styles.connectedTitle}>Connected Device</Text>
+              <Text style={styles.errorTitle}>Vitals unavailable</Text>
+              <Text style={styles.errorText}>{errorMessage}</Text>
 
-                  <View
-                    style={[
-                      styles.devicePill,
-                      isHealthConnectConnected
-                        ? styles.devicePillActive
-                        : styles.devicePillInactive,
-                    ]}
-                  >
-                    <Text
+              <TouchableOpacity
+                style={styles.retryButton}
+                activeOpacity={0.85}
+                onPress={() => loadVitals("initial")}
+              >
+                <RefreshCw size={18} color={SURFACE} strokeWidth={2.5} />
+                <Text style={styles.retryButtonText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {!isLoading && !errorMessage ? (
+            <>
+              <View style={styles.featureCard}>
+                <View style={styles.featureTopRow}>
+                  <View style={styles.featureTextBlock}>
+                    <View
                       style={[
-                        styles.devicePillText,
-                        isHealthConnectConnected
-                          ? styles.devicePillTextActive
-                          : styles.devicePillTextInactive,
+                        styles.statusBadge,
+                        {
+                          backgroundColor: statusTheme.badgeBackground,
+                        },
                       ]}
                     >
-                      {isHealthConnectConnected ? "Connected" : "Off"}
+                      <View
+                        style={[
+                          styles.statusDot,
+                          {
+                            backgroundColor: statusTheme.dot,
+                          },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          {
+                            color: statusTheme.text,
+                          },
+                        ]}
+                      >
+                        {statusTheme.label}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.featureTitle}>{statusTheme.title}</Text>
+                    <Text style={styles.featureSubtitle}>
+                      {formatTime(latestReading?.recordedAt)}
                     </Text>
+                  </View>
+
+                  <View style={styles.featureIconBox}>
+                    <HeartPulse size={29} color={PRIMARY} strokeWidth={2.7} />
                   </View>
                 </View>
 
-                <Text style={styles.connectedSubtitle}>
-                  {isHealthConnectConnected
-                    ? connectedDeviceName
-                    : "Connect Health Connect to update vitals automatically"}
-                </Text>
+                <VitalBarGraph
+                  reading={latestReading}
+                  flowLabel={statusTheme.flowLabel}
+                />
+              </View>
 
-                <View style={styles.connectedMetaRow}>
-                  <Text style={styles.connectedMetaText}>
-                    Auto Sync:{" "}
-                    {isHealthConnectConnected
-                      ? "Active"
-                      : "Off"}
-                  </Text>
-                  <Text style={styles.connectedMetaText}>
-                    Last Sync: {formatSyncTime(lastSyncAt)}
-                  </Text>
-                  <Text style={styles.connectedMetaText}>
-                    Last Status: {lastSyncStatus || "No reading yet"}
+              <View style={styles.whitePanel}>
+                <View style={styles.panelHeader}>
+                  <Text style={styles.panelTitle}>Reading source</Text>
+                  <Text style={styles.panelAction}>
+                    {formatSource(latestReading?.source)}
                   </Text>
                 </View>
 
-                {lastSyncError ? (
-                  <Text style={styles.connectedErrorText}>{lastSyncError}</Text>
-                ) : null}
+                <InfoRow
+                  label="Source"
+                  value={formatSource(latestReading?.source)}
+                />
+
+                <InfoRow
+                  label="Device"
+                  value={latestReading?.deviceSource || "No device source"}
+                />
+
+                <InfoRow
+                  label="Recorded"
+                  value={formatTime(latestReading?.recordedAt)}
+                  isLast
+                />
               </View>
 
-              <Text style={styles.connectedArrow}>›</Text>
-            </TouchableOpacity>
-
-            {isHealthConnectSyncing ? (
-              <View style={styles.syncingCard}>
-                <ActivityIndicator color="#2563EB" />
-                <Text style={styles.syncingText}>
-                  Updating latest Health Connect vitals...
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Readings</Text>
+              <VitalsTrendChart
+                readings={graphReadings}
+                selectedMetricKey={selectedMetricKey}
+                onChangeMetric={setSelectedMetricKey}
+              />
 
               <TouchableOpacity
+                style={styles.connectedRow}
                 activeOpacity={0.85}
-                onPress={() => loadVitals("refresh")}
+                onPress={openConnectedDevice}
               >
-                <RefreshCw size={20} color="#2563EB" strokeWidth={2.5} />
+                <View
+                  style={[
+                    styles.connectedIcon,
+                    {
+                      backgroundColor: isHealthConnectConnected
+                        ? SUCCESS_LIGHT
+                        : PRIMARY_LIGHT,
+                    },
+                  ]}
+                >
+                  {isHealthConnectConnected ? (
+                    <CheckCircle2 size={24} color={SUCCESS} strokeWidth={2.6} />
+                  ) : (
+                    <Bluetooth size={24} color={PRIMARY} strokeWidth={2.6} />
+                  )}
+                </View>
+
+                <View style={styles.connectedTextBlock}>
+                  <View style={styles.connectedTitleRow}>
+                    <Text style={styles.connectedTitle}>Connected device</Text>
+
+                    <View
+                      style={[
+                        styles.deviceStatusBadge,
+                        {
+                          backgroundColor: isHealthConnectConnected
+                            ? SUCCESS_LIGHT
+                            : SOFT_PANEL,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.deviceStatusText,
+                          {
+                            color: isHealthConnectConnected
+                              ? "#167A58"
+                              : MUTED,
+                          },
+                        ]}
+                      >
+                        {isHealthConnectConnected ? "Connected" : "Off"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.connectedSubtitle}>
+                    {isHealthConnectConnected
+                      ? connectedDeviceName
+                      : "Connect Health Connect to update vitals automatically"}
+                  </Text>
+
+                  <Text style={styles.connectedMeta}>
+                    Last sync: {formatSyncTime(lastSyncAt)}
+                  </Text>
+
+                  <Text style={styles.connectedMeta}>
+                    Last status: {lastSyncStatus || "No reading yet"}
+                  </Text>
+
+                  {lastSyncError ? (
+                    <Text style={styles.connectedError}>{lastSyncError}</Text>
+                  ) : null}
+                </View>
+
+                <ChevronRight size={22} color={MUTED} strokeWidth={2.6} />
               </TouchableOpacity>
+
+              {isHealthConnectSyncing ? (
+                <View style={styles.syncingPanel}>
+                  <ActivityIndicator color={PRIMARY} />
+                  <Text style={styles.syncingText}>
+                    Updating latest Health Connect vitals...
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Recent readings</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    {history.length > 0
+                      ? `${history.length} saved reading${
+                          history.length === 1 ? "" : "s"
+                        }`
+                      : "No saved readings yet"}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.refreshSmallButton}
+                  activeOpacity={0.85}
+                  onPress={() => loadVitals("refresh")}
+                >
+                  <RefreshCw size={19} color={PRIMARY} strokeWidth={2.6} />
+                </TouchableOpacity>
+              </View>
+
+              {history.length > 0 ? (
+                <View style={styles.historyPanel}>
+                  {history.map((reading, index) => (
+                    <HistoryRow
+                      key={reading.id}
+                      reading={reading}
+                      isLast={index === history.length - 1}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyPanel}>
+                  <Text style={styles.emptyTitle}>No readings yet</Text>
+                  <Text style={styles.emptyText}>
+                    Connect Health Connect or add a simulated reading to start
+                    tracking vitals.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : null}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const VitalBarGraph = ({
+  reading,
+  flowLabel,
+}: {
+  reading: VitalReading | null;
+  flowLabel: string;
+}) => {
+  const bars = useMemo(() => getLatestVitalBars(reading), [reading]);
+
+  return (
+    <View style={styles.barGraphPanel}>
+      <View style={styles.barGraphHeader}>
+        <View>
+          <Text style={styles.barGraphTitle}>Health readings</Text>
+
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={styles.legendSafeDot} />
+              <Text style={styles.legendText}>Latest</Text>
             </View>
 
-            {history.length > 0 ? (
-              history.map((reading) => (
-                <HistoryCard key={reading.id} reading={reading} />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>No readings yet</Text>
-                <Text style={styles.emptyText}>
-                  Connect Health Connect or add a simulated reading to start
-                  tracking vitals.
-                </Text>
+            <View style={styles.legendItem}>
+              <View style={styles.legendRangeDot} />
+              <Text style={styles.legendText}>Range</Text>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.filterButton} activeOpacity={0.85}>
+          <SlidersHorizontal size={20} color={TEXT} strokeWidth={2.5} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.flowPill}>
+        <Text style={styles.flowPillText}>{flowLabel}</Text>
+      </View>
+
+      <View style={styles.barChartRow}>
+        {bars.map((bar) => {
+          const barHeight = bar.hasData
+            ? Math.max(22, Math.round((bar.percentage / 100) * BAR_MAX_HEIGHT))
+            : 16;
+
+          return (
+            <View key={bar.key} style={styles.barItem}>
+              <Text style={styles.barValueText} numberOfLines={1}>
+                {bar.displayValue}
+              </Text>
+
+              <View style={styles.barTrack}>
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      height: barHeight,
+                      backgroundColor: bar.hasData ? bar.color : "#CBD5E1",
+                    },
+                  ]}
+                />
               </View>
-            )}
-          </>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+
+              <Text style={styles.barLabel}>{bar.label}</Text>
+              <Text style={styles.barUnit}>{bar.unit}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+const MetricShortcut = ({
+  label,
+  icon,
+  isSelected,
+  onPress,
+}: {
+  label: string;
+  icon: ReactNode;
+  isSelected: boolean;
+  onPress: () => void;
+}) => {
+  return (
+    <TouchableOpacity
+      style={styles.metricShortcut}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
+      <View
+        style={[
+          styles.metricShortcutIcon,
+          isSelected ? styles.metricShortcutIconSelected : undefined,
+        ]}
+      >
+        {icon}
+      </View>
+
+      <Text
+        style={[
+          styles.metricShortcutLabel,
+          isSelected ? styles.metricShortcutLabelSelected : undefined,
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const InfoRow = ({
+  label,
+  value,
+  isLast,
+}: {
+  label: string;
+  value: string;
+  isLast?: boolean;
+}) => {
+  return (
+    <View style={[styles.infoRow, isLast ? styles.rowLast : undefined]}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
   );
 };
 
@@ -797,12 +1065,12 @@ const VitalsTrendChart = ({
       : null;
 
   return (
-    <View style={styles.trendCard}>
-      <View style={styles.trendHeaderRow}>
-        <View style={styles.trendHeaderText}>
-          <Text style={styles.trendTitle}>Today&apos;s Trend</Text>
+    <View style={styles.trendPanel}>
+      <View style={styles.trendHeader}>
+        <View style={styles.trendTitleBlock}>
+          <Text style={styles.trendTitle}>Vitals trend</Text>
           <Text style={styles.trendSubtitle}>
-            Select a vital to view recent changes
+            {selectedMetric.label} changes from recent readings
           </Text>
         </View>
 
@@ -842,41 +1110,17 @@ const VitalsTrendChart = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.metricSelectorContent}
+        contentContainerStyle={styles.metricShortcutContentInside}
       >
-        {TREND_METRICS.map((metric) => {
-          const isSelected = metric.key === selectedMetricKey;
-
-          return (
-            <TouchableOpacity
-              key={metric.key}
-              activeOpacity={0.85}
-              style={[
-                styles.metricSelectorChip,
-                isSelected
-                  ? {
-                      backgroundColor: metric.softColor,
-                      borderColor: metric.color,
-                    }
-                  : null,
-              ]}
-              onPress={() => onChangeMetric(metric.key)}
-            >
-              <Text
-                style={[
-                  styles.metricSelectorText,
-                  isSelected
-                    ? {
-                        color: metric.color,
-                      }
-                    : null,
-                ]}
-              >
-                {metric.shortLabel}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {TREND_METRICS.map((metric) => (
+          <MetricShortcut
+            key={metric.key}
+            label={metric.shortLabel}
+            icon={getMetricShortcutIcon(metric.key)}
+            isSelected={selectedMetricKey === metric.key}
+            onPress={() => onChangeMetric(metric.key)}
+          />
+        ))}
       </ScrollView>
 
       {hasChartData ? (
@@ -898,7 +1142,7 @@ const VitalsTrendChart = ({
                   <Stop
                     offset="0%"
                     stopColor={selectedMetric.color}
-                    stopOpacity="0.22"
+                    stopOpacity="0.18"
                   />
                   <Stop
                     offset="100%"
@@ -913,7 +1157,7 @@ const VitalsTrendChart = ({
                 y1={chartTop}
                 x2={chartRight}
                 y2={chartTop}
-                stroke="#F1F5F9"
+                stroke="#E4E8F2"
                 strokeWidth="1"
               />
 
@@ -922,7 +1166,7 @@ const VitalsTrendChart = ({
                 y1={middleY}
                 x2={chartRight}
                 y2={middleY}
-                stroke="#E2E8F0"
+                stroke="#E4E8F2"
                 strokeWidth="1"
               />
 
@@ -931,8 +1175,8 @@ const VitalsTrendChart = ({
                 y1={chartBottom}
                 x2={chartRight}
                 y2={chartBottom}
-                stroke="#E2E8F0"
-                strokeWidth="1.5"
+                stroke="#E4E8F2"
+                strokeWidth="1.4"
               />
 
               <Line
@@ -940,14 +1184,14 @@ const VitalsTrendChart = ({
                 y1={chartTop}
                 x2={chartLeft}
                 y2={chartBottom}
-                stroke="#E2E8F0"
-                strokeWidth="1.5"
+                stroke="#E4E8F2"
+                strokeWidth="1.4"
               />
 
               <SvgText
                 x={chartLeft - 8}
                 y={chartTop + 4}
-                fill="#94A3B8"
+                fill="#9CA3AF"
                 fontSize="10"
                 textAnchor="end"
               >
@@ -957,7 +1201,7 @@ const VitalsTrendChart = ({
               <SvgText
                 x={chartLeft - 8}
                 y={middleY + 4}
-                fill="#94A3B8"
+                fill="#9CA3AF"
                 fontSize="10"
                 textAnchor="end"
               >
@@ -970,7 +1214,7 @@ const VitalsTrendChart = ({
               <SvgText
                 x={chartLeft - 8}
                 y={chartBottom + 4}
-                fill="#94A3B8"
+                fill="#9CA3AF"
                 fontSize="10"
                 textAnchor="end"
               >
@@ -998,7 +1242,7 @@ const VitalsTrendChart = ({
                   cx={point.x}
                   cy={point.y}
                   r="4.5"
-                  fill="#FFFFFF"
+                  fill={SURFACE}
                   stroke={selectedMetric.color}
                   strokeWidth="3"
                 />
@@ -1011,7 +1255,7 @@ const VitalsTrendChart = ({
                     cy={latestPoint.y}
                     r="7"
                     fill={selectedMetric.color}
-                    opacity="0.18"
+                    opacity="0.16"
                   />
                   <Circle
                     cx={latestPoint.x}
@@ -1043,7 +1287,7 @@ const VitalsTrendChart = ({
                     key={`${reading.id}-label-${index}`}
                     x={x}
                     y={CHART_HEIGHT - 8}
-                    fill="#94A3B8"
+                    fill="#9CA3AF"
                     fontSize="10"
                     textAnchor="middle"
                   >
@@ -1081,7 +1325,7 @@ const VitalsTrendChart = ({
           </View>
         </>
       ) : (
-        <View style={styles.noChartCard}>
+        <View style={styles.noChartPanel}>
           <Text style={styles.noChartTitle}>No trend data yet</Text>
           <Text style={styles.noChartText}>
             Connect Health Connect or add readings to show a graph.
@@ -1112,35 +1356,17 @@ const TrendStat = ({
   );
 };
 
-const VitalMetricCard = ({
-  icon,
-  label,
-  value,
-  unit,
+const HistoryRow = ({
+  reading,
+  isLast,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  unit: string;
+  reading: VitalReading;
+  isLast: boolean;
 }) => {
-  return (
-    <View style={styles.metricCard}>
-      <View style={styles.metricIcon}>{icon}</View>
-      <Text style={styles.metricLabel}>{label}</Text>
-
-      <View style={styles.metricValueRow}>
-        <Text style={styles.metricValue}>{value}</Text>
-        <Text style={styles.metricUnit}>{unit}</Text>
-      </View>
-    </View>
-  );
-};
-
-const HistoryCard = ({ reading }: { reading: VitalReading }) => {
   const theme = getStatusTheme(reading.status);
 
   return (
-    <View style={styles.historyCard}>
+    <View style={[styles.historyRow, isLast ? styles.rowLast : undefined]}>
       <View style={styles.historyTopRow}>
         <View style={styles.historyTitleBlock}>
           <Text style={styles.historyTime}>{formatTime(reading.recordedAt)}</Text>
@@ -1152,15 +1378,15 @@ const HistoryCard = ({ reading }: { reading: VitalReading }) => {
 
         <View
           style={[
-            styles.historyPill,
+            styles.historyStatusBadge,
             {
-              backgroundColor: theme.pill,
+              backgroundColor: theme.badgeBackground,
             },
           ]}
         >
           <Text
             style={[
-              styles.historyPillText,
+              styles.historyStatusText,
               {
                 color: theme.text,
               },
@@ -1171,16 +1397,11 @@ const HistoryCard = ({ reading }: { reading: VitalReading }) => {
         </View>
       </View>
 
-      <View style={styles.historyValuesRow}>
+      <View style={styles.historyValues}>
         <Text style={styles.historyValue}>HR {reading.heartRate ?? "--"}</Text>
-        <Text style={styles.historyValue}>SpO2 {reading.spo2 ?? "--"}%</Text>
+        <Text style={styles.historyValue}>SpO₂ {reading.spo2 ?? "--"}%</Text>
         <Text style={styles.historyValue}>BP {formatBloodPressure(reading)}</Text>
-      </View>
-
-      <View style={styles.historyValuesRow}>
-        <Text style={styles.historyValue}>
-          Glucose {reading.glucose ?? "--"}
-        </Text>
+        <Text style={styles.historyValue}>Glucose {reading.glucose ?? "--"}</Text>
         <Text style={styles.historyValue}>
           Temp{" "}
           {reading.temperature !== null && reading.temperature !== undefined
@@ -1195,77 +1416,92 @@ const HistoryCard = ({ reading }: { reading: VitalReading }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  content: {
-    paddingBottom: 34,
-  },
-  header: {
+  appBar: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 28,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTextBlock: {
-    flex: 1,
-    paddingRight: 14,
-  },
-  headerTitle: {
-    color: "#FFFFFF",
+  appBarTitle: {
+    color: TEXT,
     fontSize: 28,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 14,
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
     fontWeight: "700",
-    marginTop: 5,
+    marginTop: 3,
   },
-  headerButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "rgba(255,255,255,0.20)",
+  deviceButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
+    borderColor: BORDER,
   },
-  loadingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 22,
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  statePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 24,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  loadingText: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "800",
-    marginTop: 10,
+  stateTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "900",
+    marginTop: 12,
   },
-  errorCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 22,
+  stateText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 19,
+    marginTop: 5,
+  },
+  errorPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 24,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#FECACA",
+  },
+  errorIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: DANGER_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
   },
   errorTitle: {
     color: "#991B1B",
     fontSize: 18,
     fontWeight: "900",
-    marginTop: 10,
+    marginTop: 12,
   },
   errorText: {
     color: "#7F1D1D",
@@ -1277,7 +1513,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   retryButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: PRIMARY,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
@@ -1285,209 +1521,342 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   retryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 14,
     fontWeight: "900",
     marginLeft: 8,
   },
-  statusCard: {
-    borderRadius: 22,
-    marginHorizontal: 20,
-    marginTop: 20,
+  featureCard: {
+    backgroundColor: PRIMARY,
+    borderRadius: 28,
     padding: 18,
-    borderWidth: 1,
+    marginBottom: 14,
+    overflow: "hidden",
   },
-  statusHeaderRow: {
+  featureTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 18,
-  },
-  statusHeaderText: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  statusTitle: {
-    color: "#111827",
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  statusSubtitle: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  metricsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
   },
-  metricCard: {
-    width: "48%",
-    backgroundColor: "rgba(255,255,255,0.74)",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.88)",
+  featureTextBlock: {
+    flex: 1,
+    paddingRight: 14,
   },
-  metricIcon: {
-    marginBottom: 10,
-  },
-  metricLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  metricValueRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    flexWrap: "wrap",
-  },
-  metricValue: {
-    color: "#111827",
-    fontSize: 23,
-    fontWeight: "900",
-    marginRight: 4,
-  },
-  metricUnit: {
-    color: "#64748B",
-    fontSize: 11,
-    fontWeight: "900",
-    marginBottom: 5,
-  },
-  temperatureRow: {
-    backgroundColor: "rgba(255,255,255,0.70)",
-    borderRadius: 14,
-    padding: 13,
+  statusBadge: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
   },
-  temperatureText: {
-    color: "#0F172A",
-    fontSize: 14,
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+  statusBadgeText: {
+    fontSize: 11,
     fontWeight: "900",
-    marginLeft: 8,
   },
-  sourceRow: {
+  featureTitle: {
+    color: SURFACE,
+    fontSize: 27,
+    fontWeight: "900",
+    letterSpacing: -0.6,
     marginTop: 14,
   },
-  sourceText: {
-    color: "#475569",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 2,
+  featureSubtitle: {
+    color: "#EAF1FF",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 6,
   },
-  trendCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    marginHorizontal: 20,
-    marginTop: 18,
-    padding: 18,
+  featureIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+barGraphPanel: {
+  backgroundColor: SURFACE,
+  borderRadius: 24,
+  paddingHorizontal: 15,
+  paddingTop: 15,
+  paddingBottom: 12,
+  marginTop: 18,
+},
+barGraphHeader: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+},
+barGraphTitle: {
+  color: TEXT,
+  fontSize: 18,
+  fontWeight: "900",
+},
+legendRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginTop: 8,
+},
+legendItem: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginRight: 12,
+},
+legendSafeDot: {
+  width: 10,
+  height: 10,
+  borderRadius: 3,
+  backgroundColor: PRIMARY,
+  marginRight: 6,
+},
+legendRangeDot: {
+  width: 10,
+  height: 10,
+  borderRadius: 3,
+  backgroundColor: PRIMARY_LIGHT,
+  marginRight: 6,
+},
+legendText: {
+  color: MUTED,
+  fontSize: 12,
+  fontWeight: "800",
+},
+filterButton: {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: SOFT_PANEL,
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 1,
+  borderColor: BORDER,
+},
+flowPill: {
+  alignSelf: "center",
+  backgroundColor: PRIMARY_LIGHT,
+  borderRadius: 999,
+  paddingHorizontal: 18,
+  paddingVertical: 8,
+  marginTop: 10,
+},
+flowPillText: {
+  color: PRIMARY_DARK,
+  fontSize: 13,
+  fontWeight: "900",
+},
+barChartRow: {
+  height: 184,
+  flexDirection: "row",
+  alignItems: "flex-end",
+  justifyContent: "space-between",
+  marginTop: 14,
+},
+barItem: {
+  flex: 1,
+  alignItems: "center",
+},
+barValueText: {
+  color: TEXT,
+  fontSize: 11,
+  fontWeight: "900",
+  marginBottom: 6,
+  maxWidth: 60,
+},
+barTrack: {
+  width: 32,
+  height: BAR_MAX_HEIGHT,
+  borderRadius: 16,
+  backgroundColor: PRIMARY_LIGHT,
+  justifyContent: "flex-end",
+  overflow: "hidden",
+},
+barFill: {
+  width: "100%",
+  borderRadius: 16,
+},
+barLabel: {
+  color: TEXT,
+  fontSize: 11,
+  fontWeight: "900",
+  marginTop: 8,
+  textAlign: "center",
+},
+barUnit: {
+  color: MUTED,
+  fontSize: 9,
+  fontWeight: "800",
+  marginTop: 2,
+},
+  whitePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 4,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    borderColor: BORDER,
+    marginBottom: 14,
   },
-  trendHeaderRow: {
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 12,
+  },
+  panelTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  panelAction: {
+    color: PRIMARY,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  infoLabel: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  infoValue: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+    flex: 1,
+    marginLeft: 16,
+    lineHeight: 18,
+  },
+  trendPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  trendHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  trendHeaderText: {
+  trendTitleBlock: {
     flex: 1,
     paddingRight: 12,
   },
   trendTitle: {
-    color: "#111827",
-    fontSize: 20,
+    color: TEXT,
+    fontSize: 18,
     fontWeight: "900",
   },
   trendSubtitle: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     marginTop: 4,
     lineHeight: 18,
   },
   latestBadge: {
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     alignItems: "center",
-    minWidth: 72,
+    minWidth: 68,
   },
   latestBadgeLabel: {
     fontSize: 10,
     fontWeight: "900",
   },
   latestBadgeValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "900",
     marginTop: 2,
   },
-  metricSelectorContent: {
+  metricShortcutContentInside: {
     paddingBottom: 14,
   },
-  metricSelectorChip: {
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginRight: 9,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1.3,
-    borderColor: "#E2E8F0",
+  metricShortcut: {
+    alignItems: "center",
+    marginRight: 14,
+    width: 68,
   },
-  metricSelectorText: {
-    color: "#475569",
-    fontSize: 12,
+  metricShortcutIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  metricShortcutIconSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: SURFACE,
+    shadowColor: PRIMARY,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    elevation: 2,
+  },
+  metricShortcutLabel: {
+    color: TEXT,
+    fontSize: 10,
     fontWeight: "900",
+    marginTop: 7,
+    textAlign: "center",
+  },
+  metricShortcutLabelSelected: {
+    color: PRIMARY,
   },
   chartWrapper: {
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 18,
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 16,
     paddingTop: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
     overflow: "hidden",
   },
   trendStatsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: 11,
   },
   trendStatBox: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginHorizontal: 4,
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 13,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
+    marginHorizontal: 3,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
   },
   trendStatLabel: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 11,
     fontWeight: "900",
     textAlign: "center",
@@ -1499,62 +1868,55 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   trendStatValue: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 16,
     fontWeight: "900",
     marginRight: 3,
   },
   trendStatUnit: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 9,
     fontWeight: "900",
     marginBottom: 3,
   },
-  noChartCard: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 18,
+  noChartPanel: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 16,
     padding: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
   },
   noChartTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 16,
     fontWeight: "900",
   },
   noChartText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     textAlign: "center",
     marginTop: 6,
     lineHeight: 19,
   },
-  connectedDeviceCard: {
-    backgroundColor: "#FFFFFF",
+  connectedRow: {
+    backgroundColor: SURFACE,
     borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 18,
-    padding: 18,
+    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
+    marginBottom: 10,
   },
-  connectedIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+  connectedIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
-  },
-  connectedIconCircleActive: {
-    backgroundColor: "#DCFCE7",
-  },
-  connectedIconCircleInactive: {
-    backgroundColor: "#DBEAFE",
+    marginRight: 12,
   },
   connectedTextBlock: {
     flex: 1,
@@ -1565,100 +1927,97 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   connectedTitle: {
-    color: "#111827",
-    fontSize: 17,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
     flex: 1,
   },
-  devicePill: {
+  deviceStatusBadge: {
     borderRadius: 999,
-    paddingHorizontal: 9,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     marginLeft: 8,
   },
-  devicePillActive: {
-    backgroundColor: "#DCFCE7",
-  },
-  devicePillInactive: {
-    backgroundColor: "#E2E8F0",
-  },
-  devicePillText: {
+  deviceStatusText: {
     fontSize: 10,
     fontWeight: "900",
   },
-  devicePillTextActive: {
-    color: "#15803D",
-  },
-  devicePillTextInactive: {
-    color: "#475569",
-  },
   connectedSubtitle: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 18,
-    marginTop: 6,
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 5,
   },
-  connectedMetaRow: {
-    marginTop: 8,
-  },
-  connectedMetaText: {
-    color: "#64748B",
+  connectedMeta: {
+    color: MUTED,
     fontSize: 11,
-    fontWeight: "800",
-    marginTop: 2,
+    fontWeight: "700",
+    marginTop: 3,
   },
-  connectedErrorText: {
-    color: "#DC2626",
+  connectedError: {
+    color: "#B91C1C",
     fontSize: 11,
     fontWeight: "800",
     marginTop: 6,
     lineHeight: 16,
   },
-  connectedArrow: {
-    color: "#94A3B8",
-    fontSize: 34,
-    fontWeight: "300",
-    marginLeft: 8,
-  },
-  syncingCard: {
-    backgroundColor: "#EFF6FF",
+  syncingPanel: {
+    backgroundColor: PRIMARY_LIGHT,
     borderRadius: 16,
-    marginHorizontal: 20,
-    marginTop: 12,
-    padding: 14,
+    padding: 13,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#BFDBFE",
+    marginBottom: 12,
   },
   syncingText: {
-    color: "#2563EB",
+    color: PRIMARY,
     fontSize: 13,
     fontWeight: "900",
     marginLeft: 10,
   },
   sectionHeader: {
-    marginHorizontal: 20,
-    marginTop: 22,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   sectionTitle: {
-    color: "#111827",
-    fontSize: 20,
+    color: TEXT,
+    fontSize: 19,
     fontWeight: "900",
   },
-  historyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    padding: 16,
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  refreshSmallButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
+  },
+  historyPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  historyRow: {
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
   historyTopRow: {
     flexDirection: "row",
@@ -1670,52 +2029,59 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   historyTime: {
-    color: "#111827",
-    fontSize: 15,
+    color: TEXT,
+    fontSize: 14,
     fontWeight: "900",
   },
   historySource: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
+    fontWeight: "700",
+    marginTop: 3,
     lineHeight: 17,
   },
-  historyPill: {
+  historyStatusBadge: {
     borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  historyPillText: {
-    fontSize: 11,
+  historyStatusText: {
+    fontSize: 10,
     fontWeight: "900",
   },
-  historyValuesRow: {
+  historyValues: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
+    flexWrap: "wrap",
+    marginTop: 10,
   },
   historyValue: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "900",
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "800",
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginRight: 6,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    marginHorizontal: 20,
-    padding: 20,
+  emptyPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 22,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
   },
   emptyTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 17,
     fontWeight: "900",
   },
   emptyText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20,

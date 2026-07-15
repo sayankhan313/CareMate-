@@ -25,8 +25,15 @@ type ConfirmReminderScreenProps = NativeStackScreenProps<
   "ConfirmReminder"
 >;
 
-const HEADER_BLUE = "#2563EB";
-const BODY_BACKGROUND = "#F5F7FB";
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+const WARNING_LIGHT = "#FFF3E2";
 
 const getFrequencyLabel = (frequency: string) => {
   switch (frequency) {
@@ -141,7 +148,9 @@ const getSchedulePreviewText = (startDate: string, selectedTimes: string[]) => {
   }
 
   return selectedTimes
-    .map((time) => `${time} starts ${getAdjustedStartDateForTime(startDate, time)}`)
+    .map(
+      (time) => `${time} starts ${getAdjustedStartDateForTime(startDate, time)}`
+    )
     .join("\n");
 };
 
@@ -192,7 +201,10 @@ export const ConfirmReminderScreen = ({
     const originalStartDate = formatDateForBackend(medicineDraft.startDate);
 
     return selectedTimes.some((time) => {
-      return getAdjustedStartDateForTime(medicineDraft.startDate, time) !== originalStartDate;
+      return (
+        getAdjustedStartDateForTime(medicineDraft.startDate, time) !==
+        originalStartDate
+      );
     });
   }, [medicineDraft.startDate, selectedTimes]);
 
@@ -290,10 +302,10 @@ export const ConfirmReminderScreen = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={HEADER_BLUE} barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <View style={styles.header}>
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -303,9 +315,9 @@ export const ConfirmReminderScreen = ({
             <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Confirm Reminder</Text>
-            <Text style={styles.headerSubtitle}>
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Confirm Reminder</Text>
+            <Text style={styles.appBarSubtitle}>
               Review your medicine schedule
             </Text>
           </View>
@@ -354,8 +366,8 @@ export const ConfirmReminderScreen = ({
             {hasAutoAdjustedStartDate ? (
               <View style={styles.scheduleNotice}>
                 <Text style={styles.scheduleNoticeText}>
-                  Some selected times have already passed today, so those reminders
-                  will start from tomorrow.
+                  Some selected times have already passed today, so those
+                  reminders will start from tomorrow.
                 </Text>
               </View>
             ) : null}
@@ -392,7 +404,7 @@ export const ConfirmReminderScreen = ({
                 false: "#D1D5DB",
                 true: "#BFDBFE",
               }}
-              thumbColor={doctorReviewEnabled ? HEADER_BLUE : "#F9FAFB"}
+              thumbColor={doctorReviewEnabled ? PRIMARY : "#F9FAFB"}
             />
           </View>
         </ScrollView>
@@ -460,48 +472,50 @@ const DetailRow = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: BODY_BACKGROUND,
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: HEADER_BLUE,
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 28,
+  appBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 18,
+    marginRight: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   backButtonText: {
-    color: "#FFFFFF",
-    fontSize: 42,
+    color: TEXT,
+    fontSize: 34,
     fontWeight: "300",
-    marginTop: -4,
+    marginTop: -3,
   },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 28,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 27,
     fontWeight: "900",
-    marginBottom: 6,
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 16,
-    fontWeight: "600",
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 3,
   },
   content: {
     flex: 1,
@@ -511,27 +525,27 @@ const styles = StyleSheet.create({
     paddingBottom: 178,
   },
   mainCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 26,
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
+    borderColor: BORDER,
+    shadowColor: "#1A2B5A",
     shadowOffset: {
       width: 0,
       height: 3,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
     marginBottom: 18,
   },
   iconCircle: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 18,
@@ -540,19 +554,19 @@ const styles = StyleSheet.create({
     fontSize: 44,
   },
   medicineName: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 28,
     fontWeight: "900",
     textAlign: "center",
     marginBottom: 6,
   },
   doseText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 18,
     fontWeight: "800",
   },
   instructionsText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 15,
     fontWeight: "600",
     textAlign: "center",
@@ -560,19 +574,19 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   detailsCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
+    borderColor: BORDER,
+    shadowColor: "#1A2B5A",
     shadowOffset: {
       width: 0,
       height: 3,
     },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
     marginBottom: 18,
   },
   cardHeaderRow: {
@@ -582,27 +596,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 20,
     fontWeight: "900",
   },
   smallEditButton: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: PRIMARY_LIGHT,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#C9D8FF",
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   smallEditButtonText: {
-    color: HEADER_BLUE,
+    color: PRIMARY_DARK,
     fontSize: 12,
     fontWeight: "900",
   },
   detailRow: {
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: BORDER,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -611,22 +625,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   detailLabel: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 15,
     fontWeight: "700",
     flex: 1,
   },
   detailValue: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 15,
     fontWeight: "900",
     flex: 1,
     textAlign: "right",
   },
   scheduleNotice: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: WARNING_LIGHT,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#FED7AA",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -634,41 +648,41 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   scheduleNoticeText: {
-    color: HEADER_BLUE,
+    color: "#A85A13",
     fontSize: 12,
     fontWeight: "800",
     lineHeight: 18,
   },
   reviewCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 22,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000000",
+    shadowColor: "#1A2B5A",
     shadowOffset: {
       width: 0,
       height: 3,
     },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   reviewTextBlock: {
     flex: 1,
     paddingRight: 16,
   },
   reviewTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 17,
     fontWeight: "900",
     marginBottom: 6,
   },
   reviewSubtitle: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
@@ -678,42 +692,42 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     paddingHorizontal: 22,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: BORDER,
   },
   editDetailsButton: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#C9D8FF",
     borderRadius: 18,
     paddingVertical: 15,
     alignItems: "center",
     marginBottom: 12,
   },
   editDetailsButtonText: {
-    color: HEADER_BLUE,
+    color: PRIMARY_DARK,
     fontSize: 16,
     fontWeight: "900",
   },
   primaryButton: {
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: PRIMARY,
     borderRadius: 18,
     paddingVertical: 17,
     alignItems: "center",
-    shadowColor: HEADER_BLUE,
+    shadowColor: PRIMARY,
     shadowOffset: {
       width: 0,
       height: 8,
     },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
-    elevation: 5,
+    elevation: 4,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 17,
     fontWeight: "900",
   },

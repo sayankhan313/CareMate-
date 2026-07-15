@@ -9,13 +9,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
-  Activity,
+  Activity as ActivityIcon,
   ArrowLeft,
-  Battery,
   Droplet,
   HeartPulse,
   Link,
@@ -40,6 +41,29 @@ type ConnectedDeviceScreenProps = NativeStackScreenProps<
   "ConnectedDevice"
 >;
 
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
+
+const INDIGO = "#4F46E5";
+const INDIGO_LIGHT = "#EEF2FF";
+
 const getModeLabel = (mode: VitalSimulationMode) => {
   if (mode === "CRITICAL") return "Critical";
   if (mode === "WARNING") return "Warning";
@@ -49,34 +73,43 @@ const getModeLabel = (mode: VitalSimulationMode) => {
 const getModeColors = (mode: VitalSimulationMode) => {
   if (mode === "CRITICAL") {
     return {
-      background: "#FEF2F2",
-      border: "#FCA5A5",
-      text: "#B91C1C",
-      pill: "#FEE2E2",
+      background: DANGER_LIGHT,
+      border: "#FECACA",
+      text: "#B42318",
+      pill: "#FFE2E2",
+      dot: DANGER,
     };
   }
 
   if (mode === "WARNING") {
     return {
-      background: "#FFF7ED",
-      border: "#FDBA74",
-      text: "#C2410C",
-      pill: "#FFEDD5",
+      background: WARNING_LIGHT,
+      border: "#FED7AA",
+      text: "#A85A13",
+      pill: "#FFE9CB",
+      dot: WARNING,
     };
   }
 
   return {
-    background: "#ECFDF5",
-    border: "#86EFAC",
-    text: "#15803D",
-    pill: "#DCFCE7",
+    background: SUCCESS_LIGHT,
+    border: "#D8F1E6",
+    text: "#167A58",
+    pill: "#DFF8EE",
+    dot: SUCCESS,
   };
 };
 
 const formatTime = (dateValue: string | null) => {
   if (!dateValue) return "Not synced yet";
 
-  return new Date(dateValue).toLocaleTimeString([], {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not synced yet";
+  }
+
+  return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -231,10 +264,7 @@ export const ConnectedDeviceScreen = ({
       const savedReading = await vitalsApi.createReading(payload);
 
       if (
-        openSafetyResponseIfCritical(
-          savedReading,
-          "CareMate Watch Simulator"
-        )
+        openSafetyResponseIfCritical(savedReading, "CareMate Watch Simulator")
       ) {
         return;
       }
@@ -268,373 +298,451 @@ export const ConnectedDeviceScreen = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingBottom: Math.max(insets.bottom + 34, 54),
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <LinearGradient
-          colors={["#3B82F6", "#2563EB"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.85}
             onPress={() => navigation.goBack()}
           >
-            <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.6} />
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.6} />
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Connected Device</Text>
-            <Text style={styles.headerSubtitle}>
-              Connect Health Connect once and keep vitals updated automatically
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Connected Device</Text>
+            <Text style={styles.appBarSubtitle}>
+              Health Connect and simulator setup
             </Text>
           </View>
-        </LinearGradient>
+        </View>
 
-        <View style={styles.card}>
-          <View style={styles.deviceRow}>
-            <View
-              style={[
-                styles.deviceIcon,
-                isHealthConnectConnected
-                  ? styles.deviceIconConnected
-                  : styles.deviceIconDisconnected,
-              ]}
-            >
-              <Watch size={32} color="#FFFFFF" strokeWidth={2.5} />
-            </View>
-
-            <View style={styles.deviceTextBlock}>
-              <Text style={styles.deviceTitle}>Android Health Connect</Text>
-              <Text style={styles.deviceSubtitle}>
-                Reads patient-approved vitals from Health Connect sources
-              </Text>
-
-              <View
-                style={[
-                  styles.connectedPill,
-                  isHealthConnectConnected
-                    ? styles.connectedPillActive
-                    : styles.connectedPillInactive,
-                ]}
-              >
-                <Text
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingBottom: Math.max(insets.bottom + 34, 64),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.featureCard}>
+            <View style={styles.featureTopRow}>
+              <View style={styles.featureTextBlock}>
+                <View
                   style={[
-                    styles.connectedText,
+                    styles.statusBadge,
                     isHealthConnectConnected
-                      ? styles.connectedTextActive
-                      : styles.connectedTextInactive,
+                      ? styles.statusBadgeActive
+                      : styles.statusBadgeInactive,
                   ]}
                 >
-                  {isHealthConnectConnected ? "Connected" : "Not connected"}
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor: isHealthConnectConnected
+                          ? SUCCESS
+                          : DANGER,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      {
+                        color: isHealthConnectConnected
+                          ? "#167A58"
+                          : "#B42318",
+                      },
+                    ]}
+                  >
+                    {isHealthConnectConnected ? "Connected" : "Not connected"}
+                  </Text>
+                </View>
+
+                <Text style={styles.featureTitle}>Android Health Connect</Text>
+
+                <Text style={styles.featureSubtitle}>
+                  Reads patient-approved vitals from Health Connect sources.
+                </Text>
+              </View>
+
+              <View style={styles.featureIconBox}>
+                <Watch size={30} color={PRIMARY} strokeWidth={2.7} />
+              </View>
+            </View>
+
+            <View style={styles.featureStats}>
+              <FeatureStat
+                label="Sync"
+                value={isHealthConnectConnected ? "Auto" : "Manual"}
+              />
+
+              <FeatureStat label="Last sync" value={formatTime(lastSyncAt)} />
+
+              <FeatureStat label="Status" value={lastSyncStatus || "No data"} />
+            </View>
+          </View>
+
+          <View style={styles.quickActionCard}>
+            <DeviceActionButton
+              label={isHealthConnectConnected ? "Disconnect" : "Connect"}
+              icon={
+                isHealthConnectConnected ? (
+                  <Link2Off size={22} color={DANGER} strokeWidth={2.6} />
+                ) : (
+                  <Link size={22} color={PRIMARY} strokeWidth={2.6} />
+                )
+              }
+              tone={isHealthConnectConnected ? "danger" : "primary"}
+              disabled={isHealthConnectSyncing}
+              onPress={connectOrDisconnect}
+            />
+
+            <DeviceActionButton
+              label="Sync"
+              icon={<RefreshCw size={22} color={PRIMARY} strokeWidth={2.6} />}
+              tone="primary"
+              disabled={!isHealthConnectConnected || isHealthConnectSyncing}
+              onPress={syncNowManually}
+            />
+
+            <DeviceActionButton
+              label="Settings"
+              icon={<Settings size={22} color={TEXT} strokeWidth={2.6} />}
+              tone="neutral"
+              onPress={openHealthConnectSettings}
+            />
+          </View>
+
+          <View style={styles.whitePanel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Connection details</Text>
+              <Text style={styles.panelAction}>
+                {isHealthConnectConnected ? "Active" : "Off"}
+              </Text>
+            </View>
+
+            <DetailRow
+              label="Connection"
+              value={isHealthConnectConnected ? "Active" : "Off"}
+              tone={isHealthConnectConnected ? "success" : "danger"}
+            />
+
+            <DetailRow label="Connected via" value={connectedDeviceName} />
+
+            <DetailRow
+              label="Auto Sync"
+              value={isHealthConnectConnected ? "Active" : "Off"}
+              tone={isHealthConnectConnected ? "success" : "danger"}
+            />
+
+            <DetailRow label="Last Sync" value={formatTime(lastSyncAt)} />
+
+            <DetailRow
+              label="Last Status"
+              value={lastSyncStatus || "No reading yet"}
+              isLast
+            />
+          </View>
+
+          <View style={styles.whitePanel}>
+            <View style={styles.panelHeader}>
+              <View>
+                <Text style={styles.panelTitle}>CareMate Watch Simulator</Text>
+                <Text style={styles.panelSubtitle}>
+                  Demo mode for Normal, Warning and Critical vitals
                 </Text>
               </View>
             </View>
-          </View>
 
-          <View style={styles.statusBox}>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Connection</Text>
-              <Text
-                style={[
-                  styles.statusValue,
-                  isHealthConnectConnected
-                    ? styles.statusValueConnected
-                    : styles.statusValueDisconnected,
-                ]}
-              >
-                {isHealthConnectConnected ? "Active" : "Off"}
-              </Text>
-            </View>
+            <View style={styles.segmentControl}>
+              {(["NORMAL", "WARNING", "CRITICAL"] as VitalSimulationMode[]).map(
+                (mode) => {
+                  const isSelected = selectedMode === mode;
+                  const colors = getModeColors(mode);
 
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Connected via</Text>
-              <Text style={styles.statusValue}>{connectedDeviceName}</Text>
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Auto Sync</Text>
-              <Text
-                style={[
-                  styles.statusValue,
-                  isHealthConnectConnected
-                    ? styles.statusValueConnected
-                    : styles.statusValueDisconnected,
-                ]}
-              >
-                {isHealthConnectConnected ? "Active" : "Off"}
-              </Text>
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Last Sync</Text>
-              <Text style={styles.statusValue}>{formatTime(lastSyncAt)}</Text>
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Last Status</Text>
-              <Text style={styles.statusValue}>
-                {lastSyncStatus || "No reading yet"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <RefreshCw size={20} color="#64748B" />
-              <Text style={styles.statLabel}>Sync Type</Text>
-              <Text style={styles.statValue}>
-                {isHealthConnectConnected ? "Auto" : "Manual"}
-              </Text>
-            </View>
-
-            <View style={styles.statBox}>
-              <Battery size={20} color="#64748B" />
-              <Text style={styles.statLabel}>Provider</Text>
-              <Text style={styles.statValue}>Health Connect</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              isHealthConnectConnected
-                ? styles.disconnectButton
-                : styles.connectButton,
-            ]}
-            activeOpacity={0.85}
-            onPress={connectOrDisconnect}
-            disabled={isHealthConnectSyncing}
-          >
-            {isHealthConnectSyncing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                {isHealthConnectConnected ? (
-                  <Link2Off size={20} color="#FFFFFF" strokeWidth={2.6} />
-                ) : (
-                  <Link size={20} color="#FFFFFF" strokeWidth={2.6} />
-                )}
-
-                <Text style={styles.primaryButtonText}>
-                  {isHealthConnectConnected
-                    ? "Disconnect Health Connect"
-                    : "Connect Health Connect"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {isHealthConnectConnected ? (
-            <TouchableOpacity
-              style={styles.secondarySyncButton}
-              activeOpacity={0.85}
-              onPress={syncNowManually}
-              disabled={isHealthConnectSyncing}
-            >
-              {isHealthConnectSyncing ? (
-                <ActivityIndicator color="#2563EB" />
-              ) : (
-                <>
-                  <RefreshCw size={19} color="#2563EB" strokeWidth={2.4} />
-                  <Text style={styles.secondarySyncButtonText}>
-                    Update Now
-                  </Text>
-                </>
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.segmentButton,
+                        isSelected
+                          ? {
+                              backgroundColor: colors.pill,
+                            }
+                          : undefined,
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedMode(mode)}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          isSelected
+                            ? {
+                                color: colors.text,
+                              }
+                            : undefined,
+                        ]}
+                      >
+                        {getModeLabel(mode)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }
               )}
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity
-            style={styles.outlineButton}
-            activeOpacity={0.85}
-            onPress={openHealthConnectSettings}
-          >
-            <Settings size={19} color="#334155" strokeWidth={2.4} />
-            <Text style={styles.outlineButtonText}>
-              Open Health Connect Settings
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>CareMate Watch Simulator</Text>
-          <Text style={styles.sectionSubtitle}>
-            Backup demo mode for Normal, Warning and Critical vitals
-          </Text>
-
-          <View style={styles.segmentControl}>
-            {(["NORMAL", "WARNING", "CRITICAL"] as VitalSimulationMode[]).map(
-              (mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  style={[
-                    styles.segmentButton,
-                    selectedMode === mode ? styles.segmentButtonActive : null,
-                  ]}
-                  activeOpacity={0.85}
-                  onPress={() => setSelectedMode(mode)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      selectedMode === mode ? styles.segmentTextActive : null,
-                    ]}
-                  >
-                    {getModeLabel(mode)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
-        </View>
-
-        <View
-          style={[
-            styles.previewCard,
-            {
-              backgroundColor: modeColors.background,
-              borderColor: modeColors.border,
-            },
-          ]}
-        >
-          <View style={styles.previewHeaderRow}>
-            <Text style={styles.sectionTitle}>Live Preview</Text>
+            </View>
 
             <View
               style={[
-                styles.modePill,
+                styles.previewPanel,
                 {
-                  backgroundColor: modeColors.pill,
+                  backgroundColor: modeColors.background,
+                  borderColor: modeColors.border,
                 },
               ]}
             >
+              <View style={styles.previewHeader}>
+                <View>
+                  <Text style={styles.previewTitle}>Live Preview</Text>
+                  <Text style={styles.previewSubtitle}>
+                    {getModeLabel(selectedMode)} vital reading
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.modePill,
+                    {
+                      backgroundColor: modeColors.pill,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.modeDot,
+                      {
+                        backgroundColor: modeColors.dot,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.modePillText,
+                      {
+                        color: modeColors.text,
+                      },
+                    ]}
+                  >
+                    {getModeLabel(selectedMode)}
+                  </Text>
+                </View>
+              </View>
+
+              <PreviewRow
+                icon={<HeartPulse size={20} color={DANGER} strokeWidth={2.6} />}
+                label="Heart Rate"
+                value={`${preview.heartRate}`}
+                unit="bpm"
+                iconBackground={DANGER_LIGHT}
+              />
+
+              <PreviewRow
+                icon={
+                  <ActivityIcon size={20} color={PRIMARY} strokeWidth={2.6} />
+                }
+                label="SpO₂"
+                value={`${preview.spo2}`}
+                unit="%"
+                iconBackground={PRIMARY_LIGHT}
+              />
+
+              <PreviewRow
+                icon={
+                  <ActivityIcon size={20} color={INDIGO} strokeWidth={2.6} />
+                }
+                label="Blood Pressure"
+                value={`${preview.bpSystolic}/${preview.bpDiastolic}`}
+                unit="mmHg"
+                iconBackground={INDIGO_LIGHT}
+              />
+
+              <PreviewRow
+                icon={<Droplet size={20} color={WARNING} strokeWidth={2.6} />}
+                label="Glucose"
+                value={`${preview.glucose}`}
+                unit="mg/dL"
+                iconBackground={WARNING_LIGHT}
+                isLast
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              activeOpacity={0.85}
+              onPress={startSimulation}
+              disabled={isStartingSimulation}
+            >
+              {isStartingSimulation ? (
+                <ActivityIndicator color={SURFACE} />
+              ) : (
+                <>
+                  <Play size={20} color={SURFACE} strokeWidth={2.6} />
+                  <Text style={styles.primaryButtonText}>Start Simulation</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.outlineButton}
+              activeOpacity={0.85}
+              onPress={() =>
+                Alert.alert(
+                  "Simulation stopped",
+                  "No background simulation is running."
+                )
+              }
+            >
+              <Square size={18} color={TEXT} strokeWidth={2.5} />
+              <Text style={styles.outlineButtonText}>Stop Simulation</Text>
+            </TouchableOpacity>
+          </View>
+
+          {lastScreenMessage || lastSyncError ? (
+            <View style={styles.messagePanel}>
+              <ActivityIcon
+                size={20}
+                color={lastSyncError ? DANGER : PRIMARY}
+                strokeWidth={2.5}
+              />
+
               <Text
                 style={[
-                  styles.modePillText,
-                  {
-                    color: modeColors.text,
-                  },
+                  styles.messageText,
+                  lastSyncError ? styles.messageError : undefined,
                 ]}
               >
-                {getModeLabel(selectedMode)}
+                {lastSyncError || lastScreenMessage}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.previewGrid}>
-            <PreviewBox
-              label="Heart Rate"
-              value={`${preview.heartRate}`}
-              unit="bpm"
-              icon={<HeartPulse size={21} color="#DC2626" />}
-              backgroundColor="rgba(255,255,255,0.72)"
-            />
-
-            <PreviewBox
-              label="SpO2"
-              value={`${preview.spo2}`}
-              unit="%"
-              icon={<Activity size={21} color="#2563EB" />}
-              backgroundColor="rgba(255,255,255,0.72)"
-            />
-
-            <PreviewBox
-              label="Blood Pressure"
-              value={`${preview.bpSystolic}/${preview.bpDiastolic}`}
-              unit="mmHg"
-              icon={<Activity size={21} color="#9333EA" />}
-              backgroundColor="rgba(255,255,255,0.72)"
-            />
-
-            <PreviewBox
-              label="Glucose"
-              value={`${preview.glucose}`}
-              unit="mg/dL"
-              icon={<Droplet size={21} color="#F97316" />}
-              backgroundColor="rgba(255,255,255,0.72)"
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            activeOpacity={0.85}
-            onPress={startSimulation}
-            disabled={isStartingSimulation}
-          >
-            {isStartingSimulation ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Play size={20} color="#FFFFFF" strokeWidth={2.6} />
-                <Text style={styles.primaryButtonText}>Start Simulation</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.outlineButton}
-            activeOpacity={0.85}
-            onPress={() =>
-              Alert.alert(
-                "Simulation stopped",
-                "No background simulation is running."
-              )
-            }
-          >
-            <Square size={18} color="#334155" strokeWidth={2.4} />
-            <Text style={styles.outlineButtonText}>Stop Simulation</Text>
-          </TouchableOpacity>
-        </View>
-
-        {lastScreenMessage || lastSyncError ? (
-          <View style={styles.infoCard}>
-            <Activity size={19} color="#2563EB" strokeWidth={2.4} />
-            <Text
-              style={[
-                styles.infoText,
-                lastSyncError ? styles.errorMessage : null,
-              ]}
-            >
-              {lastSyncError || lastScreenMessage}
-            </Text>
-          </View>
-        ) : null}
-      </ScrollView>
+          ) : null}
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
 
-const PreviewBox = ({
+const DeviceActionButton = ({
+  label,
+  icon,
+  onPress,
+  disabled,
+  tone,
+}: {
+  label: string;
+  icon: ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  tone: "primary" | "danger" | "neutral";
+}) => {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.deviceActionButton,
+        tone === "primary" ? styles.deviceActionPrimary : undefined,
+        tone === "danger" ? styles.deviceActionDanger : undefined,
+        tone === "neutral" ? styles.deviceActionNeutral : undefined,
+        disabled ? styles.disabledActionButton : undefined,
+      ]}
+      activeOpacity={0.85}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <View style={styles.deviceActionIcon}>{icon}</View>
+      <Text
+        style={[
+          styles.deviceActionText,
+          tone === "danger" ? styles.deviceActionTextDanger : undefined,
+          tone === "neutral" ? styles.deviceActionTextNeutral : undefined,
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const FeatureStat = ({ label, value }: { label: string; value: string }) => {
+  return (
+    <View style={styles.featureStat}>
+      <Text style={styles.featureStatLabel}>{label}</Text>
+      <Text style={styles.featureStatValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+};
+
+const DetailRow = ({
   label,
   value,
-  unit,
-  icon,
-  backgroundColor,
+  tone,
+  isLast,
 }: {
   label: string;
   value: string;
-  unit: string;
+  tone?: "success" | "danger";
+  isLast?: boolean;
+}) => {
+  const valueStyle =
+    tone === "success"
+      ? styles.detailValueSuccess
+      : tone === "danger"
+      ? styles.detailValueDanger
+      : undefined;
+
+  return (
+    <View style={[styles.detailRow, isLast ? styles.rowLast : undefined]}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={[styles.detailValue, valueStyle]} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+};
+
+const PreviewRow = ({
+  icon,
+  label,
+  value,
+  unit,
+  iconBackground,
+  isLast,
+}: {
   icon: ReactNode;
-  backgroundColor: string;
+  label: string;
+  value: string;
+  unit: string;
+  iconBackground: string;
+  isLast?: boolean;
 }) => {
   return (
-    <View style={[styles.previewBox, { backgroundColor }]}>
-      <View style={styles.previewIcon}>{icon}</View>
-      <Text style={styles.previewLabel}>{label}</Text>
+    <View style={[styles.previewRow, isLast ? styles.rowLast : undefined]}>
+      <View style={[styles.previewIcon, { backgroundColor: iconBackground }]}>
+        {icon}
+      </View>
 
-      <View style={styles.previewValueRow}>
+      <View style={styles.previewTextBlock}>
+        <Text style={styles.previewLabel}>{label}</Text>
+      </View>
+
+      <View style={styles.previewValueBlock}>
         <Text style={styles.previewValue}>{value}</Text>
         <Text style={styles.previewUnit}>{unit}</Text>
       </View>
@@ -645,365 +753,396 @@ const PreviewBox = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  content: {
-    paddingBottom: 34,
-  },
-  header: {
+  appBar: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 28,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 13,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
+    borderColor: BORDER,
   },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 24,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 25,
     fontWeight: "900",
+    letterSpacing: -0.4,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
-  },
-  deviceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  deviceIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 16,
-  },
-  deviceIconConnected: {
-    backgroundColor: "#16A34A",
-  },
-  deviceIconDisconnected: {
-    backgroundColor: "#2563EB",
-  },
-  deviceTextBlock: {
-    flex: 1,
-  },
-  deviceTitle: {
-    color: "#111827",
-    fontSize: 19,
-    fontWeight: "900",
-  },
-  deviceSubtitle: {
-    color: "#64748B",
+  appBarSubtitle: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 5,
-    lineHeight: 19,
+    marginTop: 3,
   },
-  connectedPill: {
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  featureCard: {
+    backgroundColor: PRIMARY,
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  featureTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  featureTextBlock: {
+    flex: 1,
+    paddingRight: 14,
+  },
+  statusBadge: {
     alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginTop: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
   },
-  connectedPillActive: {
-    backgroundColor: "#DCFCE7",
+  statusBadgeActive: {
+    backgroundColor: SUCCESS_LIGHT,
   },
-  connectedPillInactive: {
-    backgroundColor: "#E2E8F0",
+  statusBadgeInactive: {
+    backgroundColor: DANGER_LIGHT,
   },
-  connectedText: {
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  featureTitle: {
+    color: SURFACE,
+    fontSize: 27,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    marginTop: 14,
+  },
+  featureSubtitle: {
+    color: "#EAF1FF",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  featureIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featureStats: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 18,
+    padding: 10,
+    marginTop: 18,
+  },
+  featureStat: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  featureStatLabel: {
+    color: "#EAF1FF",
+    fontSize: 10,
+    fontWeight: "900",
+    marginBottom: 5,
+  },
+  featureStatValue: {
+    color: SURFACE,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  quickActionCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    flexDirection: "row",
+  },
+  deviceActionButton: {
+    flex: 1,
+    minHeight: 78,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 4,
+    borderWidth: 1,
+  },
+  deviceActionPrimary: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderColor: "#C9D8FF",
+  },
+  deviceActionDanger: {
+    backgroundColor: DANGER_LIGHT,
+    borderColor: "#FECACA",
+  },
+  deviceActionNeutral: {
+    backgroundColor: SOFT_PANEL,
+    borderColor: BORDER,
+  },
+  disabledActionButton: {
+    opacity: 0.45,
+  },
+  deviceActionIcon: {
+    marginBottom: 7,
+  },
+  deviceActionText: {
+    color: PRIMARY_DARK,
     fontSize: 12,
     fontWeight: "900",
   },
-  connectedTextActive: {
-    color: "#15803D",
+  deviceActionTextDanger: {
+    color: "#B42318",
   },
-  connectedTextInactive: {
-    color: "#475569",
+  deviceActionTextNeutral: {
+    color: TEXT,
   },
-  statusBox: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
+  whitePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
     padding: 14,
-    marginTop: 20,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
   },
-  statusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingVertical: 7,
+  panelHeader: {
+    paddingBottom: 12,
   },
-  statusLabel: {
-    color: "#64748B",
+  panelTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  panelSubtitle: {
+    color: MUTED,
     fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  panelAction: {
+    color: PRIMARY,
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  detailLabel: {
+    color: MUTED,
+    fontSize: 13,
     fontWeight: "800",
     marginRight: 12,
   },
-  statusValue: {
+  detailValue: {
     flex: 1,
-    color: "#111827",
-    fontSize: 12,
+    color: TEXT,
+    fontSize: 13,
     fontWeight: "900",
     textAlign: "right",
+    lineHeight: 18,
   },
-  statusValueConnected: {
-    color: "#15803D",
+  detailValueSuccess: {
+    color: "#167A58",
   },
-  statusValueDisconnected: {
-    color: "#DC2626",
-  },
-  statsRow: {
-    flexDirection: "row",
-    marginTop: 18,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
-    padding: 14,
-    marginRight: 10,
-  },
-  statLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 8,
-  },
-  statValue: {
-    color: "#111827",
-    fontSize: 17,
-    fontWeight: "900",
-    marginTop: 4,
+  detailValueDanger: {
+    color: "#B42318",
   },
   primaryButton: {
+    backgroundColor: PRIMARY,
     borderRadius: 16,
     paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    marginTop: 18,
-    backgroundColor: "#2563EB",
-  },
-  connectButton: {
-    backgroundColor: "#2563EB",
-  },
-  disconnectButton: {
-    backgroundColor: "#DC2626",
+    marginTop: 16,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+    color: SURFACE,
+    fontSize: 15,
     fontWeight: "900",
-    marginLeft: 10,
-  },
-  secondarySyncButton: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    borderWidth: 1.5,
-    borderColor: "#BFDBFE",
-    marginTop: 12,
-  },
-  secondarySyncButtonText: {
-    color: "#2563EB",
-    fontSize: 14,
-    fontWeight: "900",
-    marginLeft: 8,
+    marginLeft: 9,
   },
   outlineButton: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 16,
     paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    borderWidth: 1.5,
-    borderColor: "#CBD5E1",
-    marginTop: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginTop: 11,
   },
   outlineButtonText: {
-    color: "#334155",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "900",
     marginLeft: 8,
-  },
-  sectionTitle: {
-    color: "#111827",
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  sectionSubtitle: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 5,
-    lineHeight: 20,
   },
   segmentControl: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: SOFT_PANEL,
     borderRadius: 16,
     padding: 4,
-    marginTop: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginTop: 4,
   },
   segmentButton: {
     flex: 1,
     borderRadius: 13,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: "center",
-  },
-  segmentButtonActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
   },
   segmentText: {
-    color: "#475569",
-    fontSize: 14,
+    color: MUTED,
+    fontSize: 13,
     fontWeight: "900",
   },
-  segmentTextActive: {
-    color: "#111827",
-  },
-  previewCard: {
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 20,
+  previewPanel: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 4,
     borderWidth: 1,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    marginTop: 14,
   },
-  previewHeaderRow: {
+  previewHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
+    paddingBottom: 12,
+  },
+  previewTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  previewSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
   },
   modePill: {
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
+    marginLeft: 10,
+  },
+  modeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 6,
   },
   modePillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
   },
-  previewGrid: {
+  previewRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginTop: 18,
-  },
-  previewBox: {
-    width: "48%",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.88)",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.06)",
   },
   previewIcon: {
-    marginBottom: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  previewTextBlock: {
+    flex: 1,
   },
   previewLabel: {
-    color: "#64748B",
-    fontSize: 12,
+    color: TEXT,
+    fontSize: 14,
     fontWeight: "800",
-    marginBottom: 8,
   },
-  previewValueRow: {
+  previewValueBlock: {
     flexDirection: "row",
     alignItems: "flex-end",
-    flexWrap: "wrap",
   },
   previewValue: {
-    color: "#111827",
-    fontSize: 22,
+    color: TEXT,
+    fontSize: 19,
     fontWeight: "900",
     marginRight: 4,
   },
   previewUnit: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
-  infoCard: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 18,
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 16,
+  messagePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  infoText: {
+  messageText: {
     flex: 1,
-    color: "#475569",
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 21,
+    lineHeight: 20,
     marginLeft: 10,
   },
-  errorMessage: {
-    color: "#DC2626",
+  messageError: {
+    color: "#B42318",
   },
 });

@@ -10,13 +10,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
+  AlertCircle,
   ArrowLeft,
   Bell,
   Calendar,
+  CheckCircle2,
   ChevronRight,
   Clock,
   HeartPulse,
@@ -25,6 +26,7 @@ import {
   LogOut,
   Mail,
   Phone,
+  RefreshCw,
   ShieldAlert,
   Stethoscope,
   UserRound,
@@ -82,6 +84,23 @@ type PatientProfileApiResponse = {
   };
 };
 
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
+
 const getInitials = (name?: string | null) => {
   if (!name) {
     return "P";
@@ -120,6 +139,18 @@ const formatMedicalConditions = (
   }
 
   return conditions.trim() || "Not added";
+};
+
+const formatAccountStatus = (status?: string) => {
+  if (!status) {
+    return "Active";
+  }
+
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 export const PatientProfileScreen = ({ navigation, route }: Props) => {
@@ -238,36 +269,26 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
   const initials = getInitials(fullName);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <LinearGradient
-          colors={["#3B82F6", "#2563EB"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[
-            styles.header,
-            {
-              paddingTop: insets.top + 22,
-            },
-          ]}
-        >
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.85}
             onPress={() => navigation.goBack()}
           >
-            <ArrowLeft size={23} color="#FFFFFF" strokeWidth={2.7} />
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.7} />
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Profile</Text>
-            <Text style={styles.headerSubtitle}>
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Profile</Text>
+            <Text style={styles.appBarSubtitle}>
               Manage account and preferences
             </Text>
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView
           style={styles.content}
@@ -282,28 +303,37 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => loadProfile("refresh")}
+              tintColor={PRIMARY}
+              colors={[PRIMARY]}
             />
           }
         >
           {isLoading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color="#2563EB" />
+              <ActivityIndicator color={PRIMARY} />
               <Text style={styles.loadingText}>Loading profile...</Text>
             </View>
           ) : null}
 
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Profile unavailable</Text>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <View style={styles.errorIconCircle}>
+                <AlertCircle size={22} color={DANGER} strokeWidth={2.6} />
+              </View>
 
-              <TouchableOpacity
-                style={styles.retryButton}
-                activeOpacity={0.85}
-                onPress={() => loadProfile("initial")}
-              >
-                <Text style={styles.retryButtonText}>Try again</Text>
-              </TouchableOpacity>
+              <View style={styles.errorTextBlock}>
+                <Text style={styles.errorTitle}>Profile unavailable</Text>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  activeOpacity={0.85}
+                  onPress={() => loadProfile("initial")}
+                >
+                  <RefreshCw size={16} color={SURFACE} strokeWidth={2.5} />
+                  <Text style={styles.retryButtonText}>Try again</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : null}
 
@@ -315,18 +345,34 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 <View style={styles.profileTextBlock}>
-                  <Text style={styles.profileName}>{fullName}</Text>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.profileName} numberOfLines={1}>
+                      {fullName}
+                    </Text>
+
+                    {profile?.isEmailVerified ? (
+                      <View style={styles.verifiedBadge}>
+                        <CheckCircle2
+                          size={13}
+                          color="#167A58"
+                          strokeWidth={2.6}
+                        />
+                        <Text style={styles.verifiedText}>Verified</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
                   <Text style={styles.profileRole}>Patient</Text>
 
                   <View style={styles.contactRow}>
-                    <Mail size={15} color="#94A3B8" strokeWidth={2.3} />
+                    <Mail size={15} color={MUTED} strokeWidth={2.3} />
                     <Text style={styles.contactText} numberOfLines={1}>
                       {email}
                     </Text>
                   </View>
 
                   <View style={styles.contactRow}>
-                    <Phone size={15} color="#94A3B8" strokeWidth={2.3} />
+                    <Phone size={15} color={MUTED} strokeWidth={2.3} />
                     <Text style={styles.contactText} numberOfLines={1}>
                       {getDisplayValue(phone)}
                     </Text>
@@ -334,30 +380,47 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                 </View>
               </View>
 
+              <View style={styles.accountStatusPanel}>
+                <View style={styles.statusIconCircle}>
+                  <CheckCircle2 size={21} color={SUCCESS} strokeWidth={2.6} />
+                </View>
+
+                <View style={styles.statusTextBlock}>
+                  <Text style={styles.statusTitle}>Account status</Text>
+                  <Text style={styles.statusText}>
+                    {formatAccountStatus(profile?.accountStatus)}
+                  </Text>
+                </View>
+              </View>
+
               <ProfileSection title="Personal Details">
                 <ProfileRow
-                  icon={<Calendar size={20} color="#64748B" />}
+                  icon={<Calendar size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Date of birth"
                   value={getDisplayValue(profile?.dateOfBirth)}
                   onPress={() => showComingSoon("Date of birth")}
                 />
 
                 <ProfileRow
-                  icon={<UserRound size={20} color="#64748B" />}
+                  icon={
+                    <UserRound size={20} color={PRIMARY} strokeWidth={2.5} />
+                  }
                   title="Gender"
                   value={getDisplayValue(profile?.gender)}
                   onPress={() => showComingSoon("Gender")}
                 />
 
                 <ProfileRow
-                  icon={<Phone size={20} color="#64748B" />}
+                  icon={<Phone size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Emergency contact"
                   value={getDisplayValue(profile?.emergencyContact)}
                   onPress={() => showComingSoon("Emergency contact")}
                 />
 
                 <ProfileRow
-                  icon={<HeartPulse size={20} color="#64748B" />}
+                  icon={
+                    <HeartPulse size={20} color={PRIMARY} strokeWidth={2.5} />
+                  }
                   title="Medical conditions"
                   value={formatMedicalConditions(profile?.medicalConditions)}
                   onPress={() => showComingSoon("Medical conditions")}
@@ -367,7 +430,9 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
 
               <ProfileSection title="Linked Users">
                 <ProfileRow
-                  icon={<Stethoscope size={20} color="#9333EA" />}
+                  icon={
+                    <Stethoscope size={20} color={PRIMARY} strokeWidth={2.5} />
+                  }
                   title="Doctor"
                   value={
                     linkedUsers.doctor
@@ -378,7 +443,7 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                 />
 
                 <ProfileRow
-                  icon={<Users size={20} color="#16A34A" />}
+                  icon={<Users size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Caregiver"
                   value={
                     linkedUsers.caregiver
@@ -392,35 +457,39 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
 
               <ProfileSection title="Settings">
                 <ProfileRow
-                  icon={<Bell size={20} color="#64748B" />}
+                  icon={<Bell size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Notification preferences"
                   value="Medicine and health alerts"
                   onPress={() => showComingSoon("Notification preferences")}
                 />
 
                 <ProfileRow
-                  icon={<Clock size={20} color="#64748B" />}
+                  icon={<Clock size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Reminder settings"
                   value="Medicine reminders"
                   onPress={() => showComingSoon("Reminder settings")}
                 />
 
                 <ProfileRow
-                  icon={<ShieldAlert size={20} color="#64748B" />}
+                  icon={
+                    <ShieldAlert size={20} color={PRIMARY} strokeWidth={2.5} />
+                  }
                   title="Safety response settings"
                   value="Critical vital alerts"
                   onPress={() => showComingSoon("Safety response settings")}
                 />
 
                 <ProfileRow
-                  icon={<Languages size={20} color="#64748B" />}
+                  icon={
+                    <Languages size={20} color={PRIMARY} strokeWidth={2.5} />
+                  }
                   title="Language and accessibility"
                   value="App preferences"
                   onPress={() => showComingSoon("Language and accessibility")}
                 />
 
                 <ProfileRow
-                  icon={<Lock size={20} color="#64748B" />}
+                  icon={<Lock size={20} color={PRIMARY} strokeWidth={2.5} />}
                   title="Privacy and security"
                   value="Account security"
                   onPress={() => showComingSoon("Privacy and security")}
@@ -433,7 +502,7 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                 activeOpacity={0.86}
                 onPress={handleLogout}
               >
-                <LogOut size={19} color="#DC2626" strokeWidth={2.6} />
+                <LogOut size={19} color={DANGER} strokeWidth={2.6} />
                 <Text style={styles.logoutText}>Logout</Text>
               </TouchableOpacity>
             </>
@@ -487,87 +556,109 @@ const ProfileRow = ({
         </Text>
       </View>
 
-      <ChevronRight size={19} color="#CBD5E1" strokeWidth={2.4} />
+      <ChevronRight size={19} color="#B7C1D4" strokeWidth={2.4} />
     </TouchableOpacity>
   );
 };
 
+export default PatientProfileScreen;
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  header: {
+  appBar: {
     paddingHorizontal: 20,
-    paddingBottom: 26,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 25,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 27,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
+  appBarSubtitle: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 3,
   },
   content: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
   loadingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: SURFACE,
+    borderRadius: 22,
     padding: 22,
     alignItems: "center",
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
   },
   loadingText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 10,
   },
   errorCard: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 18,
-    padding: 16,
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 20,
+    padding: 15,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#FECACA",
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  errorIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  errorTextBlock: {
+    flex: 1,
   },
   errorTitle: {
-    color: "#991B1B",
+    color: "#B42318",
     fontSize: 15,
     fontWeight: "900",
     marginBottom: 5,
   },
   errorText: {
-    color: "#DC2626",
+    color: "#B42318",
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19,
@@ -575,62 +666,78 @@ const styles = StyleSheet.create({
   retryButton: {
     marginTop: 12,
     alignSelf: "flex-start",
-    backgroundColor: "#DC2626",
-    borderRadius: 12,
+    backgroundColor: DANGER,
+    borderRadius: 13,
     paddingHorizontal: 14,
     paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
   },
   retryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 12,
     fontWeight: "900",
+    marginLeft: 6,
   },
   profileCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 18,
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    padding: 17,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 18,
-    shadowColor: "#000000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    borderColor: BORDER,
+    marginBottom: 14,
   },
   avatarCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#2563EB",
+    width: 70,
+    height: 70,
+    borderRadius: 24,
+    backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 16,
+    marginRight: 14,
   },
   avatarText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 22,
     fontWeight: "900",
   },
   profileTextBlock: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   profileName: {
-    color: "#111827",
-    fontSize: 19,
+    color: TEXT,
+    fontSize: 20,
     fontWeight: "900",
-    marginBottom: 2,
+    marginRight: 8,
+    maxWidth: "72%",
+  },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SUCCESS_LIGHT,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedText: {
+    color: "#167A58",
+    fontSize: 9,
+    fontWeight: "900",
+    marginLeft: 4,
   },
   profileRole: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "800",
-    marginBottom: 9,
+    color: PRIMARY_DARK,
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 3,
+    marginBottom: 8,
   },
   contactRow: {
     flexDirection: "row",
@@ -638,31 +745,58 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   contactText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     marginLeft: 7,
     flex: 1,
   },
+  accountStatusPanel: {
+    backgroundColor: SUCCESS_LIGHT,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#B7E8D3",
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  statusIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+    borderWidth: 1,
+    borderColor: "#B7E8D3",
+  },
+  statusTextBlock: {
+    flex: 1,
+  },
+  statusTitle: {
+    color: "#167A58",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  statusText: {
+    color: "#167A58",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
   sectionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    backgroundColor: SURFACE,
+    borderRadius: 22,
     paddingTop: 16,
     paddingHorizontal: 16,
-    marginBottom: 18,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    borderColor: BORDER,
   },
   sectionTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 16,
     fontWeight: "900",
     marginBottom: 8,
@@ -672,16 +806,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: BORDER,
   },
   profileRowLast: {
     borderBottomWidth: 0,
   },
   rowIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#F8FAFC",
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -691,29 +825,29 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   rowTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "900",
     marginBottom: 3,
   },
   rowValue: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
   },
   logoutButton: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: SURFACE,
+    borderRadius: 18,
     paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     borderWidth: 1.5,
-    borderColor: "#FCA5A5",
+    borderColor: "#FECACA",
     marginTop: 2,
   },
   logoutText: {
-    color: "#DC2626",
+    color: DANGER,
     fontSize: 15,
     fontWeight: "900",
     marginLeft: 8,

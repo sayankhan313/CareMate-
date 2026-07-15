@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,9 +17,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  Link,
+  Mic,
+  PhoneOff,
+  RefreshCw,
+  Share2,
+  ShieldAlert,
+  Video,
+} from "lucide-react-native";
 
 import { consultationsApi } from "../../services/consultationsApi";
 import type { RootStackParamList } from "../../types/navigation";
@@ -21,6 +42,27 @@ import type { RootStackParamList } from "../../types/navigation";
 type Props = NativeStackScreenProps<RootStackParamList, "VideoConsultation">;
 
 const CareMateWebView = WebView as unknown as React.ComponentType<any>;
+
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const DANGER = "#EF4D56";
+const DANGER_DARK = "#B42318";
+const DANGER_LIGHT = "#FFEDEE";
+
+const DARK_CALL = "#050816";
+const DARK_PANEL = "#111936";
 
 const AUTO_JOIN_HASH_PARAMS = [
   "config.prejoinConfig.enabled=false",
@@ -351,6 +393,10 @@ const VideoConsultationScreen = ({ navigation, route }: Props) => {
       : "Video Consultation";
   }, [consultationType]);
 
+  const consultationTypeLabel = useMemo(() => {
+    return consultationType === "EMERGENCY" ? "Emergency" : "Manual";
+  }, [consultationType]);
+
   const autoJoinMeetingUrl = useMemo(() => {
     return buildAutoJoinMeetingUrl(meetingUrl);
   }, [meetingUrl]);
@@ -359,9 +405,9 @@ const VideoConsultationScreen = ({ navigation, route }: Props) => {
     try {
       webViewRef.current?.injectJavaScript(WEBVIEW_MEDIA_CLEANUP_SCRIPT);
     } catch {
-      // WebView may already be unmounted.
-    }
-  }, []);
+      
+      }
+    }, []);
 
   useEffect(() => {
     return () => {
@@ -545,16 +591,35 @@ const VideoConsultationScreen = ({ navigation, route }: Props) => {
 
   if (isLoadingConfig || isRequestingPermission) {
     return (
-      <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F766E" />
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
 
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#0F766E" />
-          <Text style={styles.loadingTitle}>Preparing emergency video call</Text>
-          <Text style={styles.loadingText}>
-            CareMate+ is joining the patient automatically with camera and
-            microphone enabled.
-          </Text>
+        <View style={styles.loadingScreen}>
+          <View style={styles.loadingCard}>
+            <View style={styles.loadingIconCircle}>
+              <Video size={34} color={PRIMARY} strokeWidth={2.8} />
+            </View>
+
+            <ActivityIndicator size="large" color={PRIMARY} />
+
+            <Text style={styles.loadingTitle}>Preparing video call</Text>
+            <Text style={styles.loadingText}>
+              CareMate+ is joining the patient automatically with camera and
+              microphone enabled.
+            </Text>
+
+            <View style={styles.permissionRow}>
+              <View style={styles.permissionChip}>
+                <Camera size={15} color={PRIMARY_DARK} strokeWidth={2.5} />
+                <Text style={styles.permissionChipText}>Camera</Text>
+              </View>
+
+              <View style={styles.permissionChip}>
+                <Mic size={15} color={PRIMARY_DARK} strokeWidth={2.5} />
+                <Text style={styles.permissionChipText}>Microphone</Text>
+              </View>
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -562,67 +627,105 @@ const VideoConsultationScreen = ({ navigation, route }: Props) => {
 
   if (loadError || !meetingUrl || !hasMediaPermission) {
     return (
-      <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F766E" />
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
 
-        <View
-          style={[
-            styles.errorHeader,
-            { paddingTop: Math.max(18, insets.top + 12) },
-          ]}
-        >
-          <Text style={styles.headerTitle}>{title}</Text>
+        <View style={styles.appBar}>
+          <Text style={styles.appBarTitle}>{title}</Text>
+          <Text style={styles.appBarSubtitle}>
+            Camera and microphone setup
+          </Text>
         </View>
 
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorTitle}>Unable to open video call</Text>
-          <Text style={styles.errorText}>
-            {loadError || "Meeting link was not found."}
-          </Text>
+        <View style={styles.errorScreen}>
+          <View style={styles.errorCard}>
+            <View style={styles.errorIconCircle}>
+              <AlertCircle size={34} color={DANGER} strokeWidth={2.8} />
+            </View>
 
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={retryPermissions}
-          >
-            <Text style={styles.primaryButtonText}>Allow Camera/Mic</Text>
-          </TouchableOpacity>
+            <Text style={styles.errorTitle}>Unable to open video call</Text>
+            <Text style={styles.errorText}>
+              {loadError || "Meeting link was not found."}
+            </Text>
 
-          <TouchableOpacity
-            style={styles.secondaryActionButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.secondaryActionText}>Go Back</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              activeOpacity={0.86}
+              onPress={retryPermissions}
+            >
+              <RefreshCw size={19} color={SURFACE} strokeWidth={2.6} />
+              <Text style={styles.primaryButtonText}>Allow Camera/Mic</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryActionButton}
+              activeOpacity={0.86}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.secondaryActionText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F766E" />
+    <SafeAreaView edges={["bottom"]} style={styles.callSafeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={DARK_CALL} />
 
       <View
-        style={[styles.header, { paddingTop: Math.max(14, insets.top + 10) }]}
+        style={[
+          styles.callHeader,
+          {
+            paddingTop: Math.max(14, insets.top + 10),
+          },
+        ]}
       >
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerTitle}>{title}</Text>
-          <Text style={styles.headerSubtitle}>
-            Patient auto-joined • Fresh video session
-          </Text>
+        <View style={styles.callTitleRow}>
+          <View style={styles.callIconCircle}>
+            {consultationType === "EMERGENCY" ? (
+              <ShieldAlert size={21} color={DANGER} strokeWidth={2.7} />
+            ) : (
+              <Video size={21} color={PRIMARY} strokeWidth={2.7} />
+            )}
+          </View>
+
+          <View style={styles.headerTextBox}>
+            <Text style={styles.callTitle}>{title}</Text>
+
+            <View style={styles.callMetaRow}>
+              <View style={styles.liveDot} />
+              <Text style={styles.callSubtitle}>
+                Patient auto-joined • {consultationTypeLabel}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.endButton} onPress={endCall}>
+        <TouchableOpacity
+          style={styles.endButton}
+          activeOpacity={0.86}
+          onPress={endCall}
+        >
+          <PhoneOff size={17} color={SURFACE} strokeWidth={2.7} />
           <Text style={styles.endButtonText}>End</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.actionBar}>
+        <View style={styles.sessionStatusBox}>
+          <CheckCircle2 size={18} color={SUCCESS} strokeWidth={2.6} />
+          <Text style={styles.sessionStatusText}>Fresh video session</Text>
+        </View>
+
         <TouchableOpacity
-          style={styles.secondaryButton}
+          style={styles.shareButton}
+          activeOpacity={0.86}
           onPress={shareDoctorLink}
         >
-          <Text style={styles.secondaryButtonText}>Share Doctor Demo Link</Text>
+          <Share2 size={18} color={PRIMARY} strokeWidth={2.6} />
+          <Text style={styles.shareButtonText}>Doctor link</Text>
         </TouchableOpacity>
       </View>
 
@@ -671,15 +774,24 @@ const VideoConsultationScreen = ({ navigation, route }: Props) => {
           />
         ) : null}
 
-        {showWebViewLoader && (
+        {showWebViewLoader ? (
           <View style={styles.webViewLoader}>
-            <ActivityIndicator size="large" color="#0F766E" />
-            <Text style={styles.loadingText}>Joining patient video call...</Text>
-            <Text style={styles.smallLoadingText}>
-              A fresh video session is being prepared.
-            </Text>
+            <View style={styles.webViewLoaderCard}>
+              <View style={styles.loadingIconCircleSmall}>
+                <Link size={24} color={PRIMARY} strokeWidth={2.7} />
+              </View>
+
+              <ActivityIndicator size="large" color={PRIMARY} />
+
+              <Text style={styles.webViewLoadingTitle}>
+                Joining patient video call
+              </Text>
+              <Text style={styles.webViewLoadingText}>
+                A fresh JaaS session is being prepared.
+              </Text>
+            </View>
           </View>
-        )}
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -690,65 +802,263 @@ export default VideoConsultationScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: "#0F766E",
-    paddingHorizontal: 18,
-    paddingBottom: 14,
+  callSafeArea: {
+    flex: 1,
+    backgroundColor: DARK_CALL,
+  },
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingCard: {
+    width: "100%",
+    backgroundColor: SURFACE,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  loadingIconCircle: {
+    width: 74,
+    height: 74,
+    borderRadius: 26,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  loadingTitle: {
+    marginTop: 18,
+    color: TEXT,
+    fontSize: 19,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  loadingText: {
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 21,
+    marginTop: 8,
+  },
+  permissionRow: {
+    flexDirection: "row",
+    marginTop: 18,
+  },
+  permissionChip: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    marginHorizontal: 4,
   },
-  errorHeader: {
-    backgroundColor: "#0F766E",
+  permissionChipText: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "900",
+    marginLeft: 5,
+  },
+  appBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 25,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  errorScreen: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorCard: {
+    width: "100%",
+    backgroundColor: SURFACE,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  errorIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 25,
+    backgroundColor: DANGER_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: DANGER_DARK,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  errorText: {
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 21,
+    marginTop: 9,
+  },
+  primaryButton: {
+    minHeight: 52,
+    borderRadius: 17,
+    backgroundColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
     paddingHorizontal: 18,
-    paddingBottom: 18,
+    marginTop: 22,
+  },
+  primaryButtonText: {
+    color: SURFACE,
+    fontSize: 15,
+    fontWeight: "900",
+    marginLeft: 8,
+  },
+  secondaryActionButton: {
+    minHeight: 50,
+    borderRadius: 17,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 22,
+    marginTop: 10,
+  },
+  secondaryActionText: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  callHeader: {
+    backgroundColor: DARK_CALL,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  callTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 10,
+  },
+  callIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: DARK_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   headerTextBox: {
     flex: 1,
-    paddingRight: 12,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 19,
+  callTitle: {
+    color: SURFACE,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  callMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: SUCCESS,
+    marginRight: 6,
+  },
+  callSubtitle: {
+    color: "#AAB4D4",
+    fontSize: 11,
     fontWeight: "800",
-  },
-  headerSubtitle: {
-    color: "#CCFBF1",
-    fontSize: 12,
-    marginTop: 3,
   },
   endButton: {
-    backgroundColor: "#DC2626",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
+    minHeight: 40,
+    borderRadius: 15,
+    backgroundColor: DANGER,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   endButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "900",
+    marginLeft: 6,
   },
   actionBar: {
-    paddingHorizontal: 14,
+    backgroundColor: SURFACE,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  secondaryButton: {
-    backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#99F6E4",
-    paddingVertical: 10,
-    borderRadius: 12,
+    borderBottomColor: BORDER,
+    flexDirection: "row",
     alignItems: "center",
   },
-  secondaryButtonText: {
-    color: "#0F766E",
-    fontSize: 14,
-    fontWeight: "800",
+  sessionStatusBox: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 15,
+    backgroundColor: SUCCESS_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginRight: 10,
+  },
+  sessionStatusText: {
+    color: "#167A58",
+    fontSize: 12,
+    fontWeight: "900",
+    marginLeft: 7,
+  },
+  shareButton: {
+    minHeight: 42,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
+    borderWidth: 1,
+    borderColor: "#C9D8FF",
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shareButtonText: {
+    color: PRIMARY_DARK,
+    fontSize: 12,
+    fontWeight: "900",
+    marginLeft: 6,
   },
   webViewContainer: {
     flex: 1,
@@ -759,77 +1069,48 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
   },
   webViewLoader: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 5,
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  zIndex: 5,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: BACKGROUND,
+  paddingHorizontal: 20,
+},
+  webViewLoaderCard: {
+    width: "100%",
+    backgroundColor: SURFACE,
+    borderRadius: 28,
+    padding: 24,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 24,
-  },
-  centerContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingTitle: {
-    marginTop: 18,
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0F172A",
-    textAlign: "center",
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  smallLoadingText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#94A3B8",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#DC2626",
-    textAlign: "center",
-  },
-  errorText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  primaryButton: {
-    marginTop: 22,
-    backgroundColor: "#0F766E",
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    borderRadius: 14,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  secondaryActionButton: {
-    marginTop: 12,
-    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    borderRadius: 14,
+    borderColor: BORDER,
   },
-  secondaryActionText: {
-    color: "#334155",
-    fontSize: 15,
-    fontWeight: "800",
+  loadingIconCircleSmall: {
+    width: 60,
+    height: 60,
+    borderRadius: 22,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  webViewLoadingTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  webViewLoadingText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 19,
+    marginTop: 7,
   },
 });

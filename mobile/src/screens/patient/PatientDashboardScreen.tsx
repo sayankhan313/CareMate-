@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -25,19 +24,20 @@ import type {
   NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import {
-  Activity,
   AlertCircle,
   Bell,
   Camera,
-  Droplet,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
   HeartPulse,
-  Package,
+  MessageSquareText,
   Pill,
   Plus,
   RefreshCw,
+  Search,
   ShieldAlert,
   UserRound,
-  Video,
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
@@ -124,6 +124,24 @@ type DashboardApiResponse = {
   data: DashboardData;
 };
 
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
+
+const DASHBOARD_AUTO_REFRESH_MS = 30_000;
+
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") {
     return result.message;
@@ -154,51 +172,39 @@ const getGreetingText = () => {
   return "Good evening";
 };
 
-const getStatusTheme = (status: DashboardStatus) => {
+const getStatusTone = (status: DashboardStatus) => {
   if (status === "STABLE") {
     return {
-      cardBackground: "#ECFDF5",
-      cardBorder: "#86EFAC",
-      badgeBackground: "#DCFCE7",
-      badgeText: "#15803D",
-      sourceBackground: "#BBF7D0",
-      sourceText: "#166534",
-      shadowColor: "#22C55E",
+      background: SUCCESS_LIGHT,
+      text: "#167A58",
+      dot: SUCCESS,
+      label: "On track",
     };
   }
 
   if (status === "WARNING") {
     return {
-      cardBackground: "#FFF7ED",
-      cardBorder: "#FDBA74",
-      badgeBackground: "#FFEDD5",
-      badgeText: "#C2410C",
-      sourceBackground: "#FED7AA",
-      sourceText: "#9A3412",
-      shadowColor: "#F97316",
+      background: WARNING_LIGHT,
+      text: "#A85A13",
+      dot: WARNING,
+      label: "Needs attention",
     };
   }
 
   if (status === "CRITICAL") {
     return {
-      cardBackground: "#FEF2F2",
-      cardBorder: "#FCA5A5",
-      badgeBackground: "#FEE2E2",
-      badgeText: "#B91C1C",
-      sourceBackground: "#FECACA",
-      sourceText: "#991B1B",
-      shadowColor: "#EF4444",
+      background: DANGER_LIGHT,
+      text: "#B42318",
+      dot: DANGER,
+      label: "Critical",
     };
   }
 
   return {
-    cardBackground: "#EFF6FF",
-    cardBorder: "#BFDBFE",
-    badgeBackground: "#DBEAFE",
-    badgeText: "#1D4ED8",
-    sourceBackground: "#DBEAFE",
-    sourceText: "#1E40AF",
-    shadowColor: "#3B82F6",
+    background: "#EEF4FF",
+    text: PRIMARY_DARK,
+    dot: PRIMARY,
+    label: "No data",
   };
 };
 
@@ -244,15 +250,63 @@ const formatSourceLabel = (source: DashboardData["healthStatus"]["source"]) => {
   }
 
   if (source === "MANUAL") {
-    return "Manual";
+    return "Manual entry";
   }
 
   return "No source";
 };
 
+const formatRecordedAt = (value?: string | null) => {
+  if (!value) {
+    return "No recent reading";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Updated recently";
+  }
+
+  return `Updated ${parsedDate.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
+
+const formatDoctorNoteTime = (value?: string | null) => {
+  if (!value) {
+    return "Recently added";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Recently added";
+  }
+
+  const timeText = parsedDate.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const today = new Date();
+  const isToday = parsedDate.toDateString() === today.toDateString();
+
+  if (isToday) {
+    return `Today · ${timeText}`;
+  }
+
+  const dateText = parsedDate.toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+  });
+
+  return `${dateText} · ${timeText}`;
+};
+
 const formatOrderStatus = (status?: string | null) => {
   if (!status) {
-    return "No active order";
+    return "Preparing";
   }
 
   return status
@@ -260,6 +314,14 @@ const formatOrderStatus = (status?: string | null) => {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+};
+
+const displayMetric = (value?: number | null) => {
+  if (value === null || value === undefined) {
+    return "--";
+  }
+
+  return String(value);
 };
 
 export const PatientDashboardScreen = ({
@@ -286,11 +348,7 @@ export const PatientDashboardScreen = ({
 
     rootNavigation?.reset({
       index: 0,
-      routes: [
-        {
-          name: "Login",
-        },
-      ],
+      routes: [{ name: "Login" }],
     });
   }, [navigation]);
 
@@ -359,6 +417,14 @@ export const PatientDashboardScreen = ({
   useFocusEffect(
     useCallback(() => {
       loadDashboard("initial");
+
+      const intervalId = setInterval(() => {
+        loadDashboard("silent");
+      }, DASHBOARD_AUTO_REFRESH_MS);
+
+      return () => {
+        clearInterval(intervalId);
+      };
     }, [loadDashboard])
   );
 
@@ -368,9 +434,10 @@ export const PatientDashboardScreen = ({
         return currentDashboard;
       }
 
-      const updatedMedicines = currentDashboard.nextMedicineGroup.medicines.filter(
-        (medicine) => medicine.reminderId !== reminderId
-      );
+      const updatedMedicines =
+        currentDashboard.nextMedicineGroup.medicines.filter(
+          (medicine) => medicine.reminderId !== reminderId
+        );
 
       if (updatedMedicines.length === 0) {
         return {
@@ -433,7 +500,6 @@ export const PatientDashboardScreen = ({
       }
 
       removeMedicineFromDashboardCard(reminderId);
-
       await loadDashboard("silent");
     } catch (error) {
       Alert.alert("Network error", "Unable to connect to server.");
@@ -492,7 +558,6 @@ export const PatientDashboardScreen = ({
       }
 
       removeMedicineFromDashboardCard(reminderId);
-
       await loadDashboard("silent");
     } catch (error) {
       Alert.alert("Network error", "Unable to connect to server.");
@@ -511,18 +576,19 @@ export const PatientDashboardScreen = ({
 
     rootNavigation?.navigate("AddMedicine");
   };
- const openPatientProfileScreen = () => {
-  const rootNavigation = getRootNavigation();
 
-  if (!rootNavigation) {
-    Alert.alert("Unable to open", "Profile screen is not available right now.");
-    return;
-  }
+  const openPatientProfileScreen = () => {
+    const rootNavigation = getRootNavigation();
 
-  rootNavigation.navigate("PatientProfile", {
-    user: dashboard?.patient || route.params?.user,
-  });
-};
+    if (!rootNavigation) {
+      Alert.alert("Unable to open", "Profile screen is not available right now.");
+      return;
+    }
+
+    rootNavigation.navigate("PatientProfile", {
+      user: dashboard?.patient || route.params?.user,
+    });
+  };
 
   const openScanMedicineScreen = () => {
     const rootNavigation = getRootNavigation();
@@ -556,8 +622,8 @@ export const PatientDashboardScreen = ({
     navigation.navigate("Medicines");
   };
 
-  const openConsultationsScreen = () => {
-    navigation.navigate("Consultations");
+  const openVitalsScreen = () => {
+    navigation.navigate("Vitals");
   };
 
   const openOrdersScreen = () => {
@@ -577,7 +643,7 @@ export const PatientDashboardScreen = ({
 
   const healthStatus = dashboard?.healthStatus;
   const status = healthStatus?.status || "NO_DATA";
-  const statusTheme = getStatusTheme(status);
+  const statusTone = getStatusTone(status);
 
   const nextMedicineGroup = dashboard?.nextMedicineGroup || null;
   const firstMedicine = nextMedicineGroup?.medicines[0];
@@ -593,56 +659,61 @@ export const PatientDashboardScreen = ({
 
   const isMedicineActionDisabled = Boolean(actionLoadingReminderId);
 
+  const healthMeta = useMemo(() => {
+    return `${formatSourceLabel(healthStatus?.source || null)} · ${formatRecordedAt(
+      healthStatus?.recordedAt
+    )}`;
+  }, [healthStatus?.recordedAt, healthStatus?.source]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <LinearGradient
-          colors={["#3B82F6", "#2563EB"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {getGreetingText()}, {patientFirstName}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Your health summary for today
-            </Text>
+        <View style={styles.topBar}>
+          <View style={styles.greetingBlock}>
+            <Text style={styles.helloText}>Hello {patientFirstName} 👋</Text>
+            <Text style={styles.subHelloText}>{getGreetingText()}</Text>
           </View>
 
-          <View style={styles.headerActions}>
+          <View style={styles.topActions}>
             <TouchableOpacity
-              style={styles.bellButton}
-              activeOpacity={0.8}
+              style={styles.roundButton}
+              activeOpacity={0.85}
+              onPress={() => showComingSoon("Search")}
+            >
+              <Search size={19} color={TEXT} strokeWidth={2.5} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.roundButton}
+              activeOpacity={0.85}
               onPress={() => showComingSoon("Notifications")}
             >
-              <Bell size={20} color="#FFFFFF" strokeWidth={2.4} />
+              <Bell size={19} color={TEXT} strokeWidth={2.5} />
               <View style={styles.notificationDot} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.profileCircle}
+              style={styles.avatar}
               activeOpacity={0.85}
               onPress={openPatientProfileScreen}
             >
               {patientInitial ? (
-                <Text style={styles.profileInitial}>{patientInitial}</Text>
+                <Text style={styles.avatarText}>{patientInitial}</Text>
               ) : (
-                <UserRound size={20} color="#2563EB" />
+                <UserRound size={19} color={PRIMARY} />
               )}
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(32, insets.bottom + 108),
+              paddingBottom: Math.max(34, insets.bottom + 112),
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -650,19 +721,27 @@ export const PatientDashboardScreen = ({
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => loadDashboard("refresh")}
+              tintColor={PRIMARY}
+              colors={[PRIMARY]}
             />
           }
         >
           {isLoading ? (
-            <View style={styles.loadingCard}>
-              <ActivityIndicator color="#2563EB" />
-              <Text style={styles.loadingText}>Loading dashboard...</Text>
+            <View style={styles.statePanel}>
+              <ActivityIndicator color={PRIMARY} />
+              <Text style={styles.stateTitle}>Loading your plan...</Text>
+              <Text style={styles.stateText}>
+                Getting your medicines, vitals and care updates.
+              </Text>
             </View>
           ) : null}
 
           {!isLoading && errorMessage ? (
-            <View style={styles.errorCard}>
-              <AlertCircle size={24} color="#DC2626" />
+            <View style={styles.statePanel}>
+              <View style={styles.errorIconCircle}>
+                <AlertCircle size={24} color={DANGER} strokeWidth={2.5} />
+              </View>
+
               <Text style={styles.errorTitle}>Dashboard unavailable</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
@@ -671,330 +750,179 @@ export const PatientDashboardScreen = ({
                 activeOpacity={0.85}
                 onPress={() => loadDashboard("initial")}
               >
-                <RefreshCw size={18} color="#FFFFFF" />
-                <Text style={styles.retryButtonText}>Try Again</Text>
+                <RefreshCw size={17} color={SURFACE} strokeWidth={2.5} />
+                <Text style={styles.retryButtonText}>Try again</Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
           {!isLoading && !errorMessage ? (
             <>
-              <View
-                style={[
-                  styles.healthCard,
-                  {
-                    backgroundColor: statusTheme.cardBackground,
-                    borderColor: statusTheme.cardBorder,
-                    shadowColor: statusTheme.shadowColor,
-                  },
-                ]}
+              <TouchableOpacity
+                style={styles.healthCard}
+                activeOpacity={0.9}
+                onPress={openVitalsScreen}
               >
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.cardTitle}>Health Status</Text>
-
-                  <View
-                    style={[
-                      styles.sourcePill,
-                      {
-                        backgroundColor: statusTheme.sourceBackground,
-                      },
-                    ]}
-                  >
-                    <Text
+                <View style={styles.healthCardTop}>
+                  <View>
+                    <View
                       style={[
-                        styles.sourcePillText,
+                        styles.statusBadge,
                         {
-                          color: statusTheme.sourceText,
+                          backgroundColor: statusTone.background,
                         },
                       ]}
                     >
-                      {formatSourceLabel(healthStatus?.source || null)}
-                    </Text>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          {
+                            backgroundColor: statusTone.dot,
+                          },
+                        ]}
+                      />
+
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          {
+                            color: statusTone.text,
+                          },
+                        ]}
+                      >
+                        {healthStatus?.label || "No Data"}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.healthCardTitle}>{statusTone.label}</Text>
+                    <Text style={styles.healthCardMeta}>{healthMeta}</Text>
+                  </View>
+
+                  <View style={styles.healthIconBox}>
+                    <HeartPulse size={30} color={PRIMARY} strokeWidth={2.7} />
                   </View>
                 </View>
 
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor: statusTheme.badgeBackground,
-                    },
-                  ]}
-                >
-                  <HeartPulse
-                    size={20}
-                    color={statusTheme.badgeText}
-                    strokeWidth={2.5}
-                  />
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      {
-                        color: statusTheme.badgeText,
-                      },
-                    ]}
-                  >
-                    {healthStatus?.label || "No Data"}
-                  </Text>
-                </View>
-
-                <View style={styles.vitalsRow}>
-                  <VitalBox
-                    icon={<HeartPulse size={22} color="#DC2626" />}
-                    label="Heart Rate"
-                    value={
-                      healthStatus?.heartRate !== null &&
-                      healthStatus?.heartRate !== undefined
-                        ? `${healthStatus.heartRate}`
-                        : "--"
-                    }
+                <View style={styles.healthStatsRow}>
+                  <HealthStat
+                    label="Heart"
+                    value={displayMetric(healthStatus?.heartRate)}
                     unit="bpm"
                   />
 
-                  <VitalBox
-                    icon={<Activity size={22} color="#2563EB" />}
-                    label="SpO2"
-                    value={
-                      healthStatus?.spo2 !== null &&
-                      healthStatus?.spo2 !== undefined
-                        ? `${healthStatus.spo2}`
-                        : "--"
-                    }
+                  <HealthStat
+                    label="SpO₂"
+                    value={displayMetric(healthStatus?.spo2)}
                     unit="%"
                   />
 
-                  <VitalBox
-                    icon={<Droplet size={22} color="#9333EA" />}
+                  <HealthStat
                     label="BP"
                     value={healthStatus?.bloodPressure || "--/--"}
                     unit="mmHg"
                   />
                 </View>
-              </View>
+              </TouchableOpacity>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryContent}
+              >
+                <CategoryShortcut
+                  label="Scan"
+                  icon={<Camera size={24} color={TEXT} strokeWidth={2.4} />}
+                  onPress={openScanMedicineScreen}
+                />
+
+                <CategoryShortcut
+                  label="Add Med"
+                  icon={<Plus size={24} color={TEXT} strokeWidth={2.4} />}
+                  onPress={openAddMedicineScreen}
+                />
+
+                <CategoryShortcut
+                  label="Vitals"
+                  icon={<HeartPulse size={24} color={TEXT} strokeWidth={2.4} />}
+                  onPress={openVitalsScreen}
+                />
+
+                <CategoryShortcut
+                  label="Safety"
+                  icon={
+                    <ShieldAlert size={24} color={TEXT} strokeWidth={2.4} />
+                  }
+                  onPress={openEmergencyResponseScreen}
+                />
+              </ScrollView>
 
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {nextMedicineGroup && nextMedicineGroup.count > 1
-                    ? "Next Medicines"
-                    : "Next Medicine"}
-                </Text>
+                <Text style={styles.sectionTitle}>My plan</Text>
 
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={openMedicinesScreen}
                 >
-                  <Text style={styles.sectionLink}>View all</Text>
+                  <Text style={styles.sectionAction}>View meds</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.card}>
-                {nextMedicineGroup && firstMedicine ? (
-                  <>
-                    <View style={styles.medicineRow}>
-                      <View style={styles.medicineIconCircle}>
-                        <Pill size={25} color="#2563EB" strokeWidth={2.5} />
-                      </View>
-
-                      <View style={styles.medicineTextBlock}>
-                        <Text style={styles.medicineName}>
-                          {nextMedicineGroup.count > 1
-                            ? `${nextMedicineGroup.count} medicines due`
-                            : `${firstMedicine.name} ${firstMedicine.dose}`}
-                        </Text>
-
-                        <Text style={styles.medicineMeta}>
-                          {formatTime(nextMedicineGroup.scheduledFor)}
-                          {firstMedicine.instructions
-                            ? ` · ${firstMedicine.instructions}`
-                            : ""}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {nextMedicineGroup.count > 1 ? (
-                      <View style={styles.groupMedicineList}>
-                        {nextMedicineGroup.medicines
-                          .slice(0, 3)
-                          .map((medicine) => (
-                            <View
-                              key={`${medicine.medicineId}-${medicine.reminderId}`}
-                              style={styles.groupMedicineItem}
-                            >
-                              <Text style={styles.groupMedicineName}>
-                                {medicine.name}
-                              </Text>
-                              <Text style={styles.groupMedicineDose}>
-                                {medicine.dose}
-                              </Text>
-                            </View>
-                          ))}
-                      </View>
-                    ) : null}
-
-                    {nextMedicineGroup.count === 1 ? (
-                      <View style={styles.medicineButtonRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.takenButton,
-                            isTakingNextMedicine
-                              ? styles.disabledMedicineButton
-                              : undefined,
-                          ]}
-                          activeOpacity={0.85}
-                          disabled={isMedicineActionDisabled}
-                          onPress={() =>
-                            markDashboardMedicineTaken(firstMedicine.reminderId)
-                          }
-                        >
-                          <Text style={styles.takenButtonText}>
-                            {isTakingNextMedicine ? "Saving..." : "Taken"}
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.snoozeButton,
-                            isSnoozingNextMedicine
-                              ? styles.disabledMedicineButton
-                              : undefined,
-                          ]}
-                          activeOpacity={0.85}
-                          disabled={isMedicineActionDisabled}
-                          onPress={() =>
-                            snoozeDashboardMedicine(firstMedicine.reminderId)
-                          }
-                        >
-                          <Text style={styles.snoozeButtonText}>
-                            {isSnoozingNextMedicine
-                              ? "Snoozing..."
-                              : "Snooze"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.viewMedicinesButton}
-                        activeOpacity={0.85}
-                        onPress={openMedicinesScreen}
-                      >
-                        <Text style={styles.viewMedicinesButtonText}>
-                          View Medicines
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.emptyMedicineBlock}>
-                    <Pill size={30} color="#94A3B8" strokeWidth={2.4} />
-                    <Text style={styles.emptyMedicineTitle}>
-                      No upcoming medicine
-                    </Text>
-                    <Text style={styles.emptyMedicineText}>
-                      Add a medicine reminder to see your next dose here.
-                    </Text>
-
-                    <TouchableOpacity
-                      style={styles.viewMedicinesButton}
-                      activeOpacity={0.85}
-                      onPress={openAddMedicineScreen}
-                    >
-                      <Text style={styles.viewMedicinesButtonText}>
-                        Add Medicine
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-              </View>
-
-              <View style={styles.quickGrid}>
-                <QuickAction
-                  title="Scan Medicine"
-                  icon={<Camera size={24} color="#2563EB" />}
-                  iconBackground="#EFF6FF"
-                  onPress={openScanMedicineScreen}
-                />
-
-                <QuickAction
-                  title="Add Medicine"
-                  icon={<Plus size={24} color="#16A34A" />}
-                  iconBackground="#F0FDF4"
-                  onPress={openAddMedicineScreen}
-                />
-
-                <QuickAction
-                  title="Book Consultation"
-                  icon={<Video size={24} color="#9333EA" />}
-                  iconBackground="#FAF5FF"
-                  onPress={openConsultationsScreen}
-                />
-
-                <QuickAction
-                  title="Safety Response"
-                  icon={<ShieldAlert size={24} color="#DC2626" />}
-                  iconBackground="#FEF2F2"
-                  onPress={openEmergencyResponseScreen}
+              <View style={styles.whitePanel}>
+                <MedicinePlanBlock
+                  nextMedicineGroup={nextMedicineGroup}
+                  firstMedicine={firstMedicine}
+                  isTakingNextMedicine={isTakingNextMedicine}
+                  isSnoozingNextMedicine={isSnoozingNextMedicine}
+                  isMedicineActionDisabled={isMedicineActionDisabled}
+                  onAddMedicine={openAddMedicineScreen}
+                  onOpenMedicines={openMedicinesScreen}
+                  onMarkTaken={markDashboardMedicineTaken}
+                  onSnooze={snoozeDashboardMedicine}
                 />
               </View>
 
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Latest Doctor Note</Text>
+                <Text style={styles.sectionTitle}>Latest doctor note</Text>
               </View>
 
-              <View style={styles.card}>
-                <Text style={styles.doctorNoteText}>
-                  {dashboard?.latestDoctorNote?.note ||
-                    "Your latest doctor note will appear here after a consultation."}
-                </Text>
-              </View>
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Medicine Order</Text>
-
-                <TouchableOpacity activeOpacity={0.85} onPress={openOrdersScreen}>
-                  <Text style={styles.sectionLink}>Orders</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.orderTitleBlock}>
-                    <Package size={22} color="#2563EB" />
-                    <Text style={styles.orderTitle}>
-                      {formatOrderStatus(dashboard?.medicineOrder?.status)}
-                    </Text>
+              <View style={styles.doctorNotePanel}>
+                <View style={styles.doctorNoteHeader}>
+                  <View style={styles.doctorNoteIconBox}>
+                    <MessageSquareText
+                      size={22}
+                      color={PRIMARY}
+                      strokeWidth={2.5}
+                    />
                   </View>
 
-                  <View style={styles.orderStatusPill}>
-                    <Text style={styles.orderStatusText}>
-                      {dashboard?.medicineOrder ? "Tracking" : "No order"}
+                  <View style={styles.doctorNoteHeaderText}>
+                    <Text style={styles.doctorNoteTitle}>
+                      {dashboard?.latestDoctorNote
+                        ? "Note from your doctor"
+                        : "No doctor note yet"}
+                    </Text>
+
+                    <Text style={styles.doctorNoteDate}>
+                      {dashboard?.latestDoctorNote
+                        ? formatDoctorNoteTime(
+                            dashboard.latestDoctorNote.createdAt
+                          )
+                        : "A new note will automatically appear here after your doctor creates it."}
                     </Text>
                   </View>
                 </View>
 
-                <View style={styles.orderStepsRow}>
-                  <OrderStep
-                    label="Received"
-                    active={Boolean(dashboard?.medicineOrder?.steps.received)}
-                    color="#22C55E"
-                  />
-
-                  <OrderStep
-                    label="Preparing"
-                    active={Boolean(dashboard?.medicineOrder?.steps.preparing)}
-                    color="#F97316"
-                  />
-
-                  <OrderStep
-                    label="Ready"
-                    active={Boolean(dashboard?.medicineOrder?.steps.ready)}
-                    color="#2563EB"
-                  />
-                </View>
+                {dashboard?.latestDoctorNote ? (
+                  <Text style={styles.doctorNoteBody}>
+                    {dashboard.latestDoctorNote.note}
+                  </Text>
+                ) : null}
               </View>
+
+              <MedicineOrderMiniBar
+                order={dashboard?.medicineOrder || null}
+                onPress={openOrdersScreen}
+              />
             </>
           ) : null}
         </ScrollView>
@@ -1003,93 +931,301 @@ export const PatientDashboardScreen = ({
   );
 };
 
-const VitalBox = ({
+const CategoryShortcut = ({
+  label,
   icon,
+  onPress,
+}: {
+  label: string;
+  icon: ReactNode;
+  onPress: () => void;
+}) => {
+  return (
+    <TouchableOpacity
+      style={styles.categoryItem}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
+      <View style={styles.categoryIconCircle}>{icon}</View>
+      <Text style={styles.categoryLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
+
+const HealthStat = ({
   label,
   value,
   unit,
 }: {
-  icon: ReactNode;
   label: string;
   value: string;
   unit: string;
 }) => {
   return (
-    <View style={styles.vitalBox}>
-      <View style={styles.vitalIcon}>{icon}</View>
-
-      <Text style={styles.vitalLabel} numberOfLines={1}>
-        {label}
-      </Text>
-
-      <View style={styles.vitalValueRow}>
-        <Text style={styles.vitalValue} numberOfLines={1}>
-          {value}
-        </Text>
-        <Text style={styles.vitalUnit} numberOfLines={1}>
-          {unit}
-        </Text>
+    <View style={styles.healthStat}>
+      <Text style={styles.healthStatLabel}>{label}</Text>
+      <View style={styles.healthStatValueRow}>
+        <Text style={styles.healthStatValue}>{value}</Text>
+        <Text style={styles.healthStatUnit}>{unit}</Text>
       </View>
     </View>
   );
 };
 
-const QuickAction = ({
-  title,
-  icon,
-  iconBackground,
+const MedicineOrderMiniBar = ({
+  order,
   onPress,
 }: {
-  title: string;
-  icon: ReactNode;
-  iconBackground: string;
+  order: DashboardData["medicineOrder"];
   onPress: () => void;
 }) => {
+  const steps = order?.steps || {
+    received: true,
+    preparing: true,
+    ready: false,
+  };
+
+  const statusText = formatOrderStatus(order?.status || "PREPARING");
+
   return (
     <TouchableOpacity
-      style={styles.quickActionCard}
-      activeOpacity={0.85}
+      style={styles.orderMiniCard}
+      activeOpacity={0.9}
       onPress={onPress}
     >
-      <View style={[styles.quickIconCircle, { backgroundColor: iconBackground }]}>
-        {icon}
+      <View style={styles.orderMiniHeader}>
+        <Text style={styles.orderMiniTitle}>Medicine Order</Text>
+
+        <View style={styles.orderStatusPill}>
+          <Text style={styles.orderStatusText}>{statusText}</Text>
+        </View>
       </View>
 
-      <Text style={styles.quickActionText}>{title}</Text>
+      <View style={styles.orderStepRow}>
+        <OrderMiniStep
+          label="Received"
+          active={Boolean(steps.received)}
+          tone="success"
+        />
+
+        <OrderMiniStep
+          label="Preparing"
+          active={Boolean(steps.preparing)}
+          tone="warning"
+        />
+
+        <OrderMiniStep
+          label="Ready"
+          active={Boolean(steps.ready)}
+          tone="success"
+          isLast
+        />
+      </View>
     </TouchableOpacity>
   );
 };
 
-const OrderStep = ({
+const OrderMiniStep = ({
   label,
   active,
-  color,
+  tone,
+  isLast,
 }: {
   label: string;
   active: boolean;
-  color: string;
+  tone: "success" | "warning";
+  isLast?: boolean;
 }) => {
+  const activeColor = tone === "success" ? SUCCESS : WARNING;
+  const activeLineColor = tone === "success" ? "#BCE9D7" : "#FED7AA";
+
   return (
     <View style={styles.orderStep}>
-      <View
-        style={[
-          styles.orderStepCircle,
-          {
-            backgroundColor: active ? color : "#E5E7EB",
-          },
-        ]}
-      >
-        <View style={styles.orderStepInnerDot} />
+      <View style={styles.orderStepTop}>
+        <View
+          style={[
+            styles.orderStepCircle,
+            active
+              ? {
+                  backgroundColor: activeColor,
+                  borderColor: activeColor,
+                }
+              : undefined,
+          ]}
+        >
+          {active && tone === "success" ? (
+            <CheckCircle2 size={11} color={SURFACE} strokeWidth={3} />
+          ) : active ? (
+            <View style={styles.orderStepInnerDot} />
+          ) : null}
+        </View>
+
+        {!isLast ? (
+          <View
+            style={[
+              styles.orderStepLine,
+              active
+                ? {
+                    backgroundColor: activeLineColor,
+                  }
+                : undefined,
+            ]}
+          />
+        ) : null}
       </View>
 
       <Text
         style={[
           styles.orderStepLabel,
-          active ? styles.orderStepLabelActive : undefined,
+          active
+            ? {
+                color: tone === "success" ? "#167A58" : "#A85A13",
+              }
+            : undefined,
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
+    </View>
+  );
+};
+
+const MedicinePlanBlock = ({
+  nextMedicineGroup,
+  firstMedicine,
+  isTakingNextMedicine,
+  isSnoozingNextMedicine,
+  isMedicineActionDisabled,
+  onAddMedicine,
+  onOpenMedicines,
+  onMarkTaken,
+  onSnooze,
+}: {
+  nextMedicineGroup: NextMedicineGroup | null;
+  firstMedicine?: DashboardMedicine;
+  isTakingNextMedicine: boolean;
+  isSnoozingNextMedicine: boolean;
+  isMedicineActionDisabled: boolean;
+  onAddMedicine: () => void;
+  onOpenMedicines: () => void;
+  onMarkTaken: (reminderId: string) => void;
+  onSnooze: (reminderId: string) => void;
+}) => {
+  if (!nextMedicineGroup || !firstMedicine) {
+    return (
+      <View style={styles.emptyMedicineRow}>
+        <View style={[styles.rowIconBox, { backgroundColor: SUCCESS_LIGHT }]}>
+          <Pill size={22} color={SUCCESS} strokeWidth={2.5} />
+        </View>
+
+        <View style={styles.rowTextBlock}>
+          <Text style={styles.rowTitle}>No upcoming dose</Text>
+          <Text style={styles.rowSubtitle}>
+            Add a medicine reminder to build your daily plan.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.smallPrimaryButton}
+          activeOpacity={0.85}
+          onPress={onAddMedicine}
+        >
+          <Text style={styles.smallPrimaryButtonText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const hasMultipleMedicines = nextMedicineGroup.count > 1;
+
+  return (
+    <View>
+      <TouchableOpacity
+        style={styles.medicineTopRow}
+        activeOpacity={0.85}
+        onPress={onOpenMedicines}
+      >
+        <View style={styles.timeBox}>
+          <Text style={styles.timeBoxText}>
+            {formatTime(nextMedicineGroup.scheduledFor)}
+          </Text>
+          <Text style={styles.timeBoxLabel}>Due</Text>
+        </View>
+
+        <View style={styles.rowTextBlock}>
+          <Text style={styles.rowTitle} numberOfLines={1}>
+            {hasMultipleMedicines
+              ? `${nextMedicineGroup.count} medicines due`
+              : firstMedicine.name}
+          </Text>
+
+          <Text style={styles.rowSubtitle} numberOfLines={2}>
+            {hasMultipleMedicines
+              ? "Open schedule to manage all medicines at this time."
+              : `${firstMedicine.dose}${
+                  firstMedicine.instructions
+                    ? ` · ${firstMedicine.instructions}`
+                    : ""
+                }`}
+          </Text>
+        </View>
+
+        {hasMultipleMedicines ? (
+          <ChevronRight size={21} color={MUTED} strokeWidth={2.5} />
+        ) : null}
+      </TouchableOpacity>
+
+      {hasMultipleMedicines ? (
+        <View style={styles.previewList}>
+          {nextMedicineGroup.medicines.slice(0, 3).map((medicine) => (
+            <View
+              key={`${medicine.medicineId}-${medicine.reminderId}`}
+              style={styles.previewRow}
+            >
+              <View style={styles.previewDot} />
+              <Text style={styles.previewName} numberOfLines={1}>
+                {medicine.name}
+              </Text>
+              <Text style={styles.previewDose} numberOfLines={1}>
+                {medicine.dose}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.medicineActions}>
+          <TouchableOpacity
+            style={[
+              styles.takenButton,
+              isTakingNextMedicine ? styles.disabledButton : undefined,
+            ]}
+            activeOpacity={0.85}
+            disabled={isMedicineActionDisabled}
+            onPress={() => onMarkTaken(firstMedicine.reminderId)}
+          >
+            <CheckCircle2 size={17} color={SURFACE} strokeWidth={2.7} />
+            <Text style={styles.takenButtonText}>
+              {isTakingNextMedicine ? "Saving..." : "Taken"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.snoozeButton,
+              isSnoozingNextMedicine ? styles.disabledButton : undefined,
+            ]}
+            activeOpacity={0.85}
+            disabled={isMedicineActionDisabled}
+            onPress={() => onSnooze(firstMedicine.reminderId)}
+          >
+            <Clock3 size={17} color={PRIMARY} strokeWidth={2.7} />
+            <Text style={styles.snoozeButtonText}>
+              {isSnoozingNextMedicine ? "Snoozing..." : "Snooze"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -1097,463 +1233,531 @@ const OrderStep = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  header: {
+  topBar: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTextBlock: {
+  greetingBlock: {
     flex: 1,
     paddingRight: 12,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
+  helloText: {
+    color: TEXT,
+    fontSize: 20,
     fontWeight: "900",
-    lineHeight: 30,
-    marginBottom: 3,
+    letterSpacing: -0.3,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
+  subHelloText: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
+    marginTop: 3,
   },
-  headerActions: {
+  topActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-  bellButton: {
+  roundButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 9,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
+    borderColor: BORDER,
   },
   notificationDot: {
     position: "absolute",
-    top: 8,
+    top: 9,
     right: 9,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#EF4444",
+    backgroundColor: PRIMARY,
+    borderWidth: 1,
+    borderColor: SURFACE,
   },
-  profileCircle: {
+  avatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
   },
-  profileInitial: {
-    color: "#2563EB",
+  avatarText: {
+    color: SURFACE,
     fontSize: 16,
     fontWeight: "900",
   },
   scrollView: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  loadingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 22,
+  statePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 24,
     alignItems: "center",
-    marginBottom: 16,
+    marginTop: 24,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
   },
-  loadingText: {
-    color: "#6B7280",
-    fontSize: 14,
+  stateTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "900",
+    marginTop: 12,
+  },
+  stateText: {
+    color: MUTED,
+    fontSize: 13,
     fontWeight: "700",
-    marginTop: 10,
+    textAlign: "center",
+    lineHeight: 19,
+    marginTop: 5,
   },
-  errorCard: {
-    backgroundColor: "#FFFFFF",
+  errorIconCircle: {
+    width: 54,
+    height: 54,
     borderRadius: 18,
-    padding: 22,
+    backgroundColor: DANGER_LIGHT,
     alignItems: "center",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#FECACA",
+    justifyContent: "center",
   },
   errorTitle: {
-    color: "#991B1B",
+    color: "#9F1D1D",
     fontSize: 18,
     fontWeight: "900",
-    marginTop: 10,
+    marginTop: 12,
     marginBottom: 6,
   },
   errorText: {
-    color: "#7F1D1D",
+    color: "#7A2E2E",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 16,
   },
   retryButton: {
-    backgroundColor: "#2563EB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
   },
   retryButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 14,
     fontWeight: "900",
     marginLeft: 8,
   },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 18,
+  categoryContent: {
+    paddingBottom: 14,
+  },
+  categoryItem: {
+    alignItems: "center",
+    marginRight: 18,
+    width: 76,
+  },
+  categoryIconCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
+    borderColor: BORDER,
+  },
+  categoryLabel: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 8,
+    textAlign: "center",
   },
   healthCard: {
-    borderRadius: 22,
+    backgroundColor: PRIMARY,
+    borderRadius: 24,
     padding: 18,
-    marginBottom: 22,
-    borderWidth: 1,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    elevation: 3,
+    marginBottom: 18,
+    overflow: "hidden",
   },
-  cardHeaderRow: {
+  healthCardTop: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-  },
-  cardTitle: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  sourcePill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  sourcePillText: {
-    fontSize: 12,
-    fontWeight: "900",
   },
   statusBadge: {
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginTop: 16,
-    marginBottom: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 7,
   },
   statusBadgeText: {
-    fontSize: 17,
+    fontSize: 11,
     fontWeight: "900",
-    marginLeft: 8,
   },
-  vitalsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  vitalBox: {
-    width: "31.5%",
-    backgroundColor: "rgba(255,255,255,0.74)",
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.88)",
-  },
-  vitalIcon: {
-    marginBottom: 10,
-  },
-  vitalLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  vitalValueRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    flexWrap: "wrap",
-  },
-  vitalValue: {
-    color: "#111827",
-    fontSize: 20,
+  healthCardTitle: {
+    color: SURFACE,
+    fontSize: 29,
     fontWeight: "900",
-    marginRight: 3,
+    letterSpacing: -0.7,
+    marginTop: 14,
   },
-  vitalUnit: {
-    color: "#64748B",
-    fontSize: 10,
+  healthCardMeta: {
+    color: "#EAF1FF",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  healthIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  healthStatsRow: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 18,
+    padding: 10,
+    marginTop: 18,
+  },
+  healthStat: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  healthStatLabel: {
+    color: "#EAF1FF",
+    fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
-  sectionHeader: {
+  healthStatValueRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  healthStatValue: {
+    color: SURFACE,
+    fontSize: 17,
+    fontWeight: "900",
+    marginRight: 3,
+  },
+  healthStatUnit: {
+    color: "#EAF1FF",
+    fontSize: 9,
+    fontWeight: "900",
+    marginBottom: 3,
+  },
+  sectionHeader: {
+    marginBottom: 10,
+    marginTop: 2,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "space-between",
   },
   sectionTitle: {
-    color: "#111827",
-    fontSize: 21,
+    color: TEXT,
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+  sectionAction: {
+    color: PRIMARY,
+    fontSize: 13,
     fontWeight: "900",
   },
-  sectionLink: {
-    color: "#2563EB",
-    fontSize: 15,
-    fontWeight: "900",
+  whitePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  medicineRow: {
+  emptyMedicineRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  medicineIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#DBEAFE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  medicineTextBlock: {
-    flex: 1,
-  },
-  medicineName: {
-    color: "#111827",
-    fontSize: 19,
-    fontWeight: "900",
-    marginBottom: 6,
-  },
-  medicineMeta: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  groupMedicineList: {
-    marginBottom: 14,
-  },
-  groupMedicineItem: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  groupMedicineName: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  groupMedicineDose: {
-    color: "#64748B",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  medicineButtonRow: {
-    flexDirection: "row",
-  },
-  takenButton: {
-    flex: 1,
-    backgroundColor: "#22C55E",
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-    marginRight: 12,
-  },
-  takenButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  snoozeButton: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#2563EB",
-  },
-  snoozeButtonText: {
-    color: "#2563EB",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  disabledMedicineButton: {
-    opacity: 0.55,
-  },
-  viewMedicinesButton: {
-    backgroundColor: "#2563EB",
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  viewMedicinesButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  emptyMedicineBlock: {
     alignItems: "center",
     paddingVertical: 4,
   },
-  emptyMedicineTitle: {
-    color: "#111827",
-    fontSize: 17,
-    fontWeight: "900",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  emptyMedicineText: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 18,
-  },
-  quickActionCard: {
-    width: "48%",
-    aspectRatio: 1.18,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
-  },
-  quickIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-  quickActionText: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  doctorNoteText: {
-    color: "#4B5563",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 22,
-  },
-  orderTitleBlock: {
+  medicineTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    paddingVertical: 4,
+  },
+  rowIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  timeBox: {
+    width: 68,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: WARNING_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  timeBoxText: {
+    color: "#A85A13",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  timeBoxLabel: {
+    color: "#A85A13",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  rowTextBlock: {
     flex: 1,
   },
-  orderTitle: {
-    color: "#111827",
-    fontSize: 16,
+  rowTitle: {
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
+    marginBottom: 4,
+  },
+  rowSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  smallPrimaryButton: {
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginLeft: 10,
+  },
+  smallPrimaryButtonText: {
+    color: SURFACE,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  previewList: {
+    paddingBottom: 4,
+    paddingTop: 8,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 13,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    marginTop: 7,
+  },
+  previewDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: PRIMARY,
+    marginRight: 8,
+  },
+  previewName: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  previewDose: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "800",
     marginLeft: 8,
   },
-  orderStatusPill: {
-    borderRadius: 999,
-    backgroundColor: "#FFF7ED",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  medicineActions: {
+    flexDirection: "row",
+    marginTop: 12,
   },
-  orderStatusText: {
-    color: "#C2410C",
-    fontSize: 12,
+  takenButton: {
+    flex: 1,
+    backgroundColor: SUCCESS,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    flexDirection: "row",
+  },
+  takenButtonText: {
+    color: SURFACE,
+    fontSize: 14,
+    fontWeight: "900",
+    marginLeft: 6,
+  },
+  snoozeButton: {
+    flex: 1,
+    backgroundColor: "#EEF4FF",
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  snoozeButtonText: {
+    color: PRIMARY,
+    fontSize: 14,
+    fontWeight: "900",
+    marginLeft: 6,
+  },
+  disabledButton: {
+    opacity: 0.55,
+  },
+  doctorNotePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  doctorNoteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  doctorNoteIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  doctorNoteHeaderText: {
+    flex: 1,
+  },
+  doctorNoteTitle: {
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
   },
-  orderStepsRow: {
+  doctorNoteDate: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  doctorNoteBody: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 20,
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 14,
+    padding: 13,
+    marginTop: 14,
+  },
+  orderMiniCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 15,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  orderMiniHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 18,
+    marginBottom: 16,
+  },
+  orderMiniTitle: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  orderStatusPill: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  orderStatusText: {
+    color: "#A85A13",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  orderStepRow: {
+    flexDirection: "row",
   },
   orderStep: {
     flex: 1,
+  },
+  orderStepTop: {
+    flexDirection: "row",
     alignItems: "center",
   },
   orderStepCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#F1F4FA",
+    borderWidth: 1,
+    borderColor: "#DDE3EF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
   },
   orderStepInnerDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: "#FFFFFF",
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: SURFACE,
+  },
+  orderStepLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: "#E4E8F2",
+    borderRadius: 2,
+    marginHorizontal: 5,
   },
   orderStepLabel: {
-    color: "#9CA3AF",
-    fontSize: 12,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  orderStepLabelActive: {
-    color: "#4B5563",
+    color: "#A7B0C2",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 7,
+    paddingRight: 6,
   },
 });

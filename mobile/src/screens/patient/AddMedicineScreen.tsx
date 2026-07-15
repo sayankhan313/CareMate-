@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   Alert,
@@ -16,6 +16,18 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  FileText,
+  Pill,
+  Send,
+  Stethoscope,
+} from "lucide-react-native";
 
 import type { MedicineDraft, RootStackParamList } from "../../types/navigation";
 
@@ -42,7 +54,25 @@ type DropdownOption = {
   value: MedicineFrequency;
 };
 
-const HEADER_BLUE = "#2563EB";
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
 
 const frequencyOptions: DropdownOption[] = [
   { label: "Once daily", value: "ONCE_DAILY" },
@@ -235,72 +265,93 @@ export const AddMedicineScreen = ({
       return;
     }
 
+    const updatedMedicineDraft: MedicineDraft = {
+      name: trimmedName,
+      dose: trimmedDose,
+      frequency: formData.frequency,
+      timeOfDay: formData.selectedTimes[0],
+      selectedTimes: formData.selectedTimes,
+      startDate: trimmedStartDate,
+      endDate: trimmedEndDate || undefined,
+      instructions: trimmedInstructions || undefined,
+      prescriptionPattern: medicineDraft?.prescriptionPattern ?? null,
+      sendToDoctorForReview: formData.sendToDoctorForReview,
+    };
+
+    if (isEditDraftMode) {
+      navigation.replace("ConfirmReminder", {
+        medicineDraft: updatedMedicineDraft,
+      });
+      return;
+    }
+
     navigation.navigate("ConfirmReminder", {
-      medicineDraft: {
-        name: trimmedName,
-        dose: trimmedDose,
-        frequency: formData.frequency,
-        timeOfDay: formData.selectedTimes[0],
-        selectedTimes: formData.selectedTimes,
-        startDate: trimmedStartDate,
-        endDate: trimmedEndDate || undefined,
-        instructions: trimmedInstructions || undefined,
-        prescriptionPattern: medicineDraft?.prescriptionPattern ?? null,
-        sendToDoctorForReview: formData.sendToDoctorForReview,
-      },
+      medicineDraft: updatedMedicineDraft,
     });
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={HEADER_BLUE} barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <View style={styles.header}>
+        <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
             activeOpacity={0.85}
             disabled={isSubmitting}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.6} />
           </TouchableOpacity>
 
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>
               {isEditDraftMode ? "Edit Medicine" : "Add Medicine"}
             </Text>
-            <Text style={styles.headerSubtitle}>
+
+            <Text style={styles.appBarSubtitle}>
               {isEditDraftMode
-                ? "Update scanned reminder details"
-                : "Create a reminder schedule"}
+                ? "Review scanned reminder details"
+                : "Create a medicine reminder"}
             </Text>
           </View>
         </View>
 
         <ScrollView
           style={styles.content}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(150, insets.bottom + 140),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           {isEditDraftMode ? (
-            <View style={styles.prefillNoticeCard}>
+            <View style={styles.prefillNotice}>
               <View style={styles.prefillIconCircle}>
-                <Text style={styles.prefillIcon}>✓</Text>
+                <CheckCircle2 size={20} color={SUCCESS} strokeWidth={2.8} />
               </View>
 
               <View style={styles.prefillTextBlock}>
                 <Text style={styles.prefillTitle}>Auto-filled from scan</Text>
                 <Text style={styles.prefillSubtitle}>
-                  Review and edit the details before confirming the reminder.
+                  Check the detected details before confirming.
                 </Text>
               </View>
             </View>
           ) : null}
 
-          <View style={styles.formCard}>
-            <Text style={styles.label}>Medicine Name</Text>
+          <View style={styles.formSection}>
+            <SectionHeader
+              icon={<Pill size={20} color={PRIMARY} strokeWidth={2.6} />}
+              title="Medicine details"
+              subtitle="Name and dose information"
+            />
+
+            <FieldLabel label="Medicine name" />
 
             <Controller
               control={control}
@@ -318,7 +369,7 @@ export const AddMedicineScreen = ({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="e.g., Metformin"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#A8B0C2"
                   style={[
                     styles.input,
                     errors.name ? styles.inputError : undefined,
@@ -331,7 +382,7 @@ export const AddMedicineScreen = ({
               <Text style={styles.errorText}>{errors.name.message}</Text>
             ) : null}
 
-            <Text style={styles.label}>Dose</Text>
+            <FieldLabel label="Dose" />
 
             <Controller
               control={control}
@@ -345,7 +396,7 @@ export const AddMedicineScreen = ({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="e.g., 500mg"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#A8B0C2"
                   style={[
                     styles.input,
                     errors.dose ? styles.inputError : undefined,
@@ -357,8 +408,16 @@ export const AddMedicineScreen = ({
             {errors.dose ? (
               <Text style={styles.errorText}>{errors.dose.message}</Text>
             ) : null}
+          </View>
 
-            <Text style={styles.label}>Frequency</Text>
+          <View style={styles.formSection}>
+            <SectionHeader
+              icon={<Clock3 size={20} color={WARNING} strokeWidth={2.6} />}
+              title="Schedule"
+              subtitle="Frequency and reminder time"
+            />
+
+            <FieldLabel label="Frequency" />
 
             <TouchableOpacity
               style={styles.selectBox}
@@ -367,10 +426,16 @@ export const AddMedicineScreen = ({
               }
               activeOpacity={0.85}
             >
-              <Text style={styles.selectText}>{selectedFrequencyLabel}</Text>
-              <Text style={styles.selectIcon}>
-                {isFrequencyDropdownOpen ? "⌃" : "⌄"}
-              </Text>
+              <View>
+                <Text style={styles.selectSmallLabel}>Selected</Text>
+                <Text style={styles.selectText}>{selectedFrequencyLabel}</Text>
+              </View>
+
+              {isFrequencyDropdownOpen ? (
+                <ChevronUp size={22} color={PRIMARY} strokeWidth={2.7} />
+              ) : (
+                <ChevronDown size={22} color={MUTED} strokeWidth={2.7} />
+              )}
             </TouchableOpacity>
 
             {isFrequencyDropdownOpen ? (
@@ -398,13 +463,21 @@ export const AddMedicineScreen = ({
                       >
                         {option.label}
                       </Text>
+
+                      {isSelected ? (
+                        <CheckCircle2
+                          size={18}
+                          color={PRIMARY}
+                          strokeWidth={2.7}
+                        />
+                      ) : null}
                     </TouchableOpacity>
                   );
                 })}
               </View>
             ) : null}
 
-            <Text style={styles.label}>Reminder Time</Text>
+            <FieldLabel label="Reminder time" />
 
             <View style={styles.timeGrid}>
               {timeOptions.map((option) => {
@@ -414,16 +487,22 @@ export const AddMedicineScreen = ({
                   <TouchableOpacity
                     key={option.value}
                     style={[
-                      styles.timeButton,
-                      isSelected ? styles.timeButtonSelected : undefined,
+                      styles.timeChip,
+                      isSelected ? styles.timeChipSelected : undefined,
                     ]}
                     onPress={() => toggleTime(option.value)}
                     activeOpacity={0.85}
                   >
+                    <Clock3
+                      size={15}
+                      color={isSelected ? PRIMARY_DARK : MUTED}
+                      strokeWidth={2.5}
+                    />
+
                     <Text
                       style={[
-                        styles.timeButtonText,
-                        isSelected ? styles.timeButtonTextSelected : undefined,
+                        styles.timeChipText,
+                        isSelected ? styles.timeChipTextSelected : undefined,
                       ]}
                     >
                       {option.label}
@@ -433,15 +512,22 @@ export const AddMedicineScreen = ({
               })}
             </View>
 
-            <Text style={styles.helperText}>
-              {getTimeRequirementText(frequency)}
-            </Text>
+            <View style={styles.helperBox}>
+              <Text style={styles.helperText}>{getTimeRequirementText(frequency)}</Text>
+              <Text style={styles.selectedTimeText}>
+                Selected: {selectedTimes.join(", ")}
+              </Text>
+            </View>
+          </View>
 
-            <Text style={styles.selectedTimeText}>
-              Selected: {selectedTimes.join(", ")}
-            </Text>
+          <View style={styles.formSection}>
+            <SectionHeader
+              icon={<CalendarDays size={20} color={SUCCESS} strokeWidth={2.6} />}
+              title="Dates"
+              subtitle="Start and optional end date"
+            />
 
-            <Text style={styles.label}>Start Date</Text>
+            <FieldLabel label="Start date" />
 
             <Controller
               control={control}
@@ -461,7 +547,7 @@ export const AddMedicineScreen = ({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#A8B0C2"
                   style={[
                     styles.input,
                     errors.startDate ? styles.inputError : undefined,
@@ -474,7 +560,7 @@ export const AddMedicineScreen = ({
               <Text style={styles.errorText}>{errors.startDate.message}</Text>
             ) : null}
 
-            <Text style={styles.label}>End Date (Optional)</Text>
+            <FieldLabel label="End date optional" />
 
             <Controller
               control={control}
@@ -497,7 +583,7 @@ export const AddMedicineScreen = ({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#A8B0C2"
                   style={[
                     styles.input,
                     errors.endDate ? styles.inputError : undefined,
@@ -509,8 +595,14 @@ export const AddMedicineScreen = ({
             {errors.endDate ? (
               <Text style={styles.errorText}>{errors.endDate.message}</Text>
             ) : null}
+          </View>
 
-            <Text style={styles.label}>Instructions (Optional)</Text>
+          <View style={styles.formSection}>
+            <SectionHeader
+              icon={<FileText size={20} color={PRIMARY} strokeWidth={2.6} />}
+              title="Instructions"
+              subtitle="Optional note for this medicine"
+            />
 
             <Controller
               control={control}
@@ -521,7 +613,7 @@ export const AddMedicineScreen = ({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="e.g., Take after breakfast"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#A8B0C2"
                   style={[styles.input, styles.multilineInput]}
                   multiline
                   textAlignVertical="top"
@@ -530,11 +622,15 @@ export const AddMedicineScreen = ({
             />
           </View>
 
-          <View style={styles.reviewCard}>
+          <View style={styles.reviewSection}>
+            <View style={styles.reviewIconCircle}>
+              <Stethoscope size={22} color={PRIMARY} strokeWidth={2.6} />
+            </View>
+
             <View style={styles.reviewTextBlock}>
-              <Text style={styles.reviewTitle}>Send to doctor for review</Text>
+              <Text style={styles.reviewTitle}>Doctor review</Text>
               <Text style={styles.reviewSubtitle}>
-                Your doctor can review this reminder later.
+                Send this reminder to your doctor for later review.
               </Text>
             </View>
 
@@ -546,10 +642,10 @@ export const AddMedicineScreen = ({
                   value={field.value}
                   onValueChange={field.onChange}
                   trackColor={{
-                    false: "#D1D5DB",
-                    true: "#BFDBFE",
+                    false: "#DDE3EF",
+                    true: PRIMARY_LIGHT,
                   }}
-                  thumbColor={field.value ? HEADER_BLUE : "#F9FAFB"}
+                  thumbColor={field.value ? PRIMARY : SURFACE}
                 />
               )}
             />
@@ -573,8 +669,9 @@ export const AddMedicineScreen = ({
             activeOpacity={0.85}
             disabled={isSubmitting}
           >
+            <Send size={19} color={SURFACE} strokeWidth={2.6} />
             <Text style={styles.primaryButtonText}>
-              {isEditDraftMode ? "Update Reminder Details" : "Create Reminder"}
+              {isEditDraftMode ? "Update reminder details" : "Create reminder"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -583,326 +680,353 @@ export const AddMedicineScreen = ({
   );
 };
 
+const SectionHeader = ({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+}) => {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIcon}>{icon}</View>
+
+      <View style={styles.sectionTextBlock}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+      </View>
+    </View>
+  );
+};
+
+const FieldLabel = ({ label }: { label: string }) => {
+  return <Text style={styles.label}>{label}</Text>;
+};
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: HEADER_BLUE,
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: BACKGROUND,
   },
-  header: {
-    backgroundColor: HEADER_BLUE,
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 28,
+  appBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: BACKGROUND,
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 18,
+    marginRight: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  backButtonText: {
-    color: "#FFFFFF",
-    fontSize: 42,
-    fontWeight: "300",
-    marginTop: -4,
-  },
-  headerTextBlock: {
+  appBarTextBlock: {
     flex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 30,
+  appBarTitle: {
+    color: TEXT,
+    fontSize: 25,
     fontWeight: "900",
-    marginBottom: 6,
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
-    fontSize: 16,
-    fontWeight: "600",
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 3,
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    padding: 22,
-    paddingBottom: 120,
+    paddingHorizontal: 16,
+    paddingTop: 6,
   },
-  prefillNoticeCard: {
-    backgroundColor: "#ECFDF5",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
+  prefillNotice: {
+    backgroundColor: SUCCESS_LIGHT,
+    borderRadius: 18,
+    padding: 14,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#D8F1E6",
   },
   prefillIconCircle: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: "#10B981",
+    borderRadius: 14,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
-  },
-  prefillIcon: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "900",
+    marginRight: 11,
   },
   prefillTextBlock: {
     flex: 1,
   },
   prefillTitle: {
-    color: "#047857",
-    fontSize: 15,
+    color: "#167A58",
+    fontSize: 14,
     fontWeight: "900",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   prefillSubtitle: {
-    color: "#047857",
+    color: "#167A58",
     fontSize: 12,
     fontWeight: "700",
-    lineHeight: 18,
+    lineHeight: 17,
   },
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 20,
+  formSection: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderColor: BORDER,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  sectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  sectionTextBlock: {
+    flex: 1,
+  },
+  sectionTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+  },
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
   },
   label: {
-    color: "#334155",
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 13,
     fontWeight: "900",
-    marginBottom: 10,
-    marginTop: 16,
+    marginBottom: 8,
+    marginTop: 14,
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SOFT_PANEL,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 15,
-    color: "#111827",
-    fontSize: 17,
-    fontWeight: "600",
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: "700",
   },
   inputError: {
-    borderColor: "#DC2626",
+    borderColor: DANGER,
+    backgroundColor: DANGER_LIGHT,
   },
   errorText: {
-    color: "#DC2626",
+    color: "#B42318",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     marginTop: 7,
   },
   multilineInput: {
-    minHeight: 92,
+    minHeight: 94,
+    lineHeight: 21,
   },
   selectBox: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SOFT_PANEL,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+  },
+  selectSmallLabel: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 3,
   },
   selectText: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  selectIcon: {
-    color: "#94A3B8",
-    fontSize: 24,
+    color: TEXT,
+    fontSize: 16,
     fontWeight: "900",
   },
   dropdownMenu: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SOFT_PANEL,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
+    borderColor: BORDER,
+    borderRadius: 16,
     marginTop: 8,
     overflow: "hidden",
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   dropdownOption: {
-    paddingHorizontal: 18,
-    paddingVertical: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: BORDER,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   dropdownOptionSelected: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: PRIMARY_LIGHT,
   },
   dropdownOptionText: {
-    color: "#334155",
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "800",
   },
   dropdownOptionTextSelected: {
-    color: HEADER_BLUE,
+    color: PRIMARY_DARK,
+    fontWeight: "900",
   },
   timeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 4,
-  },
-  timeButton: {
-    width: "47%",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginRight: "3%",
-    marginBottom: 12,
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  timeButtonSelected: {
-    backgroundColor: "#EFF6FF",
-    borderColor: HEADER_BLUE,
-  },
-  timeButtonText: {
-    color: "#64748B",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  timeButtonTextSelected: {
-    color: HEADER_BLUE,
-  },
-  helperText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 19,
     marginTop: 2,
   },
-  selectedTimeText: {
-    color: HEADER_BLUE,
+  timeChip: {
+    width: "31.5%",
+    backgroundColor: SOFT_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: "1.8%",
+    marginBottom: 9,
+  },
+  timeChipSelected: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderColor: PRIMARY,
+  },
+  timeChipText: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "900",
-    marginTop: 6,
+    marginTop: 4,
   },
-  reviewCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 18,
-    marginTop: 18,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+  timeChipTextSelected: {
+    color: PRIMARY_DARK,
+  },
+  helperBox: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 15,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    marginTop: 4,
+  },
+  helperText: {
+    color: "#A85A13",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  selectedTimeText: {
+    color: "#A85A13",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  reviewSection: {
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  reviewIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 17,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
   reviewTextBlock: {
     flex: 1,
-    paddingRight: 16,
+    paddingRight: 12,
   },
   reviewTitle: {
-    color: "#111827",
-    fontSize: 17,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
-    marginBottom: 6,
+    marginBottom: 3,
   },
   reviewSubtitle: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
   },
   footer: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 22,
-    paddingTop: 16,
+    backgroundColor: "rgba(238,241,250,0.96)",
+    paddingHorizontal: 20,
+    paddingTop: 13,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: BORDER,
   },
   primaryButton: {
-    backgroundColor: HEADER_BLUE,
-    borderRadius: 18,
-    paddingVertical: 17,
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+    paddingVertical: 16,
     alignItems: "center",
-    shadowColor: HEADER_BLUE,
+    justifyContent: "center",
+    flexDirection: "row",
+    shadowColor: PRIMARY_DARK,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 5,
     },
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    elevation: 5,
+    elevation: 3,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 17,
+    color: SURFACE,
+    fontSize: 16,
     fontWeight: "900",
+    marginLeft: 8,
   },
   disabledButton: {
     opacity: 0.65,

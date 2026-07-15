@@ -1,6 +1,16 @@
-import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Alert,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   CheckCircle2,
   Circle,
@@ -26,6 +36,21 @@ type RefillMedicine = {
   doctorName: string;
   remainingDays: number;
 };
+
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const WARNING = "#F6A545";
+const WARNING_LIGHT = "#FFF3E2";
 
 const orderSteps: OrderStep[] = [
   {
@@ -81,20 +106,15 @@ export const PatientOrdersScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor="#2563EB" barStyle="light-content" />
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <LinearGradient
-          colors={["#3B82F6", "#2563EB"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <Text style={styles.headerTitle}>Pharmacy Orders</Text>
-          <Text style={styles.headerSubtitle}>
+        <View style={styles.appBar}>
+          <Text style={styles.appBarTitle}>Pharmacy Orders</Text>
+          <Text style={styles.appBarSubtitle}>
             Track prescriptions and request refills
           </Text>
-        </LinearGradient>
+        </View>
 
         <ScrollView
           style={styles.content}
@@ -109,8 +129,14 @@ export const PatientOrdersScreen = () => {
           <View style={styles.orderCard}>
             <View style={styles.orderTopRow}>
               <View style={styles.orderIdRow}>
-                <PackageCheck size={18} color="#64748B" strokeWidth={2.5} />
-                <Text style={styles.orderId}>#ORD-1024</Text>
+                <View style={styles.orderIconCircle}>
+                  <PackageCheck size={18} color={PRIMARY} strokeWidth={2.5} />
+                </View>
+
+                <View>
+                  <Text style={styles.orderLabel}>Active order</Text>
+                  <Text style={styles.orderId}>#ORD-1024</Text>
+                </View>
               </View>
 
               <View style={styles.statusPill}>
@@ -120,7 +146,7 @@ export const PatientOrdersScreen = () => {
 
             <View style={styles.medicineMiniCard}>
               <View style={styles.medicineIconCircle}>
-                <Pill size={18} color="#2563EB" strokeWidth={2.5} />
+                <Pill size={20} color={PRIMARY} strokeWidth={2.5} />
               </View>
 
               <View style={styles.medicineTextBlock}>
@@ -130,8 +156,10 @@ export const PatientOrdersScreen = () => {
             </View>
 
             <View style={styles.collectionBox}>
-              <Clock3 size={16} color="#2563EB" strokeWidth={2.5} />
-              <Text style={styles.collectionText}>Medicine expected after 5 PM</Text>
+              <Clock3 size={16} color={PRIMARY} strokeWidth={2.5} />
+              <Text style={styles.collectionText}>
+                Medicine expected after 5 PM
+              </Text>
             </View>
           </View>
 
@@ -160,6 +188,7 @@ export const PatientOrdersScreen = () => {
                       >
                         {step.title}
                       </Text>
+
                       <Text
                         style={[
                           styles.timelineDescription,
@@ -182,7 +211,7 @@ export const PatientOrdersScreen = () => {
           </View>
 
           <View style={styles.infoBox}>
-            <RefreshCcw size={16} color="#2563EB" strokeWidth={2.4} />
+            <RefreshCcw size={16} color={PRIMARY} strokeWidth={2.4} />
             <Text style={styles.infoBoxText}>
               Only doctor-confirmed medicines can be requested.
             </Text>
@@ -192,17 +221,20 @@ export const PatientOrdersScreen = () => {
             <View key={medicine.id} style={styles.refillCard}>
               <View style={styles.refillTopRow}>
                 <View style={styles.refillIconCircle}>
-                  <Pill size={18} color="#2563EB" strokeWidth={2.5} />
+                  <Pill size={18} color={PRIMARY} strokeWidth={2.5} />
                 </View>
 
                 <View style={styles.refillTextBlock}>
-                  <Text style={styles.refillMedicineName}>{medicine.name}</Text>
+                  <Text style={styles.refillMedicineName}>
+                    {medicine.name}
+                  </Text>
+
                   <Text style={styles.refillDoctorText}>
                     Last prescribed by {medicine.doctorName}
                   </Text>
 
                   <View style={styles.daysRow}>
-                    <Clock3 size={14} color="#F59E0B" strokeWidth={2.5} />
+                    <Clock3 size={14} color={WARNING} strokeWidth={2.5} />
                     <Text style={styles.daysText}>
                       Remaining days: {medicine.remainingDays}
                     </Text>
@@ -215,13 +247,18 @@ export const PatientOrdersScreen = () => {
                 activeOpacity={0.87}
                 onPress={() => handleRequestFulfilment(medicine.name)}
               >
-                <Text style={styles.requestButtonText}>Request Fulfilment</Text>
+                <Text style={styles.requestButtonText}>
+                  Request Fulfilment
+                </Text>
               </TouchableOpacity>
             </View>
           ))}
 
           <View style={styles.demoNotice}>
-            <Truck size={18} color="#64748B" strokeWidth={2.4} />
+            <View style={styles.demoNoticeIconCircle}>
+              <Truck size={18} color={PRIMARY} strokeWidth={2.4} />
+            </View>
+
             <Text style={styles.demoNoticeText}>
               This is a demo pharmacy order screen. Real pharmacy integration can
               be added later with pharmacy accounts, stock status, and collection
@@ -238,7 +275,7 @@ const StepIcon = ({ status }: { status: OrderStepStatus }) => {
   if (status === "COMPLETED") {
     return (
       <View style={[styles.stepCircle, styles.stepCompleted]}>
-        <CheckCircle2 size={19} color="#FFFFFF" strokeWidth={2.7} />
+        <CheckCircle2 size={19} color={SURFACE} strokeWidth={2.7} />
       </View>
     );
   }
@@ -246,14 +283,14 @@ const StepIcon = ({ status }: { status: OrderStepStatus }) => {
   if (status === "ACTIVE") {
     return (
       <View style={[styles.stepCircle, styles.stepActive]}>
-        <Clock3 size={17} color="#FFFFFF" strokeWidth={2.7} />
+        <Clock3 size={17} color={SURFACE} strokeWidth={2.7} />
       </View>
     );
   }
 
   return (
     <View style={[styles.stepCircle, styles.stepPending]}>
-      <Circle size={15} color="#94A3B8" strokeWidth={2.7} />
+      <Circle size={15} color="#B7C1D4" strokeWidth={2.7} />
     </View>
   );
 };
@@ -261,51 +298,43 @@ const StepIcon = ({ status }: { status: OrderStepStatus }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: BACKGROUND,
   },
-  header: {
+  appBar: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 28,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
-  headerTitle: {
-    color: "#FFFFFF",
+  appBarTitle: {
+    color: TEXT,
     fontSize: 27,
     fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    color: "#DBEAFE",
+  appBarSubtitle: {
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 5,
+    marginTop: 3,
   },
   content: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 18,
+    paddingTop: 4,
   },
   orderCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    backgroundColor: SURFACE,
+    borderRadius: 24,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     marginBottom: 14,
-    shadowColor: "#000000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
   },
   orderTopRow: {
     flexDirection: "row",
@@ -315,21 +344,39 @@ const styles = StyleSheet.create({
   orderIdRow: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
+    paddingRight: 10,
+  },
+  orderIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  orderLabel: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 2,
   },
   orderId: {
-    color: "#111827",
-    fontSize: 14,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "900",
-    marginLeft: 7,
   },
   statusPill: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: WARNING_LIGHT,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
   },
   statusPillText: {
-    color: "#D97706",
+    color: "#A85A13",
     fontSize: 11,
     fontWeight: "900",
   },
@@ -337,12 +384,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 16,
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 18,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   medicineIconCircle: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: "#EFF6FF",
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -351,51 +403,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   medicineName: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 15,
     fontWeight: "900",
   },
   pharmacyName: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     marginTop: 3,
   },
   collectionBox: {
     marginTop: 14,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: PRIMARY_LIGHT,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
-    borderRadius: 13,
+    borderColor: "#C9D8FF",
+    borderRadius: 15,
     paddingVertical: 11,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   collectionText: {
-    color: "#2563EB",
+    color: PRIMARY_DARK,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
     marginLeft: 8,
+    flex: 1,
   },
   sectionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    backgroundColor: SURFACE,
+    borderRadius: 24,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     marginBottom: 16,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
   },
   sectionTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 16,
     fontWeight: "900",
     marginBottom: 14,
@@ -414,24 +459,26 @@ const styles = StyleSheet.create({
   timelineLine: {
     width: 2,
     flex: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DDE6F5",
     marginTop: 4,
   },
   stepCircle: {
-    width: 27,
-    height: 27,
-    borderRadius: 13.5,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   stepCompleted: {
-    backgroundColor: "#10B981",
+    backgroundColor: SUCCESS,
   },
   stepActive: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: WARNING,
   },
   stepPending: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: SOFT_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   timelineTextBlock: {
     flex: 1,
@@ -439,35 +486,35 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   timelineTitle: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "900",
   },
   timelineTitlePending: {
-    color: "#94A3B8",
+    color: "#A7B0C2",
   },
   timelineDescription: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     marginTop: 3,
   },
   timelineDescriptionPending: {
-    color: "#CBD5E1",
+    color: "#B7C1D4",
   },
   refillHeaderRow: {
     marginBottom: 10,
   },
   sectionHeading: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 17,
     fontWeight: "900",
   },
   infoBox: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: PRIMARY_LIGHT,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
-    borderRadius: 14,
+    borderColor: "#C9D8FF",
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 13,
     flexDirection: "row",
@@ -475,37 +522,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   infoBoxText: {
-    color: "#2563EB",
+    color: PRIMARY_DARK,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
     marginLeft: 8,
     flex: 1,
   },
   refillCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: SURFACE,
+    borderRadius: 22,
     padding: 15,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     marginBottom: 12,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 7,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    elevation: 2,
   },
   refillTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
   refillIconCircle: {
-    width: 39,
-    height: 39,
-    borderRadius: 19.5,
-    backgroundColor: "#EFF6FF",
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -514,12 +553,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   refillMedicineName: {
-    color: "#111827",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "900",
   },
   refillDoctorText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     marginTop: 4,
@@ -530,39 +569,47 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   daysText: {
-    color: "#F59E0B",
+    color: "#A85A13",
     fontSize: 12,
     fontWeight: "900",
     marginLeft: 5,
   },
   requestButton: {
-    backgroundColor: "#2563EB",
-    borderRadius: 13,
+    backgroundColor: PRIMARY,
+    borderRadius: 15,
     paddingVertical: 13,
     alignItems: "center",
     marginTop: 14,
   },
   requestButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 14,
     fontWeight: "900",
   },
   demoNotice: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: SURFACE,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
     marginTop: 4,
   },
+  demoNoticeIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: PRIMARY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
   demoNoticeText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 18,
-    marginLeft: 9,
     flex: 1,
   },
 });

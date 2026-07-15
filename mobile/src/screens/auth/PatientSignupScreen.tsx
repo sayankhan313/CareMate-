@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -41,6 +42,20 @@ type PatientSignupScreenProps = NativeStackScreenProps<
   RootStackParamList,
   "PatientSignup"
 >;
+
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PRIMARY = "#5B86E5";
+const PRIMARY_DARK = "#3F6FD0";
+const PRIMARY_LIGHT = "#EEF4FF";
+
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
 
 const genderOptions: GenderOption[] = [
   {
@@ -128,6 +143,8 @@ export const PatientSignupScreen = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+
       <ScrollView
         style={styles.screen}
         contentContainerStyle={[
@@ -180,7 +197,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="Enter your full name"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -210,7 +227,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="you@example.com"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -238,7 +255,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="+44 7000 000000"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -269,7 +286,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="Create a secure password"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -296,7 +313,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="dd/mm/yyyy"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -368,7 +385,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="List any medical conditions"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -390,7 +407,7 @@ export const PatientSignupScreen = ({
             render={({ field }) => (
               <TextInput
                 placeholder="Name and phone number"
-                placeholderTextColor="#8A94A6"
+                placeholderTextColor="#A8B0C2"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
@@ -458,15 +475,15 @@ export const PatientSignupScreen = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#EEF5FC",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#EEF5FC",
+    backgroundColor: BACKGROUND,
   },
   container: {},
   header: {
-    backgroundColor: "#2563EB",
+    backgroundColor: BACKGROUND,
     paddingHorizontal: 24,
     paddingTop: 56,
     paddingBottom: 66,
@@ -476,124 +493,132 @@ const styles = StyleSheet.create({
   headerTextBlock: {
     flex: 1,
   },
-  backIconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  backIcon: {
-    color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: "400",
-  },
+ backIconButton: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: SURFACE,
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 13,
+  borderWidth: 1,
+  borderColor: BORDER,
+},
+backIcon: {
+  color: TEXT,
+  fontSize: 24,
+  fontWeight: "900",
+  lineHeight: 26,
+  textAlign: "center",
+  includeFontPadding: false,
+  marginTop: -1,
+},
   headerTitle: {
-    color: "#FFFFFF",
+    color: TEXT,
     fontSize: 27,
     fontWeight: "900",
     marginBottom: 8,
   },
   headerSubtitle: {
-    color: "#EAF2FF",
+    color: MUTED,
     fontSize: 17,
     fontWeight: "600",
   },
   statusCard: {
     marginHorizontal: 30,
     marginTop: -34,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 15,
     borderWidth: 1,
-    borderColor: "#DDE7F3",
+    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#0F172A",
+    shadowColor: "#1A2B5A",
     shadowOffset: {
       width: 0,
       height: 5,
     },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 3,
   },
   statusIconCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#10B981",
+    borderColor: SUCCESS,
+    backgroundColor: SUCCESS_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   statusIcon: {
-    color: "#10B981",
+    color: SUCCESS,
     fontSize: 15,
     fontWeight: "900",
   },
   statusText: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 14,
     fontWeight: "600",
     flex: 1,
   },
   statusActive: {
-    color: "#10B981",
+    color: SUCCESS,
     fontWeight: "900",
   },
   formCard: {
     marginHorizontal: 30,
     marginTop: 22,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SURFACE,
     borderRadius: 20,
     paddingHorizontal: 28,
     paddingTop: 28,
     paddingBottom: 22,
     borderWidth: 1,
-    borderColor: "#DDE7F3",
-    shadowColor: "#0F172A",
+    borderColor: BORDER,
+    shadowColor: "#1A2B5A",
     shadowOffset: {
       width: 0,
       height: 6,
     },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 3,
   },
   label: {
-    color: "#60728E",
+    color: TEXT,
     fontSize: 14,
     fontWeight: "800",
     marginBottom: 10,
   },
   optionalText: {
-    color: "#94A3B8",
+    color: MUTED,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#DDE7F3",
+    borderColor: BORDER,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: "#0F172A",
-    backgroundColor: "#FFFFFF",
+    color: TEXT,
+    backgroundColor: SOFT_PANEL,
     marginBottom: 20,
   },
   textArea: {
     borderWidth: 1,
-    borderColor: "#DDE7F3",
+    borderColor: BORDER,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingTop: 14,
     minHeight: 100,
     fontSize: 16,
-    color: "#0F172A",
-    backgroundColor: "#FFFFFF",
+    color: TEXT,
+    backgroundColor: SOFT_PANEL,
     marginBottom: 28,
   },
   genderGrid: {
@@ -604,13 +629,13 @@ const styles = StyleSheet.create({
   genderOption: {
     width: "48%",
     borderWidth: 1,
-    borderColor: "#DDE7F3",
+    borderColor: BORDER,
     borderRadius: 14,
     paddingVertical: 13,
     paddingHorizontal: 10,
     marginBottom: 10,
     marginRight: "4%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: SOFT_PANEL,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -618,23 +643,24 @@ const styles = StyleSheet.create({
     marginRight: 0,
   },
   genderOptionSelected: {
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
+    borderColor: PRIMARY,
+    backgroundColor: PRIMARY_LIGHT,
   },
   disabledGenderOption: {
     opacity: 0.7,
   },
   genderOptionText: {
-    color: "#60728E",
+    color: MUTED,
     fontSize: 13,
     fontWeight: "800",
     textAlign: "center",
   },
   genderOptionTextSelected: {
-    color: "#2563EB",
+    color: PRIMARY_DARK,
   },
   inputError: {
     borderColor: colors.danger,
+    backgroundColor: "#FFEDEE",
   },
   errorText: {
     color: colors.danger,
@@ -645,10 +671,10 @@ const styles = StyleSheet.create({
   infoCard: {
     marginHorizontal: 30,
     marginTop: 22,
-    backgroundColor: "#EAF4FF",
+    backgroundColor: PRIMARY_LIGHT,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#CFE3FF",
+    borderColor: "#C9D8FF",
     paddingHorizontal: 20,
     paddingVertical: 20,
     flexDirection: "row",
@@ -659,20 +685,21 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#2563EB",
+    borderColor: PRIMARY,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
     marginTop: 1,
   },
   infoIcon: {
-    color: "#2563EB",
+    color: PRIMARY,
     fontSize: 12,
     fontWeight: "900",
   },
   infoText: {
     flex: 1,
-    color: "#1D4ED8",
+    color: PRIMARY_DARK,
     fontSize: 14,
     lineHeight: 21,
     fontWeight: "600",
@@ -680,7 +707,7 @@ const styles = StyleSheet.create({
   createButton: {
     marginHorizontal: 30,
     marginTop: 22,
-    backgroundColor: "#2563EB",
+    backgroundColor: PRIMARY,
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -689,7 +716,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   createButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 17,
     fontWeight: "900",
   },
@@ -698,12 +725,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   loginText: {
-    color: "#60728E",
+    color: MUTED,
     fontSize: 15,
     fontWeight: "600",
   },
   loginLink: {
-    color: "#2563EB",
+    color: PRIMARY_DARK,
     fontSize: 17,
     fontWeight: "900",
   },
