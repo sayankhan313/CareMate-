@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -124,23 +126,34 @@ type DashboardApiResponse = {
   data: DashboardData;
 };
 
-const BACKGROUND = "#EEF1FA";
-const SURFACE = "#FFFFFF";
-const TEXT = "#111936";
-const MUTED = "#7A8194";
-const BORDER = "#E4E8F2";
-const SOFT_PANEL = "#F7F9FF";
 
-const PRIMARY = "#5B86E5";
-const PRIMARY_DARK = "#3F6FD0";
-const SUCCESS = "#42B883";
-const SUCCESS_LIGHT = "#EAF8F2";
-const WARNING = "#F6A545";
-const WARNING_LIGHT = "#FFF3E2";
-const DANGER = "#EF4D56";
-const DANGER_LIGHT = "#FFEDEE";
+const BACKGROUND = "#F2F3F8";
+const SURFACE = "#FFFFFF"; 
+const SURFACE_VARIANT = "#E7E9F2"; 
+const TEXT = "#1B1D2A"; 
+const MUTED = "#5F6270"; 
+const SOFT_PANEL = "#F3F4FA";
+
+const PRIMARY = "#4C6FE0";
+const PRIMARY_CONTAINER = "#E1E7FF"; 
+const ON_PRIMARY_CONTAINER = "#0C2A8C";
+
+const SUCCESS = "#3A9D75";
+const SUCCESS_CONTAINER = "#DBF3E7";
+const ON_SUCCESS_CONTAINER = "#0F5C3C";
+
+const WARNING = "#C77A1F";
+const WARNING_CONTAINER = "#FBE7CD";
+const ON_WARNING_CONTAINER = "#7A4708";
+
+const DANGER = "#C6404A";
+const DANGER_CONTAINER = "#FBDADC";
+const ON_DANGER_CONTAINER = "#8C1D24";
 
 const DASHBOARD_AUTO_REFRESH_MS = 30_000;
+
+
+const rippleFor = (color: string) => ({ color, borderless: false });
 
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") {
@@ -175,8 +188,8 @@ const getGreetingText = () => {
 const getStatusTone = (status: DashboardStatus) => {
   if (status === "STABLE") {
     return {
-      background: SUCCESS_LIGHT,
-      text: "#167A58",
+      background: SUCCESS_CONTAINER,
+      text: ON_SUCCESS_CONTAINER,
       dot: SUCCESS,
       label: "On track",
     };
@@ -184,8 +197,8 @@ const getStatusTone = (status: DashboardStatus) => {
 
   if (status === "WARNING") {
     return {
-      background: WARNING_LIGHT,
-      text: "#A85A13",
+      background: WARNING_CONTAINER,
+      text: ON_WARNING_CONTAINER,
       dot: WARNING,
       label: "Needs attention",
     };
@@ -193,16 +206,16 @@ const getStatusTone = (status: DashboardStatus) => {
 
   if (status === "CRITICAL") {
     return {
-      background: DANGER_LIGHT,
-      text: "#B42318",
+      background: DANGER_CONTAINER,
+      text: ON_DANGER_CONTAINER,
       dot: DANGER,
       label: "Critical",
     };
   }
 
   return {
-    background: "#EEF4FF",
-    text: PRIMARY_DARK,
+    background: PRIMARY_CONTAINER,
+    text: ON_PRIMARY_CONTAINER,
     dot: PRIMARY,
     label: "No data",
   };
@@ -677,34 +690,34 @@ export const PatientDashboardScreen = ({
           </View>
 
           <View style={styles.topActions}>
-            <TouchableOpacity
-              style={styles.roundButton}
-              activeOpacity={0.85}
+            <Pressable
+              style={styles.iconButton}
+              android_ripple={rippleFor(SURFACE_VARIANT)}
               onPress={() => showComingSoon("Search")}
             >
-              <Search size={19} color={TEXT} strokeWidth={2.5} />
-            </TouchableOpacity>
+              <Search size={22} color={TEXT} strokeWidth={2} />
+            </Pressable>
 
-            <TouchableOpacity
-              style={styles.roundButton}
-              activeOpacity={0.85}
+            <Pressable
+              style={styles.iconButton}
+              android_ripple={rippleFor(SURFACE_VARIANT)}
               onPress={() => showComingSoon("Notifications")}
             >
-              <Bell size={19} color={TEXT} strokeWidth={2.5} />
+              <Bell size={22} color={TEXT} strokeWidth={2} />
               <View style={styles.notificationDot} />
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable
               style={styles.avatar}
-              activeOpacity={0.85}
+              android_ripple={rippleFor("#3457C6")}
               onPress={openPatientProfileScreen}
             >
               {patientInitial ? (
                 <Text style={styles.avatarText}>{patientInitial}</Text>
               ) : (
-                <UserRound size={19} color={PRIMARY} />
+                <UserRound size={19} color={SURFACE} />
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -739,28 +752,28 @@ export const PatientDashboardScreen = ({
           {!isLoading && errorMessage ? (
             <View style={styles.statePanel}>
               <View style={styles.errorIconCircle}>
-                <AlertCircle size={24} color={DANGER} strokeWidth={2.5} />
+                <AlertCircle size={24} color={DANGER} strokeWidth={2} />
               </View>
 
               <Text style={styles.errorTitle}>Dashboard unavailable</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
-              <TouchableOpacity
+              <Pressable
                 style={styles.retryButton}
-                activeOpacity={0.85}
+                android_ripple={rippleFor("#3457C6")}
                 onPress={() => loadDashboard("initial")}
               >
-                <RefreshCw size={17} color={SURFACE} strokeWidth={2.5} />
+                <RefreshCw size={17} color={SURFACE} strokeWidth={2.2} />
                 <Text style={styles.retryButtonText}>Try again</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ) : null}
 
           {!isLoading && !errorMessage ? (
             <>
-              <TouchableOpacity
+              <Pressable
                 style={styles.healthCard}
-                activeOpacity={0.9}
+                android_ripple={rippleFor("#3457C6")}
                 onPress={openVitalsScreen}
               >
                 <View style={styles.healthCardTop}>
@@ -799,7 +812,7 @@ export const PatientDashboardScreen = ({
                   </View>
 
                   <View style={styles.healthIconBox}>
-                    <HeartPulse size={30} color={PRIMARY} strokeWidth={2.7} />
+                    <HeartPulse size={28} color={PRIMARY} strokeWidth={2.2} />
                   </View>
                 </View>
 
@@ -810,11 +823,15 @@ export const PatientDashboardScreen = ({
                     unit="bpm"
                   />
 
+                  <View style={styles.healthStatDivider} />
+
                   <HealthStat
                     label="SpO₂"
                     value={displayMetric(healthStatus?.spo2)}
                     unit="%"
                   />
+
+                  <View style={styles.healthStatDivider} />
 
                   <HealthStat
                     label="BP"
@@ -822,7 +839,7 @@ export const PatientDashboardScreen = ({
                     unit="mmHg"
                   />
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
               <ScrollView
                 horizontal
@@ -831,26 +848,26 @@ export const PatientDashboardScreen = ({
               >
                 <CategoryShortcut
                   label="Scan"
-                  icon={<Camera size={24} color={TEXT} strokeWidth={2.4} />}
+                  icon={<Camera size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
                   onPress={openScanMedicineScreen}
                 />
 
                 <CategoryShortcut
                   label="Add Med"
-                  icon={<Plus size={24} color={TEXT} strokeWidth={2.4} />}
+                  icon={<Plus size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
                   onPress={openAddMedicineScreen}
                 />
 
                 <CategoryShortcut
                   label="Vitals"
-                  icon={<HeartPulse size={24} color={TEXT} strokeWidth={2.4} />}
+                  icon={<HeartPulse size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
                   onPress={openVitalsScreen}
                 />
 
                 <CategoryShortcut
                   label="Safety"
                   icon={
-                    <ShieldAlert size={24} color={TEXT} strokeWidth={2.4} />
+                    <ShieldAlert size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />
                   }
                   onPress={openEmergencyResponseScreen}
                 />
@@ -859,12 +876,13 @@ export const PatientDashboardScreen = ({
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My plan</Text>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
+                <Pressable
+                  android_ripple={rippleFor(SURFACE_VARIANT)}
+                  hitSlop={8}
                   onPress={openMedicinesScreen}
                 >
                   <Text style={styles.sectionAction}>View meds</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               <View style={styles.whitePanel}>
@@ -889,9 +907,9 @@ export const PatientDashboardScreen = ({
                 <View style={styles.doctorNoteHeader}>
                   <View style={styles.doctorNoteIconBox}>
                     <MessageSquareText
-                      size={22}
+                      size={21}
                       color={PRIMARY}
-                      strokeWidth={2.5}
+                      strokeWidth={2}
                     />
                   </View>
 
@@ -926,6 +944,21 @@ export const PatientDashboardScreen = ({
             </>
           ) : null}
         </ScrollView>
+
+        {!isLoading && !errorMessage ? (
+          <Pressable
+            style={[
+              styles.fab,
+              {
+                bottom: Math.max(24, insets.bottom + 20),
+              },
+            ]}
+            android_ripple={rippleFor("#3457C6")}
+            onPress={openAddMedicineScreen}
+          >
+            <Plus size={24} color={SURFACE} strokeWidth={2.4} />
+          </Pressable>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -941,14 +974,14 @@ const CategoryShortcut = ({
   onPress: () => void;
 }) => {
   return (
-    <TouchableOpacity
+    <Pressable
       style={styles.categoryItem}
-      activeOpacity={0.85}
+      android_ripple={rippleFor(SURFACE_VARIANT)}
       onPress={onPress}
     >
       <View style={styles.categoryIconCircle}>{icon}</View>
       <Text style={styles.categoryLabel}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -988,9 +1021,9 @@ const MedicineOrderMiniBar = ({
   const statusText = formatOrderStatus(order?.status || "PREPARING");
 
   return (
-    <TouchableOpacity
+    <Pressable
       style={styles.orderMiniCard}
-      activeOpacity={0.9}
+      android_ripple={rippleFor(SURFACE_VARIANT)}
       onPress={onPress}
     >
       <View style={styles.orderMiniHeader}>
@@ -1021,7 +1054,7 @@ const MedicineOrderMiniBar = ({
           isLast
         />
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -1037,7 +1070,7 @@ const OrderMiniStep = ({
   isLast?: boolean;
 }) => {
   const activeColor = tone === "success" ? SUCCESS : WARNING;
-  const activeLineColor = tone === "success" ? "#BCE9D7" : "#FED7AA";
+  const activeLineColor = tone === "success" ? "#B7E4D0" : "#F3CD97";
 
   return (
     <View style={styles.orderStep}>
@@ -1054,7 +1087,7 @@ const OrderMiniStep = ({
           ]}
         >
           {active && tone === "success" ? (
-            <CheckCircle2 size={11} color={SURFACE} strokeWidth={3} />
+            <CheckCircle2 size={11} color={SURFACE} strokeWidth={2.6} />
           ) : active ? (
             <View style={styles.orderStepInnerDot} />
           ) : null}
@@ -1079,7 +1112,7 @@ const OrderMiniStep = ({
           styles.orderStepLabel,
           active
             ? {
-                color: tone === "success" ? "#167A58" : "#A85A13",
+                color: tone === "success" ? ON_SUCCESS_CONTAINER : ON_WARNING_CONTAINER,
               }
             : undefined,
         ]}
@@ -1115,8 +1148,8 @@ const MedicinePlanBlock = ({
   if (!nextMedicineGroup || !firstMedicine) {
     return (
       <View style={styles.emptyMedicineRow}>
-        <View style={[styles.rowIconBox, { backgroundColor: SUCCESS_LIGHT }]}>
-          <Pill size={22} color={SUCCESS} strokeWidth={2.5} />
+        <View style={[styles.rowIconBox, { backgroundColor: SUCCESS_CONTAINER }]}>
+          <Pill size={21} color={SUCCESS} strokeWidth={2.2} />
         </View>
 
         <View style={styles.rowTextBlock}>
@@ -1126,13 +1159,13 @@ const MedicinePlanBlock = ({
           </Text>
         </View>
 
-        <TouchableOpacity
+        <Pressable
           style={styles.smallPrimaryButton}
-          activeOpacity={0.85}
+          android_ripple={rippleFor("#3457C6")}
           onPress={onAddMedicine}
         >
           <Text style={styles.smallPrimaryButtonText}>Add</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }
@@ -1141,9 +1174,9 @@ const MedicinePlanBlock = ({
 
   return (
     <View>
-      <TouchableOpacity
+      <Pressable
         style={styles.medicineTopRow}
-        activeOpacity={0.85}
+        android_ripple={rippleFor(SURFACE_VARIANT)}
         onPress={onOpenMedicines}
       >
         <View style={styles.timeBox}>
@@ -1172,9 +1205,9 @@ const MedicinePlanBlock = ({
         </View>
 
         {hasMultipleMedicines ? (
-          <ChevronRight size={21} color={MUTED} strokeWidth={2.5} />
+          <ChevronRight size={20} color={MUTED} strokeWidth={2.2} />
         ) : null}
-      </TouchableOpacity>
+      </Pressable>
 
       {hasMultipleMedicines ? (
         <View style={styles.previewList}>
@@ -1195,40 +1228,49 @@ const MedicinePlanBlock = ({
         </View>
       ) : (
         <View style={styles.medicineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[
               styles.takenButton,
               isTakingNextMedicine ? styles.disabledButton : undefined,
             ]}
-            activeOpacity={0.85}
+            android_ripple={rippleFor("#2C8F68")}
             disabled={isMedicineActionDisabled}
             onPress={() => onMarkTaken(firstMedicine.reminderId)}
           >
-            <CheckCircle2 size={17} color={SURFACE} strokeWidth={2.7} />
+            <CheckCircle2 size={17} color={SURFACE} strokeWidth={2.2} />
             <Text style={styles.takenButtonText}>
               {isTakingNextMedicine ? "Saving..." : "Taken"}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={[
               styles.snoozeButton,
               isSnoozingNextMedicine ? styles.disabledButton : undefined,
             ]}
-            activeOpacity={0.85}
+            android_ripple={rippleFor("#C7D3FA")}
             disabled={isMedicineActionDisabled}
             onPress={() => onSnooze(firstMedicine.reminderId)}
           >
-            <Clock3 size={17} color={PRIMARY} strokeWidth={2.7} />
+            <Clock3 size={17} color={PRIMARY} strokeWidth={2.2} />
             <Text style={styles.snoozeButtonText}>
               {isSnoozingNextMedicine ? "Snoozing..." : "Snooze"}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
     </View>
   );
 };
+
+
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: "#1B1D2A",
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
+  shadowRadius: level * 1.6,
+  shadowOffset: { width: 0, height: level * 0.8 },
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1241,11 +1283,12 @@ const styles = StyleSheet.create({
   },
   topBar: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: BACKGROUND,
   },
   greetingBlock: {
     flex: 1,
@@ -1254,152 +1297,156 @@ const styles = StyleSheet.create({
   helloText: {
     color: TEXT,
     fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: -0.3,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   subHelloText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
-    marginTop: 3,
+    fontWeight: "500",
+    marginTop: 2,
   },
   topActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-  roundButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: SURFACE,
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 9,
-    borderWidth: 1,
-    borderColor: BORDER,
+    marginRight: 4,
+    overflow: "hidden",
   },
   notificationDot: {
     position: "absolute",
-    top: 9,
+    top: 8,
     right: 9,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: PRIMARY,
-    borderWidth: 1,
-    borderColor: SURFACE,
+    backgroundColor: DANGER,
+    borderWidth: 1.5,
+    borderColor: BACKGROUND,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: 4,
+    overflow: "hidden",
   },
   avatarText: {
     color: SURFACE,
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "700",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
   },
   statePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 24,
     alignItems: "center",
     marginTop: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   stateTitle: {
     color: TEXT,
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "700",
     marginTop: 12,
   },
   stateText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     lineHeight: 19,
     marginTop: 5,
   },
   errorIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: DANGER_LIGHT,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: DANGER_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
   },
   errorTitle: {
-    color: "#9F1D1D",
-    fontSize: 18,
-    fontWeight: "900",
+    color: ON_DANGER_CONTAINER,
+    fontSize: 17,
+    fontWeight: "700",
     marginTop: 12,
     marginBottom: 6,
   },
   errorText: {
-    color: "#7A2E2E",
+    color: MUTED,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 16,
   },
   retryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 999,
+    borderRadius: 20,
     paddingHorizontal: 18,
     paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
+    overflow: "hidden",
+    ...elevate(1),
   },
   retryButtonText: {
     color: SURFACE,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 8,
   },
   categoryContent: {
     paddingBottom: 14,
+    paddingTop: 4,
   },
   categoryItem: {
     alignItems: "center",
-    marginRight: 18,
-    width: 76,
+    marginRight: 14,
+    width: 74,
+    borderRadius: 16,
+    paddingVertical: 4,
+    overflow: "hidden",
   },
   categoryIconCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: SURFACE,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: PRIMARY_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   categoryLabel: {
     color: TEXT,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "600",
     marginTop: 8,
     textAlign: "center",
   },
   healthCard: {
     backgroundColor: PRIMARY,
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 18,
     marginBottom: 18,
     overflow: "hidden",
+    ...elevate(2),
   },
   healthCardTop: {
     flexDirection: "row",
@@ -1410,9 +1457,9 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   statusDot: {
     width: 7,
@@ -1422,44 +1469,50 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   healthCardTitle: {
     color: SURFACE,
-    fontSize: 29,
-    fontWeight: "900",
-    letterSpacing: -0.7,
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: 0,
     marginTop: 14,
   },
   healthCardMeta: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 6,
   },
   healthIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
   },
   healthStatsRow: {
     flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 18,
-    padding: 10,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 14,
+    padding: 12,
     marginTop: 18,
+    alignItems: "center",
   },
   healthStat: {
     flex: 1,
     paddingHorizontal: 6,
   },
+  healthStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
   healthStatLabel: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "600",
     marginBottom: 4,
   },
   healthStatValueRow: {
@@ -1469,13 +1522,13 @@ const styles = StyleSheet.create({
   healthStatValue: {
     color: SURFACE,
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "700",
     marginRight: 3,
   },
   healthStatUnit: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 9,
-    fontWeight: "900",
+    fontWeight: "600",
     marginBottom: 3,
   },
   sectionHeader: {
@@ -1487,22 +1540,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: TEXT,
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   sectionAction: {
     color: PRIMARY,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   whitePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   emptyMedicineRow: {
     flexDirection: "row",
@@ -1513,33 +1565,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 4,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   rowIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   timeBox: {
-    width: 68,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: WARNING_LIGHT,
+    width: 64,
+    height: 54,
+    borderRadius: 13,
+    backgroundColor: WARNING_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   timeBoxText: {
-    color: "#A85A13",
-    fontSize: 14,
-    fontWeight: "900",
+    color: ON_WARNING_CONTAINER,
+    fontSize: 13,
+    fontWeight: "700",
   },
   timeBoxLabel: {
-    color: "#A85A13",
+    color: ON_WARNING_CONTAINER,
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "600",
     marginTop: 2,
     textTransform: "uppercase",
   },
@@ -1549,26 +1603,27 @@ const styles = StyleSheet.create({
   rowTitle: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     marginBottom: 4,
   },
   rowSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 18,
   },
   smallPrimaryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     marginLeft: 10,
+    overflow: "hidden",
   },
   smallPrimaryButtonText: {
     color: SURFACE,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   previewList: {
     paddingBottom: 4,
@@ -1578,7 +1633,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: SOFT_PANEL,
-    borderRadius: 13,
+    borderRadius: 11,
     paddingHorizontal: 11,
     paddingVertical: 9,
     marginTop: 7,
@@ -1594,12 +1649,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   previewDose: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     marginLeft: 8,
   },
   medicineActions: {
@@ -1609,32 +1664,35 @@ const styles = StyleSheet.create({
   takenButton: {
     flex: 1,
     backgroundColor: SUCCESS,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
     flexDirection: "row",
+    overflow: "hidden",
+    ...elevate(1),
   },
   takenButtonText: {
     color: SURFACE,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 6,
   },
   snoozeButton: {
     flex: 1,
-    backgroundColor: "#EEF4FF",
-    borderRadius: 14,
+    backgroundColor: PRIMARY_CONTAINER,
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
+    overflow: "hidden",
   },
   snoozeButtonText: {
-    color: PRIMARY,
+    color: ON_PRIMARY_CONTAINER,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 6,
   },
   disabledButton: {
@@ -1642,21 +1700,20 @@ const styles = StyleSheet.create({
   },
   doctorNotePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   doctorNoteHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
   doctorNoteIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: "#EEF4FF",
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: PRIMARY_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1667,34 +1724,34 @@ const styles = StyleSheet.create({
   doctorNoteTitle: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   doctorNoteDate: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 17,
     marginTop: 4,
   },
   doctorNoteBody: {
     color: TEXT,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 20,
     backgroundColor: SOFT_PANEL,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 13,
     marginTop: 14,
   },
   orderMiniCard: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingTop: 13,
     paddingBottom: 15,
     marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+    overflow: "hidden",
+    ...elevate(1),
   },
   orderMiniHeader: {
     flexDirection: "row",
@@ -1705,20 +1762,18 @@ const styles = StyleSheet.create({
   orderMiniTitle: {
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   orderStatusPill: {
-    backgroundColor: WARNING_LIGHT,
-    borderRadius: 999,
+    backgroundColor: WARNING_CONTAINER,
+    borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#FED7AA",
   },
   orderStatusText: {
-    color: "#A85A13",
+    color: ON_WARNING_CONTAINER,
     fontSize: 9,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   orderStepRow: {
     flexDirection: "row",
@@ -1734,9 +1789,9 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#F1F4FA",
+    backgroundColor: SURFACE_VARIANT,
     borderWidth: 1,
-    borderColor: "#DDE3EF",
+    borderColor: SURFACE_VARIANT,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1749,15 +1804,27 @@ const styles = StyleSheet.create({
   orderStepLine: {
     flex: 1,
     height: 3,
-    backgroundColor: "#E4E8F2",
+    backgroundColor: SURFACE_VARIANT,
     borderRadius: 2,
     marginHorizontal: 5,
   },
   orderStepLabel: {
-    color: "#A7B0C2",
+    color: MUTED,
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "600",
     marginTop: 7,
     paddingRight: 6,
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    ...elevate(4),
   },
 });

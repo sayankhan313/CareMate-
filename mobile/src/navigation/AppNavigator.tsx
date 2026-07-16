@@ -10,6 +10,8 @@ import { SplashScreen } from "../screens/auth/SplashScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RoleSelectionScreen } from "../screens/auth/RoleSelectionScreen";
 import { PatientSignupScreen } from "../screens/auth/PatientSignupScreen";
+import { DoctorSignupScreen } from "../screens/auth/DoctorSignupScreen";
+import { DoctorPendingApprovalScreen } from "../screens/auth/DoctorPendingApprovalScreen";
 import { EmailVerificationScreen } from "../screens/auth/EmailVerificationScreen";
 import { ForgotPasswordScreen } from "../screens/auth/ForgotPasswordScreen";
 
@@ -17,7 +19,7 @@ import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
 
 import { AddMedicineScreen } from "../screens/patient/AddMedicineScreen";
 import { ConfirmReminderScreen } from "../screens/patient/ConfirmReminderScreen";
-import {ConnectedDeviceScreen} from "../screens/patient/ConnectedDeviceScreen";
+import { ConnectedDeviceScreen } from "../screens/patient/ConnectedDeviceScreen";
 import { SafetyResponseScreen } from "../screens/patient/SafetyResponseScreen";
 import VideoConsultationScreen from "../screens/patient/VideoConsultationScreen";
 import ConsultationEndedScreen from "../screens/patient/ConsultationEndedScreen";
@@ -28,6 +30,7 @@ import { ManualSafetyResponseScreen } from "../screens/patient/ManualSafetyRespo
 import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
 
 import { PatientTabNavigator } from "./PatientTabNavigator";
+import { DoctorTabNavigator } from "./DoctorTabNavigator";
 
 import type { RootStackParamList } from "../types/navigation";
 
@@ -40,8 +43,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-const ConnectedDeviceStackScreen =
-  ConnectedDeviceScreen as ComponentType<any>;
+const ConnectedDeviceStackScreen = ConnectedDeviceScreen as ComponentType<any>;
 
 const CriticalVitalWatcher = () => {
   const { lastSyncedReading } = useHealthConnectDevice();
@@ -113,6 +115,13 @@ export const AppNavigator = () => {
 
             <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
 
+            <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
+
+            <Stack.Screen
+              name="DoctorPendingApproval"
+              component={DoctorPendingApprovalScreen}
+            />
+
             <Stack.Screen
               name="EmailVerification"
               component={EmailVerificationScreen}
@@ -124,7 +133,13 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen name="PatientTabs" component={PatientTabNavigator} />
-            <Stack.Screen name="PatientProfile" component={PatientProfileScreen} />
+
+            <Stack.Screen name="DoctorTabs" component={DoctorTabNavigator} />
+
+            <Stack.Screen
+              name="PatientProfile"
+              component={PatientProfileScreen}
+            />
 
             <Stack.Screen name="AddMedicine" component={AddMedicineScreen} />
 
@@ -137,6 +152,7 @@ export const AppNavigator = () => {
               name="ConnectedDevice"
               component={ConnectedDeviceStackScreen}
             />
+
             <Stack.Screen
               name="ManualSafetyResponse"
               component={ManualSafetyResponseScreen}
@@ -157,6 +173,7 @@ export const AppNavigator = () => {
               component={ConsultationEndedScreen}
               options={{ headerShown: false }}
             />
+
             <Stack.Screen name="ScanMedicine" component={ScanMedicineScreen} />
 
             <Stack.Screen

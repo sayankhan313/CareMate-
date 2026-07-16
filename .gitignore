@@ -144,4 +144,5 @@ backend/keys/
 .env
 keys/
 *.pk
-*.pub
+*.pubbackend/uploads/
+backend/uploads/

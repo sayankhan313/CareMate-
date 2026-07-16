@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -41,28 +42,37 @@ type ConnectedDeviceScreenProps = NativeStackScreenProps<
   "ConnectedDevice"
 >;
 
-const BACKGROUND = "#EEF1FA";
+const BACKGROUND = "#F2F3F8";
 const SURFACE = "#FFFFFF";
-const TEXT = "#111936";
-const MUTED = "#7A8194";
-const BORDER = "#E4E8F2";
-const SOFT_PANEL = "#F7F9FF";
+const SURFACE_VARIANT = "#E7E9F2";
+const TEXT = "#1B1D2A";
+const MUTED = "#5F6270";
+const SOFT_PANEL = "#F3F4FA";
 
-const PRIMARY = "#5B86E5";
-const PRIMARY_DARK = "#3F6FD0";
-const PRIMARY_LIGHT = "#EEF4FF";
+const PRIMARY = "#4C6FE0";
+const PRIMARY_CONTAINER = "#E1E7FF";
+const ON_PRIMARY_CONTAINER = "#0C2A8C";
 
-const SUCCESS = "#42B883";
-const SUCCESS_LIGHT = "#EAF8F2";
+const SUCCESS = "#3A9D75";
+const SUCCESS_CONTAINER = "#DBF3E7";
+const ON_SUCCESS_CONTAINER = "#0F5C3C";
 
-const WARNING = "#F6A545";
-const WARNING_LIGHT = "#FFF3E2";
+const WARNING = "#C77A1F";
+const WARNING_CONTAINER = "#FBE7CD";
+const ON_WARNING_CONTAINER = "#7A4708";
 
-const DANGER = "#EF4D56";
-const DANGER_LIGHT = "#FFEDEE";
+const DANGER = "#C6404A";
+const DANGER_CONTAINER = "#FBDADC";
+const ON_DANGER_CONTAINER = "#8C1D24";
 
-const INDIGO = "#4F46E5";
-const INDIGO_LIGHT = "#EEF2FF";
+const INDIGO = "#6B59B5";
+const INDIGO_CONTAINER = "#E9E4F8";
+
+
+const PRIMARY_LIGHT = PRIMARY_CONTAINER;
+const WARNING_LIGHT = WARNING_CONTAINER;
+const DANGER_LIGHT = DANGER_CONTAINER;
+const INDIGO_LIGHT = INDIGO_CONTAINER;
 
 const getModeLabel = (mode: VitalSimulationMode) => {
   if (mode === "CRITICAL") return "Critical";
@@ -73,29 +83,29 @@ const getModeLabel = (mode: VitalSimulationMode) => {
 const getModeColors = (mode: VitalSimulationMode) => {
   if (mode === "CRITICAL") {
     return {
-      background: DANGER_LIGHT,
-      border: "#FECACA",
-      text: "#B42318",
-      pill: "#FFE2E2",
+      background: DANGER_CONTAINER,
+      border: DANGER_CONTAINER,
+      text: ON_DANGER_CONTAINER,
+      pill: DANGER_CONTAINER,
       dot: DANGER,
     };
   }
 
   if (mode === "WARNING") {
     return {
-      background: WARNING_LIGHT,
-      border: "#FED7AA",
-      text: "#A85A13",
-      pill: "#FFE9CB",
+      background: WARNING_CONTAINER,
+      border: WARNING_CONTAINER,
+      text: ON_WARNING_CONTAINER,
+      pill: WARNING_CONTAINER,
       dot: WARNING,
     };
   }
 
   return {
-    background: SUCCESS_LIGHT,
-    border: "#D8F1E6",
-    text: "#167A58",
-    pill: "#DFF8EE",
+    background: SUCCESS_CONTAINER,
+    border: SUCCESS_CONTAINER,
+    text: ON_SUCCESS_CONTAINER,
+    pill: SUCCESS_CONTAINER,
     dot: SUCCESS,
   };
 };
@@ -304,10 +314,10 @@ export const ConnectedDeviceScreen = ({
         <View style={styles.appBar}>
           <TouchableOpacity
             style={styles.backButton}
-            activeOpacity={0.85}
+            activeOpacity={0.82}
             onPress={() => navigation.goBack()}
           >
-            <ArrowLeft size={22} color={TEXT} strokeWidth={2.6} />
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.2} />
           </TouchableOpacity>
 
           <View style={styles.appBarTextBlock}>
@@ -355,8 +365,8 @@ export const ConnectedDeviceScreen = ({
                       styles.statusBadgeText,
                       {
                         color: isHealthConnectConnected
-                          ? "#167A58"
-                          : "#B42318",
+                          ? ON_SUCCESS_CONTAINER
+                          : ON_DANGER_CONTAINER,
                       },
                     ]}
                   >
@@ -372,7 +382,7 @@ export const ConnectedDeviceScreen = ({
               </View>
 
               <View style={styles.featureIconBox}>
-                <Watch size={30} color={PRIMARY} strokeWidth={2.7} />
+                <Watch size={29} color={PRIMARY} strokeWidth={2.2} />
               </View>
             </View>
 
@@ -382,7 +392,11 @@ export const ConnectedDeviceScreen = ({
                 value={isHealthConnectConnected ? "Auto" : "Manual"}
               />
 
+              <View style={styles.featureStatDivider} />
+
               <FeatureStat label="Last sync" value={formatTime(lastSyncAt)} />
+
+              <View style={styles.featureStatDivider} />
 
               <FeatureStat label="Status" value={lastSyncStatus || "No data"} />
             </View>
@@ -393,9 +407,9 @@ export const ConnectedDeviceScreen = ({
               label={isHealthConnectConnected ? "Disconnect" : "Connect"}
               icon={
                 isHealthConnectConnected ? (
-                  <Link2Off size={22} color={DANGER} strokeWidth={2.6} />
+                  <Link2Off size={22} color={DANGER} strokeWidth={2.2} />
                 ) : (
-                  <Link size={22} color={PRIMARY} strokeWidth={2.6} />
+                  <Link size={22} color={PRIMARY} strokeWidth={2.2} />
                 )
               }
               tone={isHealthConnectConnected ? "danger" : "primary"}
@@ -405,7 +419,7 @@ export const ConnectedDeviceScreen = ({
 
             <DeviceActionButton
               label="Sync"
-              icon={<RefreshCw size={22} color={PRIMARY} strokeWidth={2.6} />}
+              icon={<RefreshCw size={22} color={PRIMARY} strokeWidth={2.2} />}
               tone="primary"
               disabled={!isHealthConnectConnected || isHealthConnectSyncing}
               onPress={syncNowManually}
@@ -413,7 +427,7 @@ export const ConnectedDeviceScreen = ({
 
             <DeviceActionButton
               label="Settings"
-              icon={<Settings size={22} color={TEXT} strokeWidth={2.6} />}
+              icon={<Settings size={22} color={TEXT} strokeWidth={2.2} />}
               tone="neutral"
               onPress={openHealthConnectSettings}
             />
@@ -477,7 +491,7 @@ export const ConnectedDeviceScreen = ({
                             }
                           : undefined,
                       ]}
-                      activeOpacity={0.85}
+                      activeOpacity={0.82}
                       onPress={() => setSelectedMode(mode)}
                     >
                       <Text
@@ -503,7 +517,6 @@ export const ConnectedDeviceScreen = ({
                 styles.previewPanel,
                 {
                   backgroundColor: modeColors.background,
-                  borderColor: modeColors.border,
                 },
               ]}
             >
@@ -546,7 +559,7 @@ export const ConnectedDeviceScreen = ({
               </View>
 
               <PreviewRow
-                icon={<HeartPulse size={20} color={DANGER} strokeWidth={2.6} />}
+                icon={<HeartPulse size={20} color={DANGER} strokeWidth={2.2} />}
                 label="Heart Rate"
                 value={`${preview.heartRate}`}
                 unit="bpm"
@@ -555,7 +568,7 @@ export const ConnectedDeviceScreen = ({
 
               <PreviewRow
                 icon={
-                  <ActivityIcon size={20} color={PRIMARY} strokeWidth={2.6} />
+                  <ActivityIcon size={20} color={PRIMARY} strokeWidth={2.2} />
                 }
                 label="SpO₂"
                 value={`${preview.spo2}`}
@@ -565,7 +578,7 @@ export const ConnectedDeviceScreen = ({
 
               <PreviewRow
                 icon={
-                  <ActivityIcon size={20} color={INDIGO} strokeWidth={2.6} />
+                  <ActivityIcon size={20} color={INDIGO} strokeWidth={2.2} />
                 }
                 label="Blood Pressure"
                 value={`${preview.bpSystolic}/${preview.bpDiastolic}`}
@@ -574,7 +587,7 @@ export const ConnectedDeviceScreen = ({
               />
 
               <PreviewRow
-                icon={<Droplet size={20} color={WARNING} strokeWidth={2.6} />}
+                icon={<Droplet size={20} color={WARNING} strokeWidth={2.2} />}
                 label="Glucose"
                 value={`${preview.glucose}`}
                 unit="mg/dL"
@@ -585,7 +598,7 @@ export const ConnectedDeviceScreen = ({
 
             <TouchableOpacity
               style={styles.primaryButton}
-              activeOpacity={0.85}
+              activeOpacity={0.82}
               onPress={startSimulation}
               disabled={isStartingSimulation}
             >
@@ -593,7 +606,7 @@ export const ConnectedDeviceScreen = ({
                 <ActivityIndicator color={SURFACE} />
               ) : (
                 <>
-                  <Play size={20} color={SURFACE} strokeWidth={2.6} />
+                  <Play size={20} color={SURFACE} strokeWidth={2.2} />
                   <Text style={styles.primaryButtonText}>Start Simulation</Text>
                 </>
               )}
@@ -601,7 +614,7 @@ export const ConnectedDeviceScreen = ({
 
             <TouchableOpacity
               style={styles.outlineButton}
-              activeOpacity={0.85}
+              activeOpacity={0.82}
               onPress={() =>
                 Alert.alert(
                   "Simulation stopped",
@@ -609,7 +622,7 @@ export const ConnectedDeviceScreen = ({
                 )
               }
             >
-              <Square size={18} color={TEXT} strokeWidth={2.5} />
+              <Square size={18} color={TEXT} strokeWidth={2.2} />
               <Text style={styles.outlineButtonText}>Stop Simulation</Text>
             </TouchableOpacity>
           </View>
@@ -619,7 +632,7 @@ export const ConnectedDeviceScreen = ({
               <ActivityIcon
                 size={20}
                 color={lastSyncError ? DANGER : PRIMARY}
-                strokeWidth={2.5}
+                strokeWidth={2.2}
               />
 
               <Text
@@ -660,7 +673,7 @@ const DeviceActionButton = ({
         tone === "neutral" ? styles.deviceActionNeutral : undefined,
         disabled ? styles.disabledActionButton : undefined,
       ]}
-      activeOpacity={0.85}
+      activeOpacity={0.82}
       onPress={onPress}
       disabled={disabled}
     >
@@ -750,6 +763,17 @@ const PreviewRow = ({
   );
 };
 
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: TEXT,
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
+  shadowRadius: level * 1.6,
+  shadowOffset: {
+    width: 0,
+    height: level * 0.8,
+  },
+});
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -760,36 +784,35 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
   appBar: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: BACKGROUND,
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: SURFACE,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
-    borderWidth: 1,
-    borderColor: BORDER,
+    marginRight: 10,
+    overflow: "hidden",
   },
   appBarTextBlock: {
     flex: 1,
   },
   appBarTitle: {
     color: TEXT,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontSize: 24,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
   },
   scrollView: {
@@ -801,10 +824,11 @@ const styles = StyleSheet.create({
   },
   featureCard: {
     backgroundColor: PRIMARY,
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 18,
-    marginBottom: 12,
+    marginBottom: 16,
     overflow: "hidden",
+    ...elevate(2),
   },
   featureTopRow: {
     flexDirection: "row",
@@ -813,21 +837,21 @@ const styles = StyleSheet.create({
   },
   featureTextBlock: {
     flex: 1,
-    paddingRight: 14,
+    paddingRight: 12,
   },
   statusBadge: {
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   statusBadgeActive: {
-    backgroundColor: SUCCESS_LIGHT,
+    backgroundColor: SUCCESS_CONTAINER,
   },
   statusBadgeInactive: {
-    backgroundColor: DANGER_LIGHT,
+    backgroundColor: DANGER_CONTAINER,
   },
   statusDot: {
     width: 7,
@@ -837,81 +861,86 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   featureTitle: {
     color: SURFACE,
-    fontSize: 27,
-    fontWeight: "900",
-    letterSpacing: -0.6,
+    fontSize: 25,
+    fontWeight: "700",
+    letterSpacing: -0.3,
     marginTop: 14,
   },
   featureSubtitle: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 19,
     marginTop: 6,
   },
   featureIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
   },
   featureStats: {
     flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 18,
-    padding: 10,
+    alignItems: "stretch",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 5,
     marginTop: 18,
   },
   featureStat: {
     flex: 1,
-    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  featureStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255,255,255,0.28)",
   },
   featureStatLabel: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "600",
     marginBottom: 5,
   },
   featureStatValue: {
     color: SURFACE,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
+    textAlign: "center",
   },
   quickActionCard: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
-    padding: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    borderRadius: 16,
+    padding: 10,
+    marginBottom: 16,
     flexDirection: "row",
+    ...elevate(1),
   },
   deviceActionButton: {
     flex: 1,
-    minHeight: 78,
-    borderRadius: 18,
+    minHeight: 76,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginHorizontal: 4,
-    borderWidth: 1,
+    overflow: "hidden",
   },
   deviceActionPrimary: {
-    backgroundColor: PRIMARY_LIGHT,
-    borderColor: "#C9D8FF",
+    backgroundColor: PRIMARY_CONTAINER,
   },
   deviceActionDanger: {
-    backgroundColor: DANGER_LIGHT,
-    borderColor: "#FECACA",
+    backgroundColor: DANGER_CONTAINER,
   },
   deviceActionNeutral: {
-    backgroundColor: SOFT_PANEL,
-    borderColor: BORDER,
+    backgroundColor: SURFACE_VARIANT,
   },
   disabledActionButton: {
     opacity: 0.45,
@@ -920,23 +949,22 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   deviceActionText: {
-    color: PRIMARY_DARK,
+    color: ON_PRIMARY_CONTAINER,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   deviceActionTextDanger: {
-    color: "#B42318",
+    color: ON_DANGER_CONTAINER,
   },
   deviceActionTextNeutral: {
     color: TEXT,
   },
   whitePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    marginBottom: 16,
+    ...elevate(1),
   },
   panelHeader: {
     paddingBottom: 12,
@@ -944,19 +972,19 @@ const styles = StyleSheet.create({
   panelTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   panelSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 18,
     marginTop: 4,
   },
   panelAction: {
     color: PRIMARY,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 4,
   },
   detailRow: {
@@ -964,8 +992,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SURFACE_VARIANT,
   },
   rowLast: {
     borderBottomWidth: 0,
@@ -973,81 +1001,81 @@ const styles = StyleSheet.create({
   detailLabel: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "500",
     marginRight: 12,
   },
   detailValue: {
     flex: 1,
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "600",
     textAlign: "right",
     lineHeight: 18,
   },
   detailValueSuccess: {
-    color: "#167A58",
+    color: ON_SUCCESS_CONTAINER,
   },
   detailValueDanger: {
-    color: "#B42318",
+    color: ON_DANGER_CONTAINER,
   },
   primaryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 16,
-    paddingVertical: 15,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     marginTop: 16,
+    overflow: "hidden",
+    ...elevate(1),
   },
   primaryButtonText: {
     color: SURFACE,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 9,
   },
   outlineButton: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    paddingVertical: 15,
+    backgroundColor: SURFACE_VARIANT,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginTop: 11,
+    marginTop: 10,
+    overflow: "hidden",
   },
   outlineButtonText: {
     color: TEXT,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 8,
   },
   segmentControl: {
     flexDirection: "row",
     backgroundColor: SOFT_PANEL,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
     marginTop: 4,
   },
   segmentButton: {
     flex: 1,
-    borderRadius: 13,
-    paddingVertical: 11,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   segmentText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   previewPanel: {
-    borderRadius: 18,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 4,
-    borderWidth: 1,
     marginTop: 14,
   },
   previewHeader: {
@@ -1059,19 +1087,19 @@ const styles = StyleSheet.create({
   previewTitle: {
     color: TEXT,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   previewSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
   },
   modePill: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 10,
+    borderRadius: 8,
+    paddingHorizontal: 9,
     paddingVertical: 6,
     marginLeft: 10,
   },
@@ -1083,19 +1111,19 @@ const styles = StyleSheet.create({
   },
   modePillText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   previewRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.06)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(27,29,42,0.10)",
   },
   previewIcon: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1106,7 +1134,7 @@ const styles = StyleSheet.create({
   previewLabel: {
     color: TEXT,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "600",
   },
   previewValueBlock: {
     flexDirection: "row",
@@ -1115,34 +1143,33 @@ const styles = StyleSheet.create({
   previewValue: {
     color: TEXT,
     fontSize: 19,
-    fontWeight: "900",
+    fontWeight: "700",
     marginRight: 4,
   },
   previewUnit: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "600",
     marginBottom: 4,
   },
   messagePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
+    ...elevate(1),
   },
   messageText: {
     flex: 1,
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 20,
     marginLeft: 10,
   },
   messageError: {
-    color: "#B42318",
+    color: ON_DANGER_CONTAINER,
   },
 });

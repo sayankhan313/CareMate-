@@ -24,6 +24,14 @@ type LoginFormValues = {
 
 type LoginScreenProps = NativeStackScreenProps<RootStackParamList, "Login">;
 
+const isApprovedAccount = (accountStatus?: string) => {
+  return accountStatus === "ACTIVE" || accountStatus === "APPROVED";
+};
+
+const isPendingAccount = (accountStatus?: string) => {
+  return accountStatus === "PENDING_VERIFICATION";
+};
+
 export const LoginScreen = ({ navigation }: LoginScreenProps) => {
   const {
     control,
@@ -35,6 +43,88 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
       password: "",
     },
   });
+
+  const redirectByRole = async (user: any) => {
+    if (user?.role === "PATIENT") {
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: "PatientTabs",
+            params: {
+              user,
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    if (user?.role === "DOCTOR") {
+      if (isPendingAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "DoctorPendingApproval",
+              params: {
+                user,
+                email: user.email,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      if (isApprovedAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "DoctorTabs",
+              params: {
+                user,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      await tokenStorage.removeToken();
+
+      Alert.alert(
+        "Doctor account unavailable",
+        "Your doctor account is not active right now."
+      );
+      return;
+    }
+
+    if (user?.role === "PHARMACY") {
+      await tokenStorage.removeToken();
+
+      Alert.alert(
+        "Pharmacy module coming next",
+        "Pharmacy login will be connected after admin verification is completed."
+      );
+      return;
+    }
+
+    if (user?.role === "ADMIN") {
+      await tokenStorage.removeToken();
+
+      Alert.alert(
+        "Admin module coming next",
+        "Admin dashboard will be connected in the next module step."
+      );
+      return;
+    }
+
+    await tokenStorage.removeToken();
+
+    Alert.alert("Unsupported role", "This account role is not supported yet.");
+  };
 
   const onSubmit = async (formData: LoginFormValues) => {
     try {
@@ -72,17 +162,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         throw new Error(currentUserJson.message || "Could not load user.");
       }
 
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: "PatientTabs",
-            params: {
-              user: currentUserJson.data.user,
-            },
-          },
-        ],
-      });
+      await redirectByRole(currentUserJson.data.user);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong.";
@@ -247,7 +327,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
 
           <Text style={styles.securityText}>
             CareMate+ uses secure authentication and role-based access to
-            protect patient workflows.
+            protect patient and clinical workflows.
           </Text>
         </View>
       </ScrollView>

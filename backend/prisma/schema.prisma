@@ -120,7 +120,9 @@ model User {
   passwordResetToken          String?
   passwordResetTokenExpiresAt DateTime?
 
-  patientProfile   PatientProfile?
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
   vitalReadings    PatientVitalReading[]
@@ -149,6 +151,33 @@ model PatientProfile {
   updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DoctorProfile {
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  phoneNumber     String
+  gmcNumber       String  @unique
+  specialization  String
+  clinicName      String
+  clinicAddress   String?
+  yearsExperience Int?
+  bio             String?
+
+  gmcDocumentUrl           String
+  photoIdDocumentUrl       String
+  qualificationDocumentUrl String
+
+  verificationCheckedAt DateTime?
+  verificationNotes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gmcNumber])
+  @@index([specialization])
 }
 
 model Medicine {

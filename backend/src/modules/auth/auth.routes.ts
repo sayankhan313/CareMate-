@@ -1,10 +1,31 @@
 import { Router, urlencoded } from "express";
 
 import { authController } from "./auth.controller.js";
+import { doctorAuthController } from "./doctor-auth.controller.js";
+import { doctorVerificationUpload } from "../../middleware/upload.middleware.js";
 
 const router = Router();
 
 router.post("/register", authController.register);
+
+router.post(
+  "/register/doctor",
+  doctorVerificationUpload.fields([
+    {
+      name: "gmcDocument",
+      maxCount: 1,
+    },
+    {
+      name: "photoIdDocument",
+      maxCount: 1,
+    },
+    {
+      name: "qualificationDocument",
+      maxCount: 1,
+    },
+  ]),
+  doctorAuthController.registerDoctor
+);
 
 router.post("/login", authController.login);
 
