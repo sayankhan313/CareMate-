@@ -44,6 +44,37 @@ export const adminController = {
     }
   },
 
+  async listUsers(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await adminService.listUsers();
+
+      return res.status(200).json({
+        success: true,
+        message: "Users fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async suspendUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminId = getAuthenticatedAdminId(req);
+      const userId = getParamAsString(req, "userId");
+
+      const result = await adminService.suspendUser(userId, adminId);
+
+      return res.status(200).json({
+        success: true,
+        message: "User suspended successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async listDoctorVerifications(
     req: Request,
     res: Response,
@@ -133,13 +164,20 @@ export const adminController = {
     }
   },
 
-  async listUsers(req: Request, res: Response, next: NextFunction) {
+  async listPharmacyVerifications(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
-      const result = await adminService.listUsers();
+      const status =
+        typeof req.query.status === "string" ? req.query.status : undefined;
+
+      const result = await adminService.listPharmacyVerifications(status);
 
       return res.status(200).json({
         success: true,
-        message: "Users fetched successfully",
+        message: "Pharmacy verification requests fetched successfully",
         data: result,
       });
     } catch (error) {
@@ -147,16 +185,67 @@ export const adminController = {
     }
   },
 
-  async suspendUser(req: Request, res: Response, next: NextFunction) {
+  async getPharmacyVerification(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = getParamAsString(req, "userId");
+
+      const result = await adminService.getPharmacyVerification(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Pharmacy verification request fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async approvePharmacyVerification(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
 
-      const result = await adminService.suspendUser(userId, adminId);
+      const result = await adminService.approvePharmacyVerification(userId, {
+        adminId,
+        notes: getRequestNotes(req),
+      });
 
       return res.status(200).json({
         success: true,
-        message: "User suspended successfully",
+        message: "Pharmacy account approved successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async rejectPharmacyVerification(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const adminId = getAuthenticatedAdminId(req);
+      const userId = getParamAsString(req, "userId");
+
+      const result = await adminService.rejectPharmacyVerification(userId, {
+        adminId,
+        notes: getRequestNotes(req),
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Pharmacy account rejected successfully",
         data: result,
       });
     } catch (error) {

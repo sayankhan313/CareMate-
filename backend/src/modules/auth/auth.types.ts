@@ -1,24 +1,21 @@
-export type PublicRegisterRole =
+export type UserRole =
   | "PATIENT"
   | "DOCTOR"
   | "CAREGIVER"
-  | "PHARMACY";
+  | "PHARMACY"
+  | "ADMIN";
 
-export type PatientGender =
-  | "MALE"
-  | "FEMALE"
-  | "OTHER"
-  | "PREFER_NOT_TO_SAY";
+export type Gender = "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_TO_SAY";
 
 export type RegisterInput = {
   fullName: string;
   email: string;
   password: string;
-  role: PublicRegisterRole;
+  role: UserRole;
 
   phoneNumber?: string;
   dateOfBirth?: string;
-  gender?: PatientGender;
+  gender?: Gender;
   medicalConditions?: string;
   emergencyContact?: string;
 
@@ -28,23 +25,36 @@ export type RegisterInput = {
   clinicAddress?: string;
   yearsExperience?: number;
   bio?: string;
-
   gmcDocumentUrl?: string;
   photoIdDocumentUrl?: string;
   qualificationDocumentUrl?: string;
+
+  pharmacyName?: string;
+  staffName?: string;
+  registrationNumber?: string;
+  licenseNumber?: string;
+  address?: string;
+  city?: string;
+  postcode?: string;
+  openingHours?: string;
+  serviceType?: string;
+  licenseDocumentUrl?: string;
+  addressProofDocumentUrl?: string;
 };
+
+
 
 export type LoginInput = {
   email: string;
   password: string;
 };
 
-export type ResendVerificationEmailInput = {
-  email: string;
-};
-
 export type VerifyEmailInput = {
   token: string;
+};
+
+export type ResendVerificationEmailInput = {
+  email: string;
 };
 
 export type ForgotPasswordInput = {
@@ -54,5 +64,4 @@ export type ForgotPasswordInput = {
 export type ResetPasswordInput = {
   token: string;
   newPassword: string;
-  confirmPassword: string;
 };

@@ -142,11 +142,75 @@ const getDoctorProfileData = (data: RegisterInput) => {
   };
 };
 
+const getPharmacyProfileData = (data: RegisterInput) => {
+  if (data.role !== "PHARMACY") {
+    return undefined;
+  }
+
+  if (!data.pharmacyName) {
+    throw new AppError("Pharmacy name is required", 400);
+  }
+
+  if (!data.staffName) {
+    throw new AppError("Staff name is required", 400);
+  }
+
+  if (!data.phoneNumber) {
+    throw new AppError("Phone number is required for pharmacy registration", 400);
+  }
+
+  if (!data.registrationNumber) {
+    throw new AppError("Pharmacy registration number is required", 400);
+  }
+
+  if (!data.licenseNumber) {
+    throw new AppError("Pharmacy licence number is required", 400);
+  }
+
+  if (!data.address) {
+    throw new AppError("Pharmacy address is required", 400);
+  }
+
+  if (!data.city) {
+    throw new AppError("City is required", 400);
+  }
+
+  if (!data.postcode) {
+    throw new AppError("Postcode is required", 400);
+  }
+
+  if (!data.licenseDocumentUrl) {
+    throw new AppError("Pharmacy licence document is required", 400);
+  }
+
+  if (!data.addressProofDocumentUrl) {
+    throw new AppError("Address proof document is required", 400);
+  }
+
+  return {
+    pharmacyName: data.pharmacyName.trim(),
+    staffName: data.staffName.trim(),
+    phoneNumber: data.phoneNumber.trim(),
+    email: data.email.trim().toLowerCase(),
+    registrationNumber: data.registrationNumber.trim().toUpperCase(),
+    licenseNumber: data.licenseNumber.trim().toUpperCase(),
+    address: data.address.trim(),
+    city: data.city.trim(),
+    postcode: data.postcode.trim().toUpperCase(),
+    openingHours: data.openingHours?.trim() || null,
+    serviceType: data.serviceType?.trim() || null,
+    licenseDocumentUrl: data.licenseDocumentUrl,
+    addressProofDocumentUrl: data.addressProofDocumentUrl,
+  };
+};
+
 export const authService = {
   async register(data: RegisterInput) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+
     const existingUser = await prisma.user.findUnique({
       where: {
-        email: data.email,
+        email: normalizedEmail,
       },
     });
 
@@ -166,6 +230,34 @@ export const authService = {
       }
     }
 
+    if (data.role === "PHARMACY" && data.registrationNumber) {
+      const existingPharmacyRegistration =
+        await prisma.pharmacyProfile.findUnique({
+          where: {
+            registrationNumber: data.registrationNumber.trim().toUpperCase(),
+          },
+        });
+
+      if (existingPharmacyRegistration) {
+        throw new AppError(
+          "Pharmacy registration number is already registered",
+          409
+        );
+      }
+    }
+
+    if (data.role === "PHARMACY" && data.licenseNumber) {
+      const existingPharmacyLicense = await prisma.pharmacyProfile.findUnique({
+        where: {
+          licenseNumber: data.licenseNumber.trim().toUpperCase(),
+        },
+      });
+
+      if (existingPharmacyLicense) {
+        throw new AppError("Pharmacy licence number is already registered", 409);
+      }
+    }
+
     const passwordHash = await hashPassword(data.password);
 
     const accountStatus =
@@ -177,11 +269,15 @@ export const authService = {
 
     const patientProfileData = getPatientProfileData(data);
     const doctorProfileData = getDoctorProfileData(data);
+    const pharmacyProfileData = getPharmacyProfileData({
+      ...data,
+      email: normalizedEmail,
+    });
 
     const user = await prisma.user.create({
       data: {
-        fullName: data.fullName,
-        email: data.email,
+        fullName: data.fullName.trim(),
+        email: normalizedEmail,
         passwordHash,
         role: data.role,
         accountStatus,
@@ -203,6 +299,14 @@ export const authService = {
               },
             }
           : {}),
+
+        ...(pharmacyProfileData
+          ? {
+              pharmacyProfile: {
+                create: pharmacyProfileData,
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -214,6 +318,7 @@ export const authService = {
         createdAt: true,
         patientProfile: true,
         doctorProfile: true,
+        pharmacyProfile: true,
       },
     });
 
@@ -235,7 +340,7 @@ export const authService = {
   async login(data: LoginInput) {
     const user = await prisma.user.findUnique({
       where: {
-        email: data.email,
+        email: data.email.trim().toLowerCase(),
       },
     });
 
@@ -318,7 +423,7 @@ export const authService = {
   async resendVerificationEmail(data: ResendVerificationEmailInput) {
     const user = await prisma.user.findUnique({
       where: {
-        email: data.email,
+        email: data.email.trim().toLowerCase(),
       },
     });
 
@@ -359,7 +464,7 @@ export const authService = {
   async forgotPassword(data: ForgotPasswordInput) {
     const user = await prisma.user.findUnique({
       where: {
-        email: data.email,
+        email: data.email.trim().toLowerCase(),
       },
     });
 
