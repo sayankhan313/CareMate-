@@ -18,6 +18,41 @@ export type DoctorTabParamList = {
   Profile: undefined;
 };
 
+export type AdminAccountStatus =
+  | "PENDING_VERIFICATION"
+  | "ACTIVE"
+  | "APPROVED"
+  | "REJECTED"
+  | "DISABLED";
+
+export type AdminUserStatusFilter = AdminAccountStatus | "ALL";
+
+export type AdminTabParamList = {
+  Dashboard:
+    | {
+        user?: any;
+      }
+    | undefined;
+
+  Doctors:
+    | {
+        status?: AdminAccountStatus;
+      }
+    | undefined;
+
+  Pharmacies:
+    | {
+        status?: AdminAccountStatus;
+      }
+    | undefined;
+
+  Users:
+    | {
+        status?: AdminUserStatusFilter;
+      }
+    | undefined;
+};
+
 export type MedicineDraft = {
   name: string;
   dose: string;
@@ -40,7 +75,18 @@ export type RootStackParamList = {
   RoleSelection: undefined;
   PatientSignup: undefined;
   DoctorSignup: undefined;
-
+  PharmacySignup: undefined;
+  PharmacyPendingApproval:
+  | {
+      user?: any;
+      email?: string;
+    }
+  | undefined;
+PharmacyDashboard:
+  | {
+      user?: any;
+    }
+  | undefined;
   DoctorPendingApproval:
     | {
         user?: any;
@@ -61,6 +107,26 @@ export type RootStackParamList = {
   DoctorTabs:
     | (NavigatorScreenParams<DoctorTabParamList> & { user?: any })
     | undefined;
+
+  AdminTabs:
+    | (NavigatorScreenParams<AdminTabParamList> & { user?: any })
+    | undefined;
+
+  AdminDashboard: undefined;
+
+  AdminDoctorVerificationDetail: {
+    doctorId: string;
+  };
+
+  AdminPharmacyVerificationDetail: {
+    pharmacyId: string;
+  };
+
+  AdminRegisterWebView: {
+    title: string;
+    url: string;
+    helperText?: string;
+  };
 
   PatientProfile:
     | {

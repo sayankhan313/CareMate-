@@ -49,6 +49,17 @@ const doctorVerificationSelect = {
   },
 };
 
+const pharmacyVerificationSelect = {
+  id: true,
+  fullName: true,
+  email: true,
+  role: true,
+  accountStatus: true,
+  isEmailVerified: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 const userListSelect = {
   id: true,
   fullName: true,
@@ -58,6 +69,14 @@ const userListSelect = {
   isEmailVerified: true,
   createdAt: true,
   updatedAt: true,
+};
+
+const getStatusFilter = (status?: string): VerificationStatusFilter => {
+  if (status && allowedStatusFilters.has(status as VerificationStatusFilter)) {
+    return status as VerificationStatusFilter;
+  }
+
+  return "PENDING_VERIFICATION";
 };
 
 const formatDoctorVerification = (doctor: any) => {
@@ -95,6 +114,24 @@ const formatDoctorVerification = (doctor: any) => {
   };
 };
 
+const formatPharmacyVerification = (pharmacy: any) => {
+  return {
+    id: pharmacy.id,
+    fullName: pharmacy.fullName,
+    email: pharmacy.email,
+    role: pharmacy.role,
+    accountStatus: pharmacy.accountStatus,
+    isEmailVerified: pharmacy.isEmailVerified,
+    submittedAt: pharmacy.createdAt,
+    updatedAt: pharmacy.updatedAt,
+
+    // Pharmacy profile/documents are not in schema yet.
+    // This keeps frontend API working now and allows adding profile later.
+    profile: null,
+    documents: null,
+  };
+};
+
 const getDoctorOrThrow = async (userId: string) => {
   const doctor = await prisma.user.findUnique({
     where: {
@@ -114,6 +151,25 @@ const getDoctorOrThrow = async (userId: string) => {
   return doctor;
 };
 
+const getPharmacyOrThrow = async (userId: string) => {
+  const pharmacy = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: pharmacyVerificationSelect,
+  });
+
+  if (!pharmacy) {
+    throw new AppError("Pharmacy verification request not found", 404);
+  }
+
+  if (pharmacy.role !== "PHARMACY") {
+    throw new AppError("This user is not a pharmacy account", 400);
+  }
+
+  return pharmacy;
+};
+
 const cleanNotes = (notes?: string) => {
   const trimmedNotes = notes?.trim();
 
@@ -130,12 +186,16 @@ export const adminService = {
       totalUsers,
       totalPatients,
       totalDoctors,
+      totalPharmacies,
       pendingDoctors,
       approvedDoctors,
       rejectedDoctors,
       pendingPharmacies,
+      approvedPharmacies,
+      rejectedPharmacies,
       disabledUsers,
       recentDoctorVerifications,
+      recentPharmacyVerifications,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({
@@ -146,6 +206,11 @@ export const adminService = {
       prisma.user.count({
         where: {
           role: "DOCTOR",
+        },
+      }),
+      prisma.user.count({
+        where: {
+          role: "PHARMACY",
         },
       }),
       prisma.user.count({
@@ -174,6 +239,18 @@ export const adminService = {
       }),
       prisma.user.count({
         where: {
+          role: "PHARMACY",
+          accountStatus: "ACTIVE",
+        },
+      }),
+      prisma.user.count({
+        where: {
+          role: "PHARMACY",
+          accountStatus: "REJECTED",
+        },
+      }),
+      prisma.user.count({
+        where: {
           accountStatus: "DISABLED",
         },
       }),
@@ -188,6 +265,17 @@ export const adminService = {
         },
         take: 5,
       }),
+      prisma.user.findMany({
+        where: {
+          role: "PHARMACY",
+          accountStatus: "PENDING_VERIFICATION",
+        },
+        select: pharmacyVerificationSelect,
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+      }),
     ]);
 
     return {
@@ -195,23 +283,26 @@ export const adminService = {
         totalUsers,
         totalPatients,
         totalDoctors,
+        totalPharmacies,
         pendingDoctors,
         approvedDoctors,
         rejectedDoctors,
         pendingPharmacies,
+        approvedPharmacies,
+        rejectedPharmacies,
         disabledUsers,
       },
       recentDoctorVerifications: recentDoctorVerifications.map(
         formatDoctorVerification
       ),
+      recentPharmacyVerifications: recentPharmacyVerifications.map(
+        formatPharmacyVerification
+      ),
     };
   },
 
   async listDoctorVerifications(status?: string) {
-    const statusFilter =
-      status && allowedStatusFilters.has(status as VerificationStatusFilter)
-        ? (status as VerificationStatusFilter)
-        : "PENDING_VERIFICATION";
+    const statusFilter = getStatusFilter(status);
 
     const doctors = await prisma.user.findMany({
       where: {
@@ -293,6 +384,101 @@ export const adminService = {
 
     return {
       doctor: formatDoctorVerification(updatedDoctor),
+      decision: {
+        action: "REJECTED",
+        reviewedByAdminId: input.adminId,
+        notes: cleanNotes(input.notes),
+        reviewedAt: new Date().toISOString(),
+      },
+    };
+  },
+
+  async listPharmacyVerifications(status?: string) {
+    const statusFilter = getStatusFilter(status);
+
+    const pharmacies = await prisma.user.findMany({
+      where: {
+        role: "PHARMACY",
+        accountStatus: statusFilter,
+      },
+      select: pharmacyVerificationSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return {
+      status: statusFilter,
+      pharmacies: pharmacies.map(formatPharmacyVerification),
+    };
+  },
+
+  async getPharmacyVerification(userId: string) {
+    const pharmacy = await getPharmacyOrThrow(userId);
+
+    return {
+      pharmacy: formatPharmacyVerification(pharmacy),
+    };
+  },
+
+  async approvePharmacyVerification(
+    userId: string,
+    input: AdminDecisionInput
+  ) {
+    const pharmacy = await getPharmacyOrThrow(userId);
+
+    if (pharmacy.accountStatus === "ACTIVE") {
+      throw new AppError("Pharmacy account is already active", 400);
+    }
+
+    if (pharmacy.accountStatus === "DISABLED") {
+      throw new AppError("Disabled pharmacy accounts cannot be approved", 400);
+    }
+
+    const updatedPharmacy = await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        accountStatus: "ACTIVE",
+      },
+      select: pharmacyVerificationSelect,
+    });
+
+    return {
+      pharmacy: formatPharmacyVerification(updatedPharmacy),
+      decision: {
+        action: "APPROVED",
+        reviewedByAdminId: input.adminId,
+        notes: cleanNotes(input.notes),
+        reviewedAt: new Date().toISOString(),
+      },
+    };
+  },
+
+  async rejectPharmacyVerification(userId: string, input: AdminDecisionInput) {
+    const pharmacy = await getPharmacyOrThrow(userId);
+
+    if (pharmacy.accountStatus === "ACTIVE") {
+      throw new AppError("Active pharmacy accounts cannot be rejected", 400);
+    }
+
+    if (pharmacy.accountStatus === "DISABLED") {
+      throw new AppError("Disabled pharmacy accounts cannot be rejected", 400);
+    }
+
+    const updatedPharmacy = await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        accountStatus: "REJECTED",
+      },
+      select: pharmacyVerificationSelect,
+    });
+
+    return {
+      pharmacy: formatPharmacyVerification(updatedPharmacy),
       decision: {
         action: "REJECTED",
         reviewedByAdminId: input.adminId,

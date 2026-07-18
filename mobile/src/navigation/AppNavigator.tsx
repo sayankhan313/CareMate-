@@ -31,7 +31,14 @@ import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
 
 import { PatientTabNavigator } from "./PatientTabNavigator";
 import { DoctorTabNavigator } from "./DoctorTabNavigator";
+import { AdminTabNavigator } from "./AdminTabNavigator";
 
+import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
+import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
+import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
+import { PharmacySignupScreen } from "../screens/auth/PharmacySignupScreen";
+import { PharmacyPendingApprovalScreen } from "../screens/auth/PharmacyPendingApprovalScreen";
+import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
 import type { RootStackParamList } from "../types/navigation";
 
 import {
@@ -44,6 +51,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const ConnectedDeviceStackScreen = ConnectedDeviceScreen as ComponentType<any>;
+const AdminTabsLegacyScreen = AdminTabNavigator as ComponentType<any>;
 
 const CriticalVitalWatcher = () => {
   const { lastSyncedReading } = useHealthConnectDevice();
@@ -116,6 +124,11 @@ export const AppNavigator = () => {
             <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
 
             <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
+            <Stack.Screen name="PharmacySignup" component={PharmacySignupScreen} />
+            <Stack.Screen
+              name="PharmacyPendingApproval"
+              component={PharmacyPendingApprovalScreen}
+            />
 
             <Stack.Screen
               name="DoctorPendingApproval"
@@ -135,6 +148,29 @@ export const AppNavigator = () => {
             <Stack.Screen name="PatientTabs" component={PatientTabNavigator} />
 
             <Stack.Screen name="DoctorTabs" component={DoctorTabNavigator} />
+
+            <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
+            <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />
+
+            <Stack.Screen
+              name="AdminDashboard"
+              component={AdminTabsLegacyScreen}
+            />
+
+            <Stack.Screen
+              name="AdminDoctorVerificationDetail"
+              component={AdminDoctorVerificationDetailScreen}
+            />
+
+            <Stack.Screen
+              name="AdminPharmacyVerificationDetail"
+              component={AdminPharmacyVerificationDetailScreen}
+            />
+
+            <Stack.Screen
+              name="AdminRegisterWebView"
+              component={AdminRegisterWebViewScreen}
+            />
 
             <Stack.Screen
               name="PatientProfile"
@@ -171,7 +207,9 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="ConsultationEnded"
               component={ConsultationEndedScreen}
-              options={{ headerShown: false }}
+              options={{
+                headerShown: false,
+              }}
             />
 
             <Stack.Screen name="ScanMedicine" component={ScanMedicineScreen} />

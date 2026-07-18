@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import {
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -6,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CommonActions } from "@react-navigation/native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -15,6 +18,7 @@ import {
   Bell,
   CalendarDays,
   ClipboardList,
+  LogOut,
   MessageSquareText,
   Search,
   ShieldAlert,
@@ -24,6 +28,7 @@ import {
   Video,
 } from "lucide-react-native";
 
+import { tokenStorage } from "../../services/tokenStorage";
 import type { DoctorTabParamList } from "../../types/navigation";
 
 type DoctorDashboardScreenProps = BottomTabScreenProps<
@@ -45,7 +50,6 @@ const DOCTOR_LIGHT = "#F3E8FF";
 const SUCCESS = "#42B883";
 const SUCCESS_LIGHT = "#EAF8F2";
 
-const WARNING = "#F6A545";
 const WARNING_LIGHT = "#FFF3E2";
 
 const DANGER = "#EF4D56";
@@ -66,6 +70,7 @@ const getGreetingText = () => {
 };
 
 export const DoctorDashboardScreen = ({
+  navigation,
   route,
 }: DoctorDashboardScreenProps) => {
   const insets = useSafeAreaInsets();
@@ -74,6 +79,49 @@ export const DoctorDashboardScreen = ({
   const firstName =
     user?.fullName?.split(" ")[0]?.replace("Dr", "").trim() || "Doctor";
   const initial = firstName.charAt(0).toUpperCase() || "D";
+
+  const handleLogout = () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await tokenStorage.removeToken();
+
+          const rootNavigation = navigation.getParent();
+
+          if (rootNavigation) {
+            rootNavigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "Login",
+                  },
+                ],
+              })
+            );
+            return;
+          }
+
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [
+                {
+                  name: "Login",
+                },
+              ],
+            })
+          );
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -103,6 +151,14 @@ export const DoctorDashboardScreen = ({
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initial}</Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              activeOpacity={0.85}
+              onPress={handleLogout}
+            >
+              <LogOut size={18} color={DOCTOR_PRIMARY} strokeWidth={2.5} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -250,7 +306,7 @@ const QuickAction = ({
   icon,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }) => {
   return (
     <TouchableOpacity style={styles.quickAction} activeOpacity={0.86}>
@@ -349,20 +405,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   roundButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 9,
+    marginRight: 7,
     borderWidth: 1,
     borderColor: BORDER,
   },
+  logoutButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 7,
+    borderWidth: 1,
+    borderColor: "#E9D5FF",
+  },
   notificationDot: {
     position: "absolute",
-    top: 9,
-    right: 9,
+    top: 8,
+    right: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -371,16 +438,16 @@ const styles = StyleSheet.create({
     borderColor: SURFACE,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     backgroundColor: DOCTOR_PRIMARY,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     color: SURFACE,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
   },
   scrollView: {

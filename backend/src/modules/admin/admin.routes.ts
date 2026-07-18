@@ -15,10 +15,7 @@ router.get("/users", adminController.listUsers);
 
 router.patch("/users/:userId/suspend", adminController.suspendUser);
 
-router.get(
-  "/verifications/doctors",
-  adminController.listDoctorVerifications
-);
+router.get("/verifications/doctors", adminController.listDoctorVerifications);
 
 router.get(
   "/verifications/doctors/:userId",
@@ -33,6 +30,26 @@ router.patch(
 router.patch(
   "/verifications/doctors/:userId/reject",
   adminController.rejectDoctorVerification
+);
+
+router.get(
+  "/verifications/pharmacies",
+  adminController.listPharmacyVerifications
+);
+
+router.get(
+  "/verifications/pharmacies/:userId",
+  adminController.getPharmacyVerification
+);
+
+router.patch(
+  "/verifications/pharmacies/:userId/approve",
+  adminController.approvePharmacyVerification
+);
+
+router.patch(
+  "/verifications/pharmacies/:userId/reject",
+  adminController.rejectPharmacyVerification
 );
 
 export default router;
