@@ -73,20 +73,26 @@ export type RootStackParamList = {
   Welcome: undefined;
   Login: undefined;
   RoleSelection: undefined;
+
   PatientSignup: undefined;
   DoctorSignup: undefined;
   PharmacySignup: undefined;
+
+  SelectDoctor: undefined;
+
   PharmacyPendingApproval:
-  | {
-      user?: any;
-      email?: string;
-    }
-  | undefined;
-PharmacyDashboard:
-  | {
-      user?: any;
-    }
-  | undefined;
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
+  PharmacyDashboard:
+    | {
+        user?: any;
+      }
+    | undefined;
+
   DoctorPendingApproval:
     | {
         user?: any;
@@ -101,15 +107,26 @@ PharmacyDashboard:
   ForgotPassword: undefined;
 
   PatientTabs:
-    | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+    | (NavigatorScreenParams<PatientTabParamList> & {
+        user?: any;
+      })
     | undefined;
 
   DoctorTabs:
-    | (NavigatorScreenParams<DoctorTabParamList> & { user?: any })
+    | (NavigatorScreenParams<DoctorTabParamList> & {
+        user?: any;
+      })
     | undefined;
 
+  DoctorPatientDetail: {
+    patientId: string;
+    patientName?: string;
+  };
+
   AdminTabs:
-    | (NavigatorScreenParams<AdminTabParamList> & { user?: any })
+    | (NavigatorScreenParams<AdminTabParamList> & {
+        user?: any;
+      })
     | undefined;
 
   AdminDashboard: undefined;

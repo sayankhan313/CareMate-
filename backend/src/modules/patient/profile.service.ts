@@ -6,9 +6,7 @@ const getFirstName = (fullName: string) => {
 };
 
 const formatDateOfBirth = (value?: Date | null) => {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const day = String(value.getUTCDate()).padStart(2, "0");
   const month = String(value.getUTCMonth() + 1).padStart(2, "0");
@@ -18,25 +16,12 @@ const formatDateOfBirth = (value?: Date | null) => {
 };
 
 const formatGender = (value?: string | null) => {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
-  if (value === "MALE") {
-    return "Male";
-  }
-
-  if (value === "FEMALE") {
-    return "Female";
-  }
-
-  if (value === "OTHER") {
-    return "Other";
-  }
-
-  if (value === "PREFER_NOT_TO_SAY") {
-    return "Prefer not to say";
-  }
+  if (value === "MALE") return "Male";
+  if (value === "FEMALE") return "Female";
+  if (value === "OTHER") return "Other";
+  if (value === "PREFER_NOT_TO_SAY") return "Prefer not to say";
 
   return value;
 };

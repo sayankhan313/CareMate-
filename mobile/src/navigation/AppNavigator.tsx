@@ -14,6 +14,8 @@ import { DoctorSignupScreen } from "../screens/auth/DoctorSignupScreen";
 import { DoctorPendingApprovalScreen } from "../screens/auth/DoctorPendingApprovalScreen";
 import { EmailVerificationScreen } from "../screens/auth/EmailVerificationScreen";
 import { ForgotPasswordScreen } from "../screens/auth/ForgotPasswordScreen";
+import { PharmacySignupScreen } from "../screens/auth/PharmacySignupScreen";
+import { PharmacyPendingApprovalScreen } from "../screens/auth/PharmacyPendingApprovalScreen";
 
 import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
 
@@ -28,6 +30,9 @@ import ScanMedicineResultScreen from "../screens/patient/ScanMedicineResultScree
 import PrescriptionScanResultScreen from "../screens/patient/PrescriptionScanResultScreen";
 import { ManualSafetyResponseScreen } from "../screens/patient/ManualSafetyResponseScreen";
 import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
+import { SelectDoctorScreen } from "../screens/patient/SelectDoctorScreen";
+
+import { DoctorPatientDetailScreen } from "../screens/doctor/DoctorPatientDetailScreen";
 
 import { PatientTabNavigator } from "./PatientTabNavigator";
 import { DoctorTabNavigator } from "./DoctorTabNavigator";
@@ -36,9 +41,9 @@ import { AdminTabNavigator } from "./AdminTabNavigator";
 import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
 import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
 import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
-import { PharmacySignupScreen } from "../screens/auth/PharmacySignupScreen";
-import { PharmacyPendingApprovalScreen } from "../screens/auth/PharmacyPendingApprovalScreen";
+
 import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
+
 import type { RootStackParamList } from "../types/navigation";
 
 import {
@@ -52,6 +57,8 @@ const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const ConnectedDeviceStackScreen = ConnectedDeviceScreen as ComponentType<any>;
 const AdminTabsLegacyScreen = AdminTabNavigator as ComponentType<any>;
+const DoctorPatientDetailStackScreen =
+  DoctorPatientDetailScreen as ComponentType<any>;
 
 const CriticalVitalWatcher = () => {
   const { lastSyncedReading } = useHealthConnectDevice();
@@ -124,7 +131,12 @@ export const AppNavigator = () => {
             <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
 
             <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
-            <Stack.Screen name="PharmacySignup" component={PharmacySignupScreen} />
+
+            <Stack.Screen
+              name="PharmacySignup"
+              component={PharmacySignupScreen}
+            />
+
             <Stack.Screen
               name="PharmacyPendingApproval"
               component={PharmacyPendingApprovalScreen}
@@ -149,8 +161,17 @@ export const AppNavigator = () => {
 
             <Stack.Screen name="DoctorTabs" component={DoctorTabNavigator} />
 
+            <Stack.Screen
+              name="DoctorPatientDetail"
+              component={DoctorPatientDetailStackScreen}
+            />
+
             <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
-            <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />
+
+            <Stack.Screen
+              name="PharmacyDashboard"
+              component={PharmacyDashboardScreen}
+            />
 
             <Stack.Screen
               name="AdminDashboard"
@@ -223,6 +244,8 @@ export const AppNavigator = () => {
               name="PrescriptionScanResult"
               component={PrescriptionScanResultScreen}
             />
+
+            <Stack.Screen name="SelectDoctor" component={SelectDoctorScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </HealthConnectDeviceProvider>

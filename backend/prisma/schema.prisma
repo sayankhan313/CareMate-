@@ -105,6 +105,11 @@ enum MedicineSafetyLevel {
   DOCTOR_REVIEW_RECOMMENDED
 }
 
+enum PatientDoctorAssignmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -132,8 +137,10 @@ model User {
   patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
   doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
 
-  patientConsultations Consultation[] @relation("PatientConsultations")
-  doctorConsultations  Consultation[] @relation("DoctorConsultations")
+  patientConsultations     Consultation[]            @relation("PatientConsultations")
+  doctorConsultations      Consultation[]            @relation("DoctorConsultations")
+  patientDoctorAssignments PatientDoctorAssignment[] @relation("PatientDoctorAssignments")
+  doctorPatientAssignments PatientDoctorAssignment[] @relation("DoctorPatientAssignments")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,6 +185,22 @@ model DoctorProfile {
 
   @@index([gmcNumber])
   @@index([specialization])
+}
+
+model PatientDoctorAssignment {
+  id        String                        @id @default(uuid())
+  patientId String                        @unique
+  doctorId  String
+  status    PatientDoctorAssignmentStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation("PatientDoctorAssignments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  User @relation("DoctorPatientAssignments", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+  @@index([status])
 }
 
 model Medicine {
@@ -267,6 +290,7 @@ model PatientVitalReading {
 model PatientDoctorNote {
   id        String @id @default(uuid())
   patientId String
+  doctorId  String?
   note      String
 
   createdAt DateTime @default(now())

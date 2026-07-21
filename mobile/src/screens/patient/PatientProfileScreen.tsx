@@ -269,7 +269,7 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
   const initials = getInitials(fullName);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
@@ -295,7 +295,7 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(36, insets.bottom + 36),
+              paddingBottom: Math.max(130, insets.bottom + 120),
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -439,7 +439,7 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                       ? `Dr. ${linkedUsers.doctor.fullName}`
                       : "Not assigned yet"
                   }
-                  onPress={() => showComingSoon("Assigned doctor")}
+                  onPress={() => navigation.navigate("SelectDoctor")}
                 />
 
                 <ProfileRow

@@ -1,17 +1,15 @@
 import { Router } from "express";
 
-import healthRoutes from "./health.routes.js";
 import authRoutes from "../modules/auth/auth.routes.js";
-import userRoutes from "../modules/users/user.routes.js";
 import patientRoutes from "../modules/patient/patient.routes.js";
-import adminRoutes from "../modules/admin/admin.routes.js";
+import userRoutes from "../modules/users/user.routes.js";
+import doctorRoutes from "../modules/doctor/doctor.routes.js";
 
-const apiRoutes = Router();
+const router = Router();
 
-apiRoutes.use("/health", healthRoutes);
-apiRoutes.use("/auth", authRoutes);
-apiRoutes.use("/users", userRoutes);
-apiRoutes.use("/patient", patientRoutes);
-apiRoutes.use("/admin", adminRoutes);
+router.use("/auth", authRoutes);
+router.use("/patient", patientRoutes);
+router.use("/users", userRoutes);
+router.use("/doctor", doctorRoutes);
 
-export default apiRoutes;
+export default router;

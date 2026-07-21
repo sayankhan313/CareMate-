@@ -8,8 +8,10 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DoctorDashboardScreen } from "../screens/doctor/DoctorDashboardScreen";
+import { DoctorPatientsScreen } from "../screens/doctor/DoctorPatientsScreen";
 import type {
   DoctorTabParamList,
   RootStackParamList,
@@ -28,7 +30,8 @@ const TEXT = "#111936";
 const MUTED = "#7A8194";
 const BORDER = "#E4E8F2";
 
-const DOCTOR_PRIMARY = "#7C3AED";
+const DOCTOR_PRIMARY = "#0F766E";
+const DOCTOR_LIGHT = "#E6FFFA";
 
 const ComingSoonScreen = ({ title }: { title: string }) => {
   return (
@@ -39,15 +42,17 @@ const ComingSoonScreen = ({ title }: { title: string }) => {
 
       <Text style={styles.placeholderTitle}>{title}</Text>
       <Text style={styles.placeholderText}>
-        This doctor section will connect after admin approval and patient link
-        workflows are completed.
+        This doctor workflow will connect to real patient data in the next
+        module step.
       </Text>
     </View>
   );
 };
 
 export const DoctorTabNavigator = ({ route }: DoctorTabNavigatorProps) => {
+  const insets = useSafeAreaInsets();
   const user = route.params?.user;
+  const bottomInset = Math.max(insets.bottom, 10);
 
   return (
     <Tab.Navigator
@@ -59,13 +64,13 @@ export const DoctorTabNavigator = ({ route }: DoctorTabNavigatorProps) => {
         tabBarStyle: {
           backgroundColor: SURFACE,
           borderTopColor: BORDER,
-          height: 72,
+          height: 66 + bottomInset,
           paddingTop: 8,
-          paddingBottom: 10,
+          paddingBottom: bottomInset,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "800",
+          fontWeight: "700",
         },
       }}
     >
@@ -76,7 +81,7 @@ export const DoctorTabNavigator = ({ route }: DoctorTabNavigatorProps) => {
           user,
         }}
         options={{
-          title: "Dashboard",
+          title: "Home",
           tabBarIcon: ({ color }) => (
             <LayoutDashboard size={22} color={color} strokeWidth={2.5} />
           ),
@@ -97,15 +102,14 @@ export const DoctorTabNavigator = ({ route }: DoctorTabNavigatorProps) => {
 
       <Tab.Screen
         name="Patients"
+        component={DoctorPatientsScreen}
         options={{
           title: "Patients",
           tabBarIcon: ({ color }) => (
             <UsersRound size={22} color={color} strokeWidth={2.5} />
           ),
         }}
-      >
-        {() => <ComingSoonScreen title="Patients" />}
-      </Tab.Screen>
+      />
 
       <Tab.Screen
         name="Profile"
@@ -133,10 +137,8 @@ const styles = StyleSheet.create({
   placeholderIcon: {
     width: 76,
     height: 76,
-    borderRadius: 26,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
+    borderRadius: 18,
+    backgroundColor: DOCTOR_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
@@ -144,13 +146,13 @@ const styles = StyleSheet.create({
   placeholderTitle: {
     color: TEXT,
     fontSize: 22,
-    fontWeight: "900",
+    fontWeight: "700",
     marginBottom: 8,
   },
   placeholderText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 20,
     textAlign: "center",
   },

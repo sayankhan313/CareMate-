@@ -10,6 +10,7 @@ import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { profileController } from "./profile.controller.js";
+import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 
 const router = Router();
 
@@ -19,6 +20,10 @@ router.use(authorizeRoles("PATIENT"));
 router.get("/dashboard", dashboardController.getDashboard);
 
 router.get("/profile", profileController.getProfile);
+
+router.get("/doctors", doctorAssignmentController.listApprovedDoctors);
+
+router.post("/doctor-assignment", doctorAssignmentController.assignDoctor);
 
 router.post("/vitals/readings", vitalsController.createReading);
 
