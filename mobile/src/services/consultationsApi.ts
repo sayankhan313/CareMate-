@@ -1,7 +1,10 @@
 import { API_BASE_URL } from "../constants/api";
 import { tokenStorage } from "./tokenStorage";
 
-import type { Consultation, MeetingConfig } from "./safetyApi";
+import type {
+  Consultation,
+  MeetingConfig,
+} from "./safetyApi";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -10,6 +13,7 @@ type ApiResponse<T> = {
 };
 
 export type CreateManualConsultationPayload = {
+  doctorId: string;
   reason: string;
   preferredDate?: string;
   preferredTime?: string;
@@ -33,11 +37,24 @@ const getErrorMessage = (result: any) => {
   }
 
   if (Array.isArray(result?.message)) {
-    return result.message[0]?.message || "Request failed.";
+    return (
+      result.message[0]?.message ||
+      "Request failed."
+    );
   }
 
   if (Array.isArray(result?.errors)) {
-    return result.errors[0]?.message || "Request failed.";
+    return (
+      result.errors[0]?.message ||
+      "Request failed."
+    );
+  }
+
+  if (Array.isArray(result?.issues)) {
+    return (
+      result.issues[0]?.message ||
+      "Request failed."
+    );
   }
 
   return "Request failed.";
@@ -57,7 +74,9 @@ const getAuthHeaders = async () => {
 };
 
 export const consultationsApi = {
-  async createManualConsultation(payload: CreateManualConsultationPayload) {
+  async createManualConsultation(
+    payload: CreateManualConsultationPayload
+  ) {
     const response = await fetch(
       `${API_BASE_URL}/patient/consultations/manual`,
       {
@@ -67,32 +86,44 @@ export const consultationsApi = {
       }
     );
 
-    const result: ApiResponse<CreateConsultationResult> | any =
-      await response.json();
+    const result:
+      | ApiResponse<CreateConsultationResult>
+      | any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(getErrorMessage(result));
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getErrorMessage(result)
+      );
     }
 
     return result.data as CreateConsultationResult;
   },
 
   async listConsultations() {
-    const response = await fetch(`${API_BASE_URL}/patient/consultations`, {
-      method: "GET",
-      headers: await getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/patient/consultations`,
+      {
+        method: "GET",
+        headers: await getAuthHeaders(),
+      }
+    );
 
-    const result: ApiResponse<Consultation[]> | any = await response.json();
+    const result:
+      | ApiResponse<Consultation[]>
+      | any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(getErrorMessage(result));
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getErrorMessage(result)
+      );
     }
 
     return result.data as Consultation[];
   },
 
-  async getConsultationById(consultationId: string) {
+  async getConsultationById(
+    consultationId: string
+  ) {
     const response = await fetch(
       `${API_BASE_URL}/patient/consultations/${consultationId}`,
       {
@@ -101,16 +132,22 @@ export const consultationsApi = {
       }
     );
 
-    const result: ApiResponse<Consultation> | any = await response.json();
+    const result:
+      | ApiResponse<Consultation>
+      | any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(getErrorMessage(result));
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getErrorMessage(result)
+      );
     }
 
     return result.data as Consultation;
   },
 
-  async getPatientJoinConfig(consultationId: string) {
+  async getPatientJoinConfig(
+    consultationId: string
+  ) {
     const response = await fetch(
       `${API_BASE_URL}/patient/consultations/${consultationId}/join`,
       {
@@ -119,11 +156,14 @@ export const consultationsApi = {
       }
     );
 
-    const result: ApiResponse<PatientJoinConfigResult> | any =
-      await response.json();
+    const result:
+      | ApiResponse<PatientJoinConfigResult>
+      | any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(getErrorMessage(result));
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getErrorMessage(result)
+      );
     }
 
     return result.data as PatientJoinConfigResult;

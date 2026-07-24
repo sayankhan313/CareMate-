@@ -2,18 +2,18 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
 import LinearGradient from "react-native-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
+  ClipboardList,
   ChevronRight,
   Clock3,
   Droplets,
@@ -38,6 +39,10 @@ import {
   Thermometer,
   Video,
 } from "lucide-react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import {
   doctorPatientsApi,
@@ -49,6 +54,7 @@ import {
   type DoctorUrgentAlert,
   type DoctorVitalReading,
 } from "../../services/doctor/doctorPatientsApi";
+import { doctorNotesApi } from "../../services/doctor/doctorNotesApi";
 import type { RootStackParamList } from "../../types/navigation";
 
 type DoctorPatientDetailScreenProps = NativeStackScreenProps<
@@ -79,6 +85,8 @@ const WARNING_DARK = "#A85A13";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
 const DANGER_DARK = "#B42318";
+
+const MAX_NOTE_LENGTH = 2000;
 
 const elevate = (level: 1 | 2 | 3 = 2) => {
   const elevation = level === 1 ? 2 : level === 2 ? 4 : 7;
@@ -359,6 +367,10 @@ export const DoctorPatientDetailScreen = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [isNoteModalVisible, setIsNoteModalVisible] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
   const patientName = patientDetail?.patient.fullName || fallbackPatientName;
 
   const latestVitalStatus = patientDetail?.latestVital?.status;
@@ -405,12 +417,78 @@ export const DoctorPatientDetailScreen = ({
 
   useFocusEffect(
     useCallback(() => {
-      loadPatientDetail("initial");
+      void loadPatientDetail("initial");
     }, [loadPatientDetail])
   );
 
   const showComingNext = (title: string) => {
     Alert.alert(title, "This doctor workflow will be connected next.");
+  };
+
+  const openPrescription = () => {
+    navigation.navigate("DoctorPrescription", {
+      patientId,
+      patientName,
+    });
+  };
+
+  const openNoteModal = () => {
+    setNoteText("");
+    setIsNoteModalVisible(true);
+  };
+
+  const closeNoteModal = () => {
+    if (isSavingNote) {
+      return;
+    }
+
+    setIsNoteModalVisible(false);
+    setNoteText("");
+  };
+
+  const saveDoctorNote = async () => {
+    const cleanedNote = noteText.trim();
+
+    if (cleanedNote.length < 2) {
+      Alert.alert("Note required", "Please write at least 2 characters.");
+      return;
+    }
+
+    try {
+      setIsSavingNote(true);
+
+      const result = await doctorNotesApi.createNote(patientId, cleanedNote);
+
+      const noteForDetail: DoctorPatientNote = {
+        id: result.note.id,
+        note: result.note.note,
+        createdAt: result.note.createdAt,
+        updatedAt: result.note.updatedAt,
+      };
+
+      setPatientDetail((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          latestNotes: [noteForDetail, ...current.latestNotes].slice(0, 3),
+        };
+      });
+
+      setIsNoteModalVisible(false);
+      setNoteText("");
+
+      await loadPatientDetail("refresh");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save doctor note.";
+
+      Alert.alert("Unable to save note", message);
+    } finally {
+      setIsSavingNote(false);
+    }
   };
 
   return (
@@ -431,6 +509,7 @@ export const DoctorPatientDetailScreen = ({
             <Text style={styles.headerTitle} numberOfLines={1}>
               {patientName}
             </Text>
+
             <Text style={styles.headerSubtitle}>Patient clinical record</Text>
           </View>
         </View>
@@ -447,7 +526,7 @@ export const DoctorPatientDetailScreen = ({
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() => loadPatientDetail("refresh")}
+              onRefresh={() => void loadPatientDetail("refresh")}
               tintColor={DOCTOR_PRIMARY}
               colors={[DOCTOR_PRIMARY]}
             />
@@ -456,6 +535,7 @@ export const DoctorPatientDetailScreen = ({
           {isLoading ? (
             <View style={styles.stateCard}>
               <ActivityIndicator color={DOCTOR_PRIMARY} />
+
               <Text style={styles.stateText}>Loading patient record...</Text>
             </View>
           ) : null}
@@ -467,14 +547,16 @@ export const DoctorPatientDetailScreen = ({
               </View>
 
               <Text style={styles.errorTitle}>Unable to load record</Text>
+
               <Text style={styles.errorText}>{errorMessage}</Text>
 
               <TouchableOpacity
                 style={styles.retryButton}
                 activeOpacity={0.86}
-                onPress={() => loadPatientDetail("initial")}
+                onPress={() => void loadPatientDetail("initial")}
               >
                 <RefreshCw size={17} color="#FFFFFF" strokeWidth={2.5} />
+
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
@@ -499,6 +581,7 @@ export const DoctorPatientDetailScreen = ({
                     <Text style={styles.heroName} numberOfLines={1}>
                       {patientDetail.patient.fullName}
                     </Text>
+
                     <Text style={styles.heroMeta}>
                       {getAgeText(patientDetail.patient.dateOfBirth)} •{" "}
                       {patientDetail.patient.gender || "Gender not set"}
@@ -519,6 +602,7 @@ export const DoctorPatientDetailScreen = ({
                     <Text style={styles.heroVitalLabel}>
                       {primaryVital.label}
                     </Text>
+
                     <Text style={styles.heroVitalValue}>
                       {primaryVital.value}
                     </Text>
@@ -526,6 +610,7 @@ export const DoctorPatientDetailScreen = ({
 
                   <View style={styles.heroUpdatedBlock}>
                     <Text style={styles.heroUpdatedLabel}>Last updated</Text>
+
                     <Text style={styles.heroUpdatedValue}>
                       {patientDetail.latestVital
                         ? formatDateTime(patientDetail.latestVital.recordedAt)
@@ -539,6 +624,7 @@ export const DoctorPatientDetailScreen = ({
                 <View style={styles.overviewHeader}>
                   <View>
                     <Text style={styles.overviewTitle}>Clinical Overview</Text>
+
                     <Text style={styles.overviewSubtitle}>
                       Today’s patient activity
                     </Text>
@@ -604,6 +690,7 @@ export const DoctorPatientDetailScreen = ({
                 <View style={styles.profileDivider} />
 
                 <Text style={styles.profileLabel}>Medical conditions</Text>
+
                 <Text style={styles.profileText}>
                   {patientDetail.patient.medicalConditions ||
                     "No medical conditions recorded."}
@@ -612,11 +699,43 @@ export const DoctorPatientDetailScreen = ({
                 <View style={styles.profileDivider} />
 
                 <Text style={styles.profileLabel}>Emergency contact</Text>
+
                 <Text style={styles.profileText}>
                   {patientDetail.patient.emergencyContact ||
                     "No emergency contact recorded."}
                 </Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.prescriptionAction}
+                activeOpacity={0.86}
+                onPress={openPrescription}
+              >
+                <View style={styles.prescriptionActionIcon}>
+                  <ClipboardList
+                    size={24}
+                    color={DOCTOR_PRIMARY}
+                    strokeWidth={2.7}
+                  />
+                </View>
+
+                <View style={styles.prescriptionActionTextBlock}>
+                  <Text style={styles.prescriptionActionTitle}>
+                    Add Prescription
+                  </Text>
+
+                  <Text style={styles.prescriptionActionText}>
+                    Add medicines manually or scan a prescription for this
+                    patient.
+                  </Text>
+                </View>
+
+                <ChevronRight
+                  size={20}
+                  color={DOCTOR_PRIMARY}
+                  strokeWidth={2.7}
+                />
+              </TouchableOpacity>
 
               {patientDetail.activeAlert ? (
                 <SafetyAlertPanel
@@ -636,6 +755,7 @@ export const DoctorPatientDetailScreen = ({
 
                   <View style={styles.safePanelTextBlock}>
                     <Text style={styles.safePanelTitle}>No active alert</Text>
+
                     <Text style={styles.safePanelText}>
                       This patient has no active Safety Response escalation.
                     </Text>
@@ -720,6 +840,8 @@ export const DoctorPatientDetailScreen = ({
               <SectionHeader
                 title="Doctor Notes"
                 subtitle="Your latest notes for this patient"
+                rightAction="Add Note"
+                onPressRight={openNoteModal}
               />
 
               {patientDetail.latestNotes.length > 0 ? (
@@ -772,6 +894,15 @@ export const DoctorPatientDetailScreen = ({
             </>
           ) : null}
         </ScrollView>
+
+        <DoctorNoteModal
+          visible={isNoteModalVisible}
+          noteText={noteText}
+          isSaving={isSavingNote}
+          onChangeNote={setNoteText}
+          onCancel={closeNoteModal}
+          onSave={saveDoctorNote}
+        />
       </View>
     </SafeAreaView>
   );
@@ -807,6 +938,7 @@ const OverviewStat = ({
   return (
     <View style={[styles.overviewStatBox, { backgroundColor: background }]}>
       <Text style={[styles.overviewStatValue, { color }]}>{value}</Text>
+
       <Text style={[styles.overviewStatLabel, { color }]}>{label}</Text>
     </View>
   );
@@ -815,28 +947,143 @@ const OverviewStat = ({
 const SectionHeader = ({
   title,
   subtitle,
+  rightAction,
+  onPressRight,
 }: {
   title: string;
   subtitle: string;
+  rightAction?: string;
+  onPressRight?: () => void;
 }) => {
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleBlock}>
         <Text style={styles.sectionTitle}>{title}</Text>
+
         <Text style={styles.sectionSubtitle}>{subtitle}</Text>
       </View>
+
+      {rightAction && onPressRight ? (
+        <TouchableOpacity
+          style={styles.sectionActionButton}
+          activeOpacity={0.86}
+          onPress={onPressRight}
+        >
+          <NotebookPen size={15} color="#FFFFFF" strokeWidth={2.5} />
+
+          <Text style={styles.sectionActionText}>{rightAction}</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };
 
-const InfoLine = ({ icon, text }: { icon: ReactNode; text: string }) => {
+const InfoLine = ({
+  icon,
+  text,
+}: {
+  icon: ReactNode;
+  text: string;
+}) => {
   return (
     <View style={styles.infoLine}>
       {icon}
+
       <Text style={styles.infoLineText} numberOfLines={1}>
         {text}
       </Text>
     </View>
+  );
+};
+
+const DoctorNoteModal = ({
+  visible,
+  noteText,
+  isSaving,
+  onChangeNote,
+  onCancel,
+  onSave,
+}: {
+  visible: boolean;
+  noteText: string;
+  isSaving: boolean;
+  onChangeNote: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) => {
+  const isSaveDisabled = isSaving || noteText.trim().length < 2;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      onRequestClose={onCancel}
+    >
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalIconBox}>
+              <NotebookPen size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
+            </View>
+
+            <View style={styles.modalTitleBlock}>
+              <Text style={styles.modalTitle}>Add Doctor Note</Text>
+
+              <Text style={styles.modalSubtitle}>
+                This note will be saved under your doctor account.
+              </Text>
+            </View>
+          </View>
+
+          <TextInput
+            style={styles.noteInput}
+            value={noteText}
+            onChangeText={onChangeNote}
+            placeholder="Write clinical observation, advice, or follow-up note..."
+            placeholderTextColor={MUTED}
+            multiline
+            maxLength={MAX_NOTE_LENGTH}
+            textAlignVertical="top"
+            editable={!isSaving}
+          />
+
+          <Text style={styles.noteCounter}>
+            {noteText.length}/{MAX_NOTE_LENGTH}
+          </Text>
+
+          <View style={styles.modalButtonRow}>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              activeOpacity={0.86}
+              onPress={onCancel}
+              disabled={isSaving}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modalSaveButton,
+                isSaveDisabled ? styles.modalSaveButtonDisabled : undefined,
+              ]}
+              activeOpacity={0.86}
+              onPress={onSave}
+              disabled={isSaveDisabled}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.modalSaveText}>Save Note</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
 
@@ -858,6 +1105,7 @@ const SafetyAlertPanel = ({
 
         <View style={styles.alertTitleBlock}>
           <Text style={styles.alertTitle}>Active Safety Alert</Text>
+
           <Text style={styles.alertSubtitle}>
             {alert.vitalSummary
               ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}`
@@ -922,6 +1170,7 @@ const VitalsCard = ({
 
         <View style={styles.vitalsTitleBlock}>
           <Text style={styles.vitalsTitle}>Latest Reading</Text>
+
           <Text style={styles.vitalsSubtitle}>
             {formatDateTime(vital.recordedAt)}
           </Text>
@@ -982,6 +1231,7 @@ const VitalsCard = ({
         <View style={styles.historyPanel}>
           <View style={styles.historyHeader}>
             <Text style={styles.historyTitle}>Recent readings</Text>
+
             <Text style={styles.historySubtitle}>Last {history.length}</Text>
           </View>
 
@@ -1006,8 +1256,10 @@ const VitalMetric = ({
   return (
     <View style={styles.vitalMetricBox}>
       <View style={styles.vitalMetricIcon}>{icon}</View>
+
       <View style={styles.vitalMetricTextBlock}>
         <Text style={styles.vitalMetricLabel}>{label}</Text>
+
         <Text style={styles.vitalMetricValue} numberOfLines={1}>
           {value}
         </Text>
@@ -1016,7 +1268,11 @@ const VitalMetric = ({
   );
 };
 
-const VitalHistoryRow = ({ vital }: { vital: DoctorVitalReading }) => {
+const VitalHistoryRow = ({
+  vital,
+}: {
+  vital: DoctorVitalReading;
+}) => {
   const tone = getVitalTone(vital.status);
   const primary = getPrimaryVital(vital);
 
@@ -1028,7 +1284,10 @@ const VitalHistoryRow = ({ vital }: { vital: DoctorVitalReading }) => {
         <Text style={styles.historyMain}>
           {primary.label}: {primary.value}
         </Text>
-        <Text style={styles.historyTime}>{formatDateTime(vital.recordedAt)}</Text>
+
+        <Text style={styles.historyTime}>
+          {formatDateTime(vital.recordedAt)}
+        </Text>
       </View>
 
       <View style={[styles.historyChip, { backgroundColor: tone.background }]}>
@@ -1040,7 +1299,11 @@ const VitalHistoryRow = ({ vital }: { vital: DoctorVitalReading }) => {
   );
 };
 
-const DoseLogCard = ({ doseLog }: { doseLog: DoctorPatientDoseLog }) => {
+const DoseLogCard = ({
+  doseLog,
+}: {
+  doseLog: DoctorPatientDoseLog;
+}) => {
   const tone = getDoseTone(doseLog.status);
 
   return (
@@ -1051,6 +1314,7 @@ const DoseLogCard = ({ doseLog }: { doseLog: DoctorPatientDoseLog }) => {
 
       <View style={styles.listTextBlock}>
         <Text style={styles.listTitle}>{doseLog.medicine.name}</Text>
+
         <Text style={styles.listSubtitle}>
           {doseLog.medicine.dose} • {formatShortTime(doseLog.scheduledFor)}
         </Text>
@@ -1065,7 +1329,11 @@ const DoseLogCard = ({ doseLog }: { doseLog: DoctorPatientDoseLog }) => {
   );
 };
 
-const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
+const MedicineCard = ({
+  medicine,
+}: {
+  medicine: DoctorPatientMedicine;
+}) => {
   const pendingReviewCount = medicine.reminders.filter((reminder) => {
     return reminder.sendToDoctorForReview && reminder.reviewStatus === "PENDING";
   }).length;
@@ -1079,6 +1347,7 @@ const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
 
         <View style={styles.listTextBlock}>
           <Text style={styles.listTitle}>{medicine.name}</Text>
+
           <Text style={styles.listSubtitle}>{medicine.dose}</Text>
         </View>
 
@@ -1110,6 +1379,7 @@ const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
           medicine.reminders.map((reminder) => (
             <View key={reminder.id} style={styles.reminderRow}>
               <Clock3 size={15} color={DOCTOR_PRIMARY} strokeWidth={2.4} />
+
               <Text style={styles.reminderText}>
                 {reminder.timeOfDay} • {formatStatus(reminder.frequency)}
               </Text>
@@ -1133,7 +1403,11 @@ const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
   );
 };
 
-const NoteCard = ({ note }: { note: DoctorPatientNote }) => {
+const NoteCard = ({
+  note,
+}: {
+  note: DoctorPatientNote;
+}) => {
   return (
     <View style={styles.noteCard}>
       <View style={styles.noteTopRow}>
@@ -1143,7 +1417,10 @@ const NoteCard = ({ note }: { note: DoctorPatientNote }) => {
 
         <View style={styles.listTextBlock}>
           <Text style={styles.listTitle}>Doctor note</Text>
-          <Text style={styles.listSubtitle}>{formatDateTime(note.createdAt)}</Text>
+
+          <Text style={styles.listSubtitle}>
+            {formatDateTime(note.createdAt)}
+          </Text>
         </View>
       </View>
 
@@ -1182,6 +1459,7 @@ const ConsultationCard = ({
         <Text style={styles.listTitle}>
           {isEmergency ? "Emergency Consultation" : "Manual Consultation"}
         </Text>
+
         <Text style={styles.listSubtitle}>
           {formatDateTime(consultation.preferredAt || consultation.createdAt)}
         </Text>
@@ -1204,7 +1482,9 @@ const EmptyCard = ({
   return (
     <View style={styles.emptyCard}>
       <View style={styles.emptyIcon}>{icon}</View>
+
       <Text style={styles.emptyTitle}>{title}</Text>
+
       <Text style={styles.emptyText}>{text}</Text>
     </View>
   );
@@ -1500,6 +1780,40 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4,
   },
+  prescriptionAction: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 15,
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    ...elevate(1),
+  },
+  prescriptionActionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  prescriptionActionTextBlock: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  prescriptionActionTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  prescriptionActionText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 3,
+  },
   alertCard: {
     backgroundColor: SURFACE,
     borderRadius: 16,
@@ -1646,6 +1960,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     marginTop: 3,
+  },
+  sectionActionButton: {
+    backgroundColor: DOCTOR_PRIMARY,
+    borderRadius: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 12,
+  },
+  sectionActionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    marginLeft: 5,
   },
   vitalsCard: {
     borderRadius: 16,
@@ -1946,5 +2275,99 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
     marginTop: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,25,54,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  modalCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 18,
+    padding: 16,
+    ...elevate(3),
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  modalIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  modalTitleBlock: {
+    flex: 1,
+  },
+  modalTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  modalSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  noteInput: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 14,
+    minHeight: 150,
+    paddingHorizontal: 13,
+    paddingTop: 13,
+    paddingBottom: 13,
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+    marginTop: 15,
+  },
+  noteCounter: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 7,
+  },
+  modalButtonRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 15,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: DOCTOR_LIGHT,
+    borderRadius: 13,
+    paddingVertical: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelText: {
+    color: DOCTOR_DARK,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  modalSaveButton: {
+    flex: 1,
+    backgroundColor: DOCTOR_PRIMARY,
+    borderRadius: 13,
+    paddingVertical: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSaveButtonDisabled: {
+    opacity: 0.55,
+  },
+  modalSaveText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

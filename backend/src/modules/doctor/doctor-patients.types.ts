@@ -1,4 +1,11 @@
-export type DoctorVitalStatus = "STABLE" | "WARNING" | "CRITICAL";
+export type DoctorVitalStatus =
+  | "STABLE"
+  | "WARNING"
+  | "CRITICAL";
+
+export type DoctorAssignmentType =
+  | "PRIMARY"
+  | "SPECIALIST";
 
 export type DoctorVitalReadingResponse = {
   id: string;
@@ -35,11 +42,16 @@ export type DoctorPatientActiveAlert = {
 
 export type DoctorAssignedPatient = {
   assignmentId: string;
+  assignmentType: DoctorAssignmentType;
   assignedAt: Date;
   patient: DoctorPatientBasicInfo;
-  latestVital: DoctorVitalReadingResponse | null;
+  latestVital:
+    | DoctorVitalReadingResponse
+    | null;
   activeMedicineCount: number;
-  activeAlert: DoctorPatientActiveAlert | null;
+  activeAlert:
+    | DoctorPatientActiveAlert
+    | null;
 };
 
 export type DoctorAssignedPatientsResponse = {
@@ -66,7 +78,9 @@ export type DoctorAlertResponse = {
     fullName: string;
     email: string;
   } | null;
-  vitalSummary: DoctorVitalSummary | null;
+  vitalSummary:
+    | DoctorVitalSummary
+    | null;
   consultation: {
     id: string;
     type: string;
@@ -146,6 +160,7 @@ export type DoctorPatientNoteResponse = {
 export type DoctorPatientDetailResponse = {
   assignment: {
     id: string;
+    assignmentType: DoctorAssignmentType;
     assignedAt: Date;
   };
   patient: DoctorPatientBasicInfo;
@@ -157,11 +172,20 @@ export type DoctorPatientDetailResponse = {
     pendingMedicineReviews: number;
     hasActiveAlert: boolean;
   };
-  latestVital: DoctorVitalReadingResponse | null;
-  vitalsHistory: DoctorVitalReadingResponse[];
-  activeMedicines: DoctorPatientMedicineResponse[];
-  todayDoseLogs: DoctorPatientDoseLogResponse[];
-  latestNotes: DoctorPatientNoteResponse[];
-  activeAlert: DoctorAlertResponse | null;
-  recentConsultations: DoctorConsultationResponse[];
+  latestVital:
+    | DoctorVitalReadingResponse
+    | null;
+  vitalsHistory:
+    DoctorVitalReadingResponse[];
+  activeMedicines:
+    DoctorPatientMedicineResponse[];
+  todayDoseLogs:
+    DoctorPatientDoseLogResponse[];
+  latestNotes:
+    DoctorPatientNoteResponse[];
+  activeAlert:
+    | DoctorAlertResponse
+    | null;
+  recentConsultations:
+    DoctorConsultationResponse[];
 };

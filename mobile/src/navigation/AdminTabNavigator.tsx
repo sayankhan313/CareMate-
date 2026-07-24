@@ -13,6 +13,7 @@ import { AdminDashboardScreen } from "../screens/admin/AdminDashboardScreen";
 import { AdminDoctorListScreen } from "../screens/admin/AdminDoctorListScreen";
 import { AdminPharmacyListScreen } from "../screens/admin/AdminPharmacyListScreen";
 import { AdminUsersScreen } from "../screens/admin/AdminUsersScreen";
+
 import type {
   AdminTabParamList,
   RootStackParamList,

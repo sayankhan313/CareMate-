@@ -17,37 +17,107 @@ const router = Router();
 router.use(authMiddleware);
 router.use(authorizeRoles("PATIENT"));
 
-router.get("/dashboard", dashboardController.getDashboard);
+router.get(
+  "/dashboard",
+  dashboardController.getDashboard
+);
 
-router.get("/profile", profileController.getProfile);
+router.get(
+  "/profile",
+  profileController.getProfile
+);
 
-router.get("/doctors", doctorAssignmentController.listApprovedDoctors);
 
-router.post("/doctor-assignment", doctorAssignmentController.assignDoctor);
+router.get(
+  "/doctors/specialties",
+  doctorAssignmentController.listDoctorSpecialties
+);
 
-router.post("/vitals/readings", vitalsController.createReading);
+router.get(
+  "/doctors",
+  doctorAssignmentController.listApprovedDoctors
+);
 
-router.get("/vitals/latest", vitalsController.getLatestReading);
+router.get(
+  "/doctor-assignments",
+  doctorAssignmentController.listAssignedDoctors
+);
 
-router.get("/vitals/history", vitalsController.getReadingHistory);
 
-router.post("/safety-alerts", safetyController.createSafetyAlert);
+router.post(
+  "/doctor-assignment",
+  doctorAssignmentController.assignDoctor
+);
 
-router.get("/safety-alerts/active", safetyController.getActiveSafetyAlert);
 
-router.post("/safety-alerts/:alertId/cancel", safetyController.cancelSafetyAlert);
+router.post(
+  "/doctor-assignments",
+  doctorAssignmentController.assignDoctor
+);
+
+router.patch(
+  "/doctor-assignments/:doctorId/primary",
+  doctorAssignmentController.setPrimaryDoctor
+);
+
+router.delete(
+  "/doctor-assignments/:doctorId",
+  doctorAssignmentController.removeDoctor
+);
+
+
+router.post(
+  "/vitals/readings",
+  vitalsController.createReading
+);
+
+router.get(
+  "/vitals/latest",
+  vitalsController.getLatestReading
+);
+
+router.get(
+  "/vitals/history",
+  vitalsController.getReadingHistory
+);
+
+
+
+router.post(
+  "/safety-alerts",
+  safetyController.createSafetyAlert
+);
+
+router.get(
+  "/safety-alerts/active",
+  safetyController.getActiveSafetyAlert
+);
+
+router.post(
+  "/safety-alerts/:alertId/cancel",
+  safetyController.cancelSafetyAlert
+);
 
 router.post(
   "/safety-alerts/:alertId/escalate",
   safetyController.escalateSafetyAlert
 );
 
+/*
+|--------------------------------------------------------------------------
+| Consultations
+|--------------------------------------------------------------------------
+*/
+
 router.post(
   "/consultations/manual",
   consultationController.createManualConsultation
 );
 
-router.get("/consultations", consultationController.listConsultations);
+router.get(
+  "/consultations",
+  consultationController.listConsultations
+);
 
 router.get(
   "/consultations/:consultationId",
@@ -59,17 +129,37 @@ router.get(
   consultationController.getPatientJoinConfig
 );
 
-router.post("/medicines", medicineController.createMedicine);
 
-router.get("/medicines", medicineController.listMedicines);
 
-router.get("/medicines/today", medicineController.getTodayMedicines);
+router.post(
+  "/medicines",
+  medicineController.createMedicine
+);
 
-router.get("/medicines/:medicineId", medicineController.getMedicineById);
+router.get(
+  "/medicines",
+  medicineController.listMedicines
+);
 
-router.patch("/medicines/:medicineId", medicineController.updateMedicine);
+router.get(
+  "/medicines/today",
+  medicineController.getTodayMedicines
+);
 
-router.delete("/medicines/:medicineId", medicineController.deleteMedicine);
+router.get(
+  "/medicines/:medicineId",
+  medicineController.getMedicineById
+);
+
+router.patch(
+  "/medicines/:medicineId",
+  medicineController.updateMedicine
+);
+
+router.delete(
+  "/medicines/:medicineId",
+  medicineController.deleteMedicine
+);
 
 router.post(
   "/medicine-reminders/:reminderId/taken",
@@ -80,6 +170,9 @@ router.post(
   "/medicine-reminders/:reminderId/snooze",
   medicineController.snoozeReminder
 );
+
+
+
 router.get(
   "/medicine-references/search",
   medicineReferenceController.searchMedicineReferences

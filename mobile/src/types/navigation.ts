@@ -14,8 +14,9 @@ export type PatientTabParamList = {
 export type DoctorTabParamList = {
   Home: { user?: any } | undefined;
   Consultations: undefined;
+  Alerts: undefined;
   Patients: undefined;
-  Profile: undefined;
+  Reviews: undefined;
 };
 
 export type AdminAccountStatus =
@@ -25,7 +26,9 @@ export type AdminAccountStatus =
   | "REJECTED"
   | "DISABLED";
 
-export type AdminUserStatusFilter = AdminAccountStatus | "ALL";
+export type AdminUserStatusFilter =
+  | AdminAccountStatus
+  | "ALL";
 
 export type AdminTabParamList = {
   Dashboard:
@@ -57,7 +60,11 @@ export type MedicineDraft = {
   name: string;
   dose: string;
   instructions?: string;
-  frequency: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY" | "AS_NEEDED";
+  frequency:
+    | "ONCE_DAILY"
+    | "TWICE_DAILY"
+    | "THREE_TIMES_DAILY"
+    | "AS_NEEDED";
   timeOfDay: string;
   selectedTimes?: string[];
   startDate: string;
@@ -66,7 +73,22 @@ export type MedicineDraft = {
   sendToDoctorForReview: boolean;
 };
 
-export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
+export type ScanMedicineSource =
+  | "DEMO"
+  | "CAMERA"
+  | "GALLERY";
+
+export type ConsultationParticipantRole =
+  | "PATIENT"
+  | "DOCTOR";
+
+export type ConsultationEndedBy =
+  | "PATIENT"
+  | "DOCTOR";
+
+export type ConsultationCompletionStatus =
+  | "COMPLETED"
+  | "LEFT";
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -121,6 +143,11 @@ export type RootStackParamList = {
   DoctorPatientDetail: {
     patientId: string;
     patientName?: string;
+  };
+
+  DoctorPrescription: {
+    patientId: string;
+    patientName: string;
   };
 
   AdminTabs:
@@ -193,7 +220,9 @@ export type RootStackParamList = {
 
   VideoConsultation: {
     consultationId: string;
-    consultationType?: "EMERGENCY" | "MANUAL";
+    consultationType?:
+      | "EMERGENCY"
+      | "MANUAL";
     patientMeeting?: MeetingConfig;
     doctorMeeting?: MeetingConfig;
     patientMeetingUrl?: string;
@@ -202,6 +231,11 @@ export type RootStackParamList = {
 
   ConsultationEnded: {
     consultationId: string;
-    consultationType?: "EMERGENCY" | "MANUAL";
+    consultationType?:
+      | "EMERGENCY"
+      | "MANUAL";
+    participantRole?: ConsultationParticipantRole;
+    endedBy?: ConsultationEndedBy;
+    completionStatus?: ConsultationCompletionStatus;
   };
 };

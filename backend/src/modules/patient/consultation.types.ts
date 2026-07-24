@@ -3,6 +3,7 @@ export type ConsultationIdParams = {
 };
 
 export type CreateManualConsultationInput = {
+  doctorId: string;
   reason: string;
   preferredDate?: string;
   preferredTime?: string;

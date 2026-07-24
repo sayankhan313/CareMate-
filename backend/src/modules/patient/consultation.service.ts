@@ -5,6 +5,16 @@ import { jitsiService } from "./jitsi.service.js";
 
 import type { CreateManualConsultationInput } from "./consultation.types.js";
 
+const consultationInclude = {
+  patient: true,
+  doctor: true,
+  safetyAlert: {
+    include: {
+      vitalReading: true,
+    },
+  },
+} as const;
+
 const formatConsultation = (consultation: any) => {
   return {
     id: consultation.id,
@@ -16,7 +26,10 @@ const formatConsultation = (consultation: any) => {
     reason: consultation.reason,
     preferredAt: consultation.preferredAt,
     notes: consultation.notes,
-    doctorName: consultation.doctorName,
+    doctorName:
+      consultation.doctor?.fullName ||
+      consultation.doctorName ||
+      null,
     rejectionNote: consultation.rejectionNote,
     jaasRoomName: consultation.jaasRoomName,
     acceptedAt: consultation.acceptedAt,
@@ -29,19 +42,38 @@ const formatConsultation = (consultation: any) => {
   };
 };
 
-const parsePreferredDateTime = (date?: string, time?: string) => {
+const parsePreferredDateTime = (
+  date?: string,
+  time?: string
+) => {
   if (!date && !time) {
     return null;
   }
 
   if (!date || !time) {
-    throw new AppError("Preferred date and time must be provided together.", 400);
+    throw new AppError(
+      "Preferred date and time must be provided together.",
+      400
+    );
   }
 
-  const [day, month, year] = date.split("/").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
+  const [day, month, year] = date
+    .split("/")
+    .map(Number);
 
-  const preferredAt = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const [hour, minute] = time
+    .split(":")
+    .map(Number);
+
+  const preferredAt = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0,
+    0
+  );
 
   const isInvalidDate =
     Number.isNaN(preferredAt.getTime()) ||
@@ -52,17 +84,33 @@ const parsePreferredDateTime = (date?: string, time?: string) => {
     preferredAt.getMinutes() !== minute;
 
   if (isInvalidDate) {
-    throw new AppError("Preferred date or time is invalid.", 400);
+    throw new AppError(
+      "Preferred date or time is invalid.",
+      400
+    );
   }
 
-  if (preferredAt.getTime() < Date.now() - 60 * 1000) {
-    throw new AppError("Preferred consultation time cannot be in the past.", 400);
+  if (
+    preferredAt.getTime() <
+    Date.now() - 60 * 1000
+  ) {
+    throw new AppError(
+      "Preferred consultation time cannot be in the past.",
+      400
+    );
   }
 
   return preferredAt;
 };
 
 const buildPatientMeeting = (consultation: any) => {
+  if (!consultation.patient) {
+    throw new AppError(
+      "Patient meeting information is unavailable.",
+      500
+    );
+  }
+
   return jitsiService.createMeetingConfig({
     roomName: consultation.jaasRoomName,
     user: {
@@ -76,15 +124,19 @@ const buildPatientMeeting = (consultation: any) => {
 };
 
 const buildDoctorMeeting = (consultation: any) => {
+  if (!consultation.doctor) {
+    throw new AppError(
+      "Doctor meeting information is unavailable.",
+      500
+    );
+  }
+
   return jitsiService.createMeetingConfig({
     roomName: consultation.jaasRoomName,
     user: {
-      id: consultation.doctor?.id || "doctor-direct-join",
-      name:
-        consultation.doctor?.fullName ||
-        consultation.doctorName ||
-        "CareMate+ Doctor",
-      email: consultation.doctor?.email || "doctor@caremate.local",
+      id: consultation.doctor.id,
+      name: consultation.doctor.fullName,
+      email: consultation.doctor.email,
       role: "DOCTOR",
       moderator: true,
     },
@@ -95,82 +147,160 @@ const getPatientConsultation = async (
   patientId: string,
   consultationId: string
 ) => {
-  const consultation = await prisma.consultation.findFirst({
-    where: {
-      id: consultationId,
-      patientId,
-    },
-    include: {
-      patient: true,
-      doctor: true,
-      safetyAlert: {
-        include: {
-          vitalReading: true,
-        },
+  const consultation =
+    await prisma.consultation.findFirst({
+      where: {
+        id: consultationId,
+        patientId,
       },
-    },
-  });
+      include: consultationInclude,
+    });
 
   if (!consultation) {
-    throw new AppError("Consultation not found.", 404);
+    throw new AppError(
+      "Consultation not found.",
+      404
+    );
   }
 
   return consultation;
 };
 
+const getAssignedApprovedDoctor = async (
+  patientId: string,
+  doctorId: string,
+  requiredAssignmentType?: "PRIMARY" | "SPECIALIST"
+) => {
+  const assignment =
+    await prisma.patientDoctorAssignment.findFirst({
+      where: {
+        patientId,
+        doctorId,
+        status: "ACTIVE",
+        ...(requiredAssignmentType
+          ? {
+              assignmentType:
+                requiredAssignmentType,
+            }
+          : {}),
+        doctor: {
+          is: {
+            role: "DOCTOR",
+            isEmailVerified: true,
+            accountStatus: {
+              in: ["ACTIVE", "APPROVED"],
+            },
+          },
+        },
+      },
+      include: {
+        doctor: true,
+      },
+    });
+
+  if (!assignment) {
+    if (requiredAssignmentType === "PRIMARY") {
+      throw new AppError(
+        "The selected doctor is not the patient's active primary doctor.",
+        403
+      );
+    }
+
+    throw new AppError(
+      "You can only request a consultation with an assigned approved doctor.",
+      403
+    );
+  }
+
+  return assignment.doctor;
+};
+
 export const consultationService = {
   async createEmergencyConsultationFromAlert(
     patientId: string,
-    safetyAlertId: string
+    safetyAlertId: string,
+    doctorId: string
   ) {
-    const existingConsultation = await prisma.consultation.findFirst({
-      where: {
+    const doctor =
+      await getAssignedApprovedDoctor(
         patientId,
-        safetyAlertId,
-      },
-      include: {
-        patient: true,
-        doctor: true,
-        safetyAlert: {
-          include: {
-            vitalReading: true,
-          },
+        doctorId,
+        "PRIMARY"
+      );
+
+    const existingConsultation =
+      await prisma.consultation.findFirst({
+        where: {
+          patientId,
+          safetyAlertId,
         },
-      },
-    });
+        include: consultationInclude,
+      });
 
     if (existingConsultation) {
+      if (
+        existingConsultation.doctorId &&
+        existingConsultation.doctorId !== doctor.id
+      ) {
+        throw new AppError(
+          "This emergency consultation is already assigned to another doctor.",
+          409
+        );
+      }
+
+      const resolvedConsultation =
+        existingConsultation.doctorId
+          ? existingConsultation
+          : await prisma.consultation.update({
+              where: {
+                id: existingConsultation.id,
+              },
+              data: {
+                doctorId: doctor.id,
+                doctorName: doctor.fullName,
+              },
+              include: consultationInclude,
+            });
+
       return {
-        consultation: formatConsultation(existingConsultation),
-        patientMeeting: buildPatientMeeting(existingConsultation),
-        doctorMeeting: buildDoctorMeeting(existingConsultation),
+        consultation: formatConsultation(
+          resolvedConsultation
+        ),
+        patientMeeting: buildPatientMeeting(
+          resolvedConsultation
+        ),
+        doctorMeeting: buildDoctorMeeting(
+          resolvedConsultation
+        ),
       };
     }
 
-    const consultation = await prisma.consultation.create({
-      data: {
-        patientId,
-        safetyAlertId,
-        type: "EMERGENCY",
-        status: "PENDING",
-        reason: "Critical vital reading detected by CareMate+ Safety Response.",
-        jaasRoomName: jitsiService.createRoomName("emergency"),
-      },
-      include: {
-        patient: true,
-        doctor: true,
-        safetyAlert: {
-          include: {
-            vitalReading: true,
-          },
+    const consultation =
+      await prisma.consultation.create({
+        data: {
+          patientId,
+          doctorId: doctor.id,
+          doctorName: doctor.fullName,
+          safetyAlertId,
+          type: "EMERGENCY",
+          status: "PENDING",
+          reason:
+            "Critical vital reading detected by CareMate+ Safety Response.",
+          jaasRoomName:
+            jitsiService.createRoomName(
+              "emergency"
+            ),
         },
-      },
-    });
+        include: consultationInclude,
+      });
 
     return {
-      consultation: formatConsultation(consultation),
-      patientMeeting: buildPatientMeeting(consultation),
-      doctorMeeting: buildDoctorMeeting(consultation),
+      consultation:
+        formatConsultation(consultation),
+      patientMeeting:
+        buildPatientMeeting(consultation),
+      doctorMeeting:
+        buildDoctorMeeting(consultation),
     };
   },
 
@@ -178,98 +308,143 @@ export const consultationService = {
     patientId: string,
     data: CreateManualConsultationInput
   ) {
-    const preferredAt = parsePreferredDateTime(
-      data.preferredDate,
-      data.preferredTime
-    );
-
-    const consultation = await prisma.consultation.create({
-      data: {
+    const doctor =
+      await getAssignedApprovedDoctor(
         patientId,
-        type: "MANUAL",
-        status: "PENDING",
-        reason: data.reason.trim(),
-        preferredAt,
-        notes: data.notes?.trim() || null,
-        jaasRoomName: jitsiService.createRoomName("manual"),
-      },
-      include: {
-        patient: true,
-        doctor: true,
-        safetyAlert: {
-          include: {
-            vitalReading: true,
-          },
+        data.doctorId
+      );
+
+    const preferredAt =
+      parsePreferredDateTime(
+        data.preferredDate,
+        data.preferredTime
+      );
+
+    const consultation =
+      await prisma.consultation.create({
+        data: {
+          patientId,
+          doctorId: doctor.id,
+          doctorName: doctor.fullName,
+          type: "MANUAL",
+          status: "PENDING",
+          reason: data.reason.trim(),
+          preferredAt,
+          notes:
+            data.notes?.trim() || null,
+          jaasRoomName:
+            jitsiService.createRoomName(
+              "manual"
+            ),
         },
-      },
-    });
+        include: consultationInclude,
+      });
 
     return {
-      consultation: formatConsultation(consultation),
-      patientMeeting: buildPatientMeeting(consultation),
-      doctorMeeting: buildDoctorMeeting(consultation),
+      consultation:
+        formatConsultation(consultation),
+      patientMeeting:
+        buildPatientMeeting(consultation),
+      doctorMeeting:
+        buildDoctorMeeting(consultation),
     };
   },
 
-  async listPatientConsultations(patientId: string) {
-    const consultations = await prisma.consultation.findMany({
-      where: {
-        patientId,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+  async listPatientConsultations(
+    patientId: string
+  ) {
+    const consultations =
+      await prisma.consultation.findMany({
+        where: {
+          patientId,
+        },
+        include: {
+          doctor: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
-    return consultations.map(formatConsultation);
+    return consultations.map(
+      formatConsultation
+    );
   },
 
-  async getPatientConsultationById(patientId: string, consultationId: string) {
-    const consultation = await getPatientConsultation(patientId, consultationId);
+  async getPatientConsultationById(
+    patientId: string,
+    consultationId: string
+  ) {
+    const consultation =
+      await getPatientConsultation(
+        patientId,
+        consultationId
+      );
 
     return formatConsultation(consultation);
   },
 
-  async getPatientJoinConfig(patientId: string, consultationId: string) {
-    const consultation = await getPatientConsultation(patientId, consultationId);
+  async getPatientJoinConfig(
+    patientId: string,
+    consultationId: string
+  ) {
+    const consultation =
+      await getPatientConsultation(
+        patientId,
+        consultationId
+      );
+
+    if (consultation.status === "PENDING") {
+      throw new AppError(
+        "Doctor has not accepted this consultation yet.",
+        400
+      );
+    }
 
     if (consultation.status === "REJECTED") {
-      throw new AppError("This consultation was rejected.", 400);
+      throw new AppError(
+        "This consultation was rejected.",
+        400
+      );
     }
 
     if (consultation.status === "CANCELLED") {
-      throw new AppError("This consultation was cancelled.", 400);
+      throw new AppError(
+        "This consultation was cancelled.",
+        400
+      );
     }
 
     if (consultation.status === "COMPLETED") {
-      throw new AppError("This consultation has already been completed.", 400);
+      throw new AppError(
+        "This consultation has already been completed.",
+        400
+      );
     }
 
     const updatedConsultation =
-      consultation.status === "PENDING" || consultation.status === "ACCEPTED"
+      consultation.status === "ACCEPTED"
         ? await prisma.consultation.update({
             where: {
               id: consultation.id,
             },
             data: {
               status: "IN_PROGRESS",
-              startedAt: consultation.startedAt || new Date(),
+              startedAt:
+                consultation.startedAt ||
+                new Date(),
             },
-            include: {
-              patient: true,
-              doctor: true,
-              safetyAlert: {
-                include: {
-                  vitalReading: true,
-                },
-              },
-            },
+            include: consultationInclude,
           })
         : consultation;
 
     return {
-      consultation: formatConsultation(updatedConsultation),
-      patientMeeting: buildPatientMeeting(updatedConsultation),
+      consultation: formatConsultation(
+        updatedConsultation
+      ),
+      patientMeeting: buildPatientMeeting(
+        updatedConsultation
+      ),
     };
   },
 };

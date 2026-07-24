@@ -1,6 +1,5 @@
 import React, {
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -9,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -31,21 +32,36 @@ import {
   Clock3,
   History,
   MessageSquareText,
-  Plus,
+  PlayCircle,
   RefreshCw,
   Send,
   Stethoscope,
+  UserPlus,
   Video,
   X,
 } from "lucide-react-native";
 
-import { consultationsApi } from "../../services/consultationsApi";
+import {
+  consultationsApi,
+  type CreateManualConsultationPayload,
+} from "../../services/consultationsApi";
+import {
+  doctorAssignmentApi,
+  type AssignedDoctor,
+} from "../../services/doctorAssignmentApi";
 import type { Consultation } from "../../services/safetyApi";
 import type { PatientTabParamList } from "../../types/navigation";
 
-type Props = BottomTabScreenProps<PatientTabParamList, "Consultations">;
+type Props = BottomTabScreenProps<
+  PatientTabParamList,
+  "Consultations"
+>;
 
-type DropdownType = "reason" | "date" | "time";
+type DropdownType =
+  | "doctor"
+  | "reason"
+  | "date"
+  | "time";
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
@@ -76,7 +92,12 @@ const REASON_OPTIONS = [
   "General consultation",
 ];
 
-const DATE_OPTIONS = ["Today", "Tomorrow", "Next available date", "This week"];
+const DATE_OPTIONS = [
+  "Today",
+  "Tomorrow",
+  "Next available date",
+  "This week",
+];
 
 const TIME_OPTIONS = [
   "As soon as possible",
@@ -85,37 +106,166 @@ const TIME_OPTIONS = [
   "Evening",
 ];
 
-const formatConsultationDate = (value?: string | null) => {
+const elevate = (level: 1 | 2 = 1) => ({
+  elevation: level === 1 ? 2 : 4,
+  shadowColor: "#172033",
+  shadowOpacity:
+    Platform.OS === "android" ? 0 : 0.08,
+  shadowRadius: level === 1 ? 4 : 8,
+  shadowOffset: {
+    width: 0,
+    height: level === 1 ? 2 : 4,
+  },
+});
+
+const formatDoctorName = (
+  fullName: string
+) => {
+  if (/^dr\.?\s/i.test(fullName.trim())) {
+    return fullName.trim();
+  }
+
+  return `Dr. ${fullName.trim()}`;
+};
+
+const padDateValue = (value: number) =>
+  String(value).padStart(2, "0");
+
+const formatDateForBackend = (
+  date: Date
+) => {
+  return `${padDateValue(
+    date.getDate()
+  )}/${padDateValue(
+    date.getMonth() + 1
+  )}/${date.getFullYear()}`;
+};
+
+const getDateFromOption = (
+  option: string
+) => {
+  const date = new Date();
+
+  if (option === "Tomorrow") {
+    date.setDate(date.getDate() + 1);
+  }
+
+  if (option === "Next available date") {
+    date.setDate(date.getDate() + 2);
+  }
+
+  if (option === "This week") {
+    date.setDate(date.getDate() + 3);
+  }
+
+  return date;
+};
+
+const getTimeForBackend = (
+  option: string
+) => {
+  if (option === "Morning") {
+    return "09:00";
+  }
+
+  if (option === "Afternoon") {
+    return "14:00";
+  }
+
+  if (option === "Evening") {
+    return "18:00";
+  }
+
+  return null;
+};
+
+const formatConsultationDate = (
+  value?: string | null
+) => {
   if (!value) {
-    return "Unknown date";
+    return "No preferred time";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Unknown date";
+    return "No preferred time";
   }
 
-  return date.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleDateString(
+    undefined,
+    {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
 };
 
-const getStatusLabel = (status: string) => {
-  if (status === "PENDING") return "Requested";
-  if (status === "ACCEPTED") return "Accepted";
-  if (status === "IN_PROGRESS") return "In progress";
-  if (status === "COMPLETED") return "Completed";
-  if (status === "CANCELLED") return "Cancelled";
-  if (status === "REJECTED") return "Rejected";
+const getStatusLabel = (
+  status: string
+) => {
+  if (status === "PENDING") {
+    return "Requested";
+  }
+
+  if (status === "ACCEPTED") {
+    return "Accepted";
+  }
+
+  if (status === "IN_PROGRESS") {
+    return "In progress";
+  }
+
+  if (status === "COMPLETED") {
+    return "Completed";
+  }
+
+  if (status === "CANCELLED") {
+    return "Cancelled";
+  }
+
+  if (status === "REJECTED") {
+    return "Rejected";
+  }
 
   return status;
 };
 
-const getStatusTone = (status: string) => {
+const getStatusHint = (
+  status: string
+) => {
+  if (status === "PENDING") {
+    return "Waiting for doctor response";
+  }
+
+  if (status === "ACCEPTED") {
+    return "Doctor accepted. You can join now.";
+  }
+
+  if (status === "IN_PROGRESS") {
+    return "Consultation is in progress.";
+  }
+
+  if (status === "COMPLETED") {
+    return "Consultation completed.";
+  }
+
+  if (status === "REJECTED") {
+    return "Doctor rejected this request.";
+  }
+
+  if (status === "CANCELLED") {
+    return "Consultation cancelled.";
+  }
+
+  return "Consultation updated.";
+};
+
+const getStatusTone = (
+  status: string
+) => {
   if (status === "COMPLETED") {
     return {
       background: SUCCESS_LIGHT,
@@ -125,7 +275,10 @@ const getStatusTone = (status: string) => {
     };
   }
 
-  if (status === "CANCELLED" || status === "REJECTED") {
+  if (
+    status === "CANCELLED" ||
+    status === "REJECTED"
+  ) {
     return {
       background: DANGER_LIGHT,
       text: "#B42318",
@@ -134,7 +287,10 @@ const getStatusTone = (status: string) => {
     };
   }
 
-  if (status === "ACCEPTED" || status === "IN_PROGRESS") {
+  if (
+    status === "ACCEPTED" ||
+    status === "IN_PROGRESS"
+  ) {
     return {
       background: PRIMARY_LIGHT,
       text: PRIMARY_DARK,
@@ -151,7 +307,9 @@ const getStatusTone = (status: string) => {
   };
 };
 
-const getConsultationTypeLabel = (type: string) => {
+const getConsultationTypeLabel = (
+  type: string
+) => {
   if (type === "EMERGENCY") {
     return "Emergency consultation";
   }
@@ -159,208 +317,598 @@ const getConsultationTypeLabel = (type: string) => {
   return "Manual consultation";
 };
 
-const getDropdownTitle = (activeDropdown: DropdownType | null) => {
-  if (activeDropdown === "reason") return "Select reason";
-  if (activeDropdown === "date") return "Select preferred date";
-  if (activeDropdown === "time") return "Select preferred time";
+const canJoinConsultation = (
+  status: string
+) => {
+  return (
+    status === "ACCEPTED" ||
+    status === "IN_PROGRESS"
+  );
+};
+
+const getDropdownTitle = (
+  activeDropdown: DropdownType | null
+) => {
+  if (activeDropdown === "doctor") {
+    return "Select assigned doctor";
+  }
+
+  if (activeDropdown === "reason") {
+    return "Select reason";
+  }
+
+  if (activeDropdown === "date") {
+    return "Select preferred date";
+  }
+
+  if (activeDropdown === "time") {
+    return "Select preferred time";
+  }
 
   return "";
 };
 
-const getDropdownIcon = (activeDropdown: DropdownType | null) => {
+const getDropdownIcon = (
+  activeDropdown: DropdownType | null
+) => {
+  if (activeDropdown === "doctor") {
+    return (
+      <Stethoscope
+        size={20}
+        color={PRIMARY}
+        strokeWidth={2.6}
+      />
+    );
+  }
+
   if (activeDropdown === "reason") {
-    return <MessageSquareText size={20} color={PRIMARY} strokeWidth={2.6} />;
+    return (
+      <MessageSquareText
+        size={20}
+        color={PRIMARY}
+        strokeWidth={2.6}
+      />
+    );
   }
 
   if (activeDropdown === "date") {
-    return <CalendarDays size={20} color={PRIMARY} strokeWidth={2.6} />;
+    return (
+      <CalendarDays
+        size={20}
+        color={PRIMARY}
+        strokeWidth={2.6}
+      />
+    );
   }
 
   if (activeDropdown === "time") {
-    return <Clock3 size={20} color={PRIMARY} strokeWidth={2.6} />;
+    return (
+      <Clock3
+        size={20}
+        color={PRIMARY}
+        strokeWidth={2.6}
+      />
+    );
   }
 
-  return <CheckCircle2 size={20} color={PRIMARY} strokeWidth={2.6} />;
+  return (
+    <CheckCircle2
+      size={20}
+      color={PRIMARY}
+      strokeWidth={2.6}
+    />
+  );
 };
 
-const ConsultationsScreen = ({ navigation }: Props) => {
+const ConsultationsScreen = ({
+  navigation,
+}: Props) => {
   const insets = useSafeAreaInsets();
-  const rootNavigation = navigation.getParent<any>();
+  const rootNavigation =
+    navigation.getParent<any>();
 
-  const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isSendingRequest, setIsSendingRequest] = useState(false);
-  const [screenError, setScreenError] = useState("");
+  const [consultations, setConsultations] =
+    useState<Consultation[]>([]);
 
-  const [selectedReason, setSelectedReason] = useState(REASON_OPTIONS[0]);
-  const [preferredDate, setPreferredDate] = useState("Select date");
-  const [preferredTime, setPreferredTime] = useState("Select time");
+  const [assignedDoctors, setAssignedDoctors] =
+    useState<AssignedDoctor[]>([]);
+
+  const [
+    selectedDoctorId,
+    setSelectedDoctorId,
+  ] = useState<string | null>(null);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [isRefreshing, setIsRefreshing] =
+    useState(false);
+
+  const [
+    isSendingRequest,
+    setIsSendingRequest,
+  ] = useState(false);
+
+  const [
+    joiningConsultationId,
+    setJoiningConsultationId,
+  ] = useState<string | null>(null);
+
+  const [screenError, setScreenError] =
+    useState("");
+
+  const [
+    selectedReason,
+    setSelectedReason,
+  ] = useState(REASON_OPTIONS[0]);
+
+  const [
+    preferredDate,
+    setPreferredDate,
+  ] = useState(DATE_OPTIONS[0]);
+
+  const [
+    preferredTime,
+    setPreferredTime,
+  ] = useState(TIME_OPTIONS[0]);
+
   const [notes, setNotes] = useState("");
 
-  const [activeDropdown, setActiveDropdown] = useState<DropdownType | null>(
+  const [
+    activeDropdown,
+    setActiveDropdown,
+  ] = useState<DropdownType | null>(
     null
   );
 
-  const activeConsultations = useMemo(() => {
-    return consultations.filter(
-      (consultation) =>
-        consultation.status === "PENDING" ||
-        consultation.status === "ACCEPTED" ||
-        consultation.status === "IN_PROGRESS"
+  const selectedDoctor = useMemo(() => {
+    return assignedDoctors.find(
+      (assignment) =>
+        assignment.doctor.id ===
+        selectedDoctorId
     );
-  }, [consultations]);
+  }, [
+    assignedDoctors,
+    selectedDoctorId,
+  ]);
 
-  const pastConsultations = useMemo(() => {
-    return consultations.filter(
-      (consultation) =>
-        consultation.status === "COMPLETED" ||
-        consultation.status === "CANCELLED" ||
-        consultation.status === "REJECTED"
-    );
-  }, [consultations]);
-
-  const dropdownOptions = useMemo(() => {
-    if (activeDropdown === "reason") return REASON_OPTIONS;
-    if (activeDropdown === "date") return DATE_OPTIONS;
-    if (activeDropdown === "time") return TIME_OPTIONS;
-
-    return [];
-  }, [activeDropdown]);
-
-  const dropdownTitle = useMemo(() => {
-    return getDropdownTitle(activeDropdown);
-  }, [activeDropdown]);
-
-  const loadConsultations = useCallback(async () => {
-    try {
-      setScreenError("");
-
-      const result = await consultationsApi.listConsultations();
-
-      setConsultations(result);
-    } catch (error) {
-      setScreenError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load consultations."
+  const activeConsultations =
+    useMemo(() => {
+      return consultations.filter(
+        (consultation) =>
+          consultation.status ===
+            "PENDING" ||
+          consultation.status ===
+            "ACCEPTED" ||
+          consultation.status ===
+            "IN_PROGRESS"
       );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+    }, [consultations]);
 
-  useEffect(() => {
-    loadConsultations();
-  }, [loadConsultations]);
+  const pastConsultations =
+    useMemo(() => {
+      return consultations.filter(
+        (consultation) =>
+          consultation.status ===
+            "COMPLETED" ||
+          consultation.status ===
+            "CANCELLED" ||
+          consultation.status ===
+            "REJECTED"
+      );
+    }, [consultations]);
 
-  const refreshConsultations = useCallback(() => {
-    setIsRefreshing(true);
-    loadConsultations();
-  }, [loadConsultations]);
-
-  const selectDropdownOption = useCallback(
-    (option: string) => {
-      if (activeDropdown === "reason") {
-        setSelectedReason(option);
+  const dropdownOptions =
+    useMemo(() => {
+      if (
+        activeDropdown === "reason"
+      ) {
+        return REASON_OPTIONS;
       }
 
-      if (activeDropdown === "date") {
-        setPreferredDate(option);
+      if (
+        activeDropdown === "date"
+      ) {
+        return DATE_OPTIONS;
       }
 
-      if (activeDropdown === "time") {
-        setPreferredTime(option);
+      if (
+        activeDropdown === "time"
+      ) {
+        return TIME_OPTIONS;
       }
 
-      setActiveDropdown(null);
-    },
+      return [];
+    }, [activeDropdown]);
+
+  const dropdownTitle = useMemo(
+    () =>
+      getDropdownTitle(
+        activeDropdown
+      ),
     [activeDropdown]
   );
 
-  const buildManualReason = useCallback(() => {
-    const parts = [
-      `Reason: ${selectedReason}`,
-      `Preferred date: ${preferredDate}`,
-      `Preferred time: ${preferredTime}`,
-    ];
+  const loadScreenData = useCallback(
+    async (
+      mode: "initial" | "refresh" =
+        "initial"
+    ) => {
+      try {
+        if (mode === "initial") {
+          setIsLoading(true);
+        } else {
+          setIsRefreshing(true);
+        }
 
-    if (notes.trim()) {
-      parts.push(`Notes: ${notes.trim()}`);
-    }
+        setScreenError("");
 
-    return parts.join("\n");
-  }, [notes, preferredDate, preferredTime, selectedReason]);
+        const [
+          consultationResult,
+          doctorResult,
+        ] = await Promise.all([
+          consultationsApi.listConsultations(),
+          doctorAssignmentApi.getAssignedDoctors(),
+        ]);
 
-  const sendConsultationRequest = useCallback(async () => {
-    if (isSendingRequest) {
-      return;
-    }
+        setConsultations(
+          consultationResult
+        );
 
-    if (preferredDate === "Select date") {
-      Alert.alert("Select date", "Please select a preferred date.");
-      return;
-    }
+        setAssignedDoctors(
+          doctorResult.doctors
+        );
 
-    if (preferredTime === "Select time") {
-      Alert.alert("Select time", "Please select a preferred time.");
-      return;
-    }
+        setSelectedDoctorId(
+          (currentDoctorId) => {
+            const currentExists =
+              doctorResult.doctors.some(
+                (assignment) =>
+                  assignment.doctor.id ===
+                  currentDoctorId
+              );
 
-    try {
-      setIsSendingRequest(true);
-      setScreenError("");
+            if (currentExists) {
+              return currentDoctorId;
+            }
 
-      const result = await consultationsApi.createManualConsultation({
-        reason: buildManualReason(),
-      });
+            const primaryDoctor =
+              doctorResult.doctors.find(
+                (assignment) =>
+                  assignment.assignmentType ===
+                  "PRIMARY"
+              );
 
-      setNotes("");
-      setPreferredDate("Select date");
-      setPreferredTime("Select time");
+            return (
+              primaryDoctor?.doctor.id ||
+              doctorResult.doctors[0]
+                ?.doctor.id ||
+              null
+            );
+          }
+        );
+      } catch (error) {
+        setScreenError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load consultations."
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
 
-      rootNavigation?.navigate("VideoConsultation", {
-        consultationId: result.consultation.id,
-        consultationType: result.consultation.type,
-        patientMeeting: result.patientMeeting,
-        doctorMeeting: result.doctorMeeting,
-        patientMeetingUrl: result.patientMeeting.webUrl,
-        doctorMeetingUrl: result.doctorMeeting.webUrl,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to send consultation request.";
+  useFocusEffect(
+    useCallback(() => {
+      void loadScreenData(
+        "initial"
+      );
+    }, [loadScreenData])
+  );
 
-      setScreenError(message);
-      Alert.alert("Request failed", message);
-    } finally {
-      setIsSendingRequest(false);
-    }
-  }, [
-    buildManualReason,
-    isSendingRequest,
-    preferredDate,
-    preferredTime,
-    rootNavigation,
-  ]);
+  const refreshScreen =
+    useCallback(() => {
+      void loadScreenData(
+        "refresh"
+      );
+    }, [loadScreenData]);
+
+  const selectDropdownOption =
+    useCallback(
+      (option: string) => {
+        if (
+          activeDropdown ===
+          "reason"
+        ) {
+          setSelectedReason(option);
+        }
+
+        if (
+          activeDropdown === "date"
+        ) {
+          setPreferredDate(option);
+        }
+
+        if (
+          activeDropdown === "time"
+        ) {
+          setPreferredTime(option);
+        }
+
+        setActiveDropdown(null);
+      },
+      [activeDropdown]
+    );
+
+  const buildPreferredPayload =
+    useCallback(() => {
+      const selectedTime =
+        getTimeForBackend(
+          preferredTime
+        );
+
+      if (!selectedTime) {
+        return {};
+      }
+
+      const selectedDate =
+        getDateFromOption(
+          preferredDate
+        );
+
+      const [hour, minute] =
+        selectedTime
+          .split(":")
+          .map(Number);
+
+      selectedDate.setHours(
+        hour,
+        minute,
+        0,
+        0
+      );
+
+      if (
+        selectedDate.getTime() <
+        Date.now() + 60 * 1000
+      ) {
+        selectedDate.setDate(
+          selectedDate.getDate() + 1
+        );
+      }
+
+      return {
+        preferredDate:
+          formatDateForBackend(
+            selectedDate
+          ),
+        preferredTime:
+          selectedTime,
+      };
+    }, [
+      preferredDate,
+      preferredTime,
+    ]);
+
+  const buildRequestNotes =
+    useCallback(() => {
+      const parts = [
+        `Preferred: ${preferredDate}, ${preferredTime}`,
+      ];
+
+      if (notes.trim()) {
+        parts.push(notes.trim());
+      }
+
+      return parts.join("\n");
+    }, [
+      notes,
+      preferredDate,
+      preferredTime,
+    ]);
+
+  const sendConsultationRequest =
+    useCallback(async () => {
+      if (isSendingRequest) {
+        return;
+      }
+
+      if (!selectedDoctorId) {
+        Alert.alert(
+          "Select a doctor",
+          "Please assign and select a doctor before sending a consultation request."
+        );
+        return;
+      }
+
+      try {
+        setIsSendingRequest(true);
+        setScreenError("");
+
+        const payload:
+          CreateManualConsultationPayload =
+          {
+            doctorId:
+              selectedDoctorId,
+            reason: selectedReason,
+            ...buildPreferredPayload(),
+            notes:
+              buildRequestNotes(),
+          };
+
+        const result =
+          await consultationsApi.createManualConsultation(
+            payload
+          );
+
+        setConsultations(
+          (
+            currentConsultations
+          ) => [
+            result.consultation,
+            ...currentConsultations.filter(
+              (consultation) =>
+                consultation.id !==
+                result.consultation.id
+            ),
+          ]
+        );
+
+        setNotes("");
+        setPreferredDate(
+          DATE_OPTIONS[0]
+        );
+        setPreferredTime(
+          TIME_OPTIONS[0]
+        );
+
+        Alert.alert(
+          "Request sent",
+          selectedDoctor
+            ? `Your consultation request has been sent to ${formatDoctorName(
+                selectedDoctor.doctor
+                  .fullName
+              )}.`
+            : "Your consultation request has been sent."
+        );
+
+        await loadScreenData(
+          "refresh"
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to send consultation request.";
+
+        setScreenError(message);
+
+        Alert.alert(
+          "Request failed",
+          message
+        );
+      } finally {
+        setIsSendingRequest(false);
+      }
+    }, [
+      buildPreferredPayload,
+      buildRequestNotes,
+      isSendingRequest,
+      loadScreenData,
+      selectedDoctor,
+      selectedDoctorId,
+      selectedReason,
+    ]);
+
+  const joinConsultation =
+    useCallback(
+      async (
+        consultation: Consultation
+      ) => {
+        if (
+          joiningConsultationId
+        ) {
+          return;
+        }
+
+        if (!rootNavigation) {
+          Alert.alert(
+            "Unable to open call",
+            "Video consultation screen is not available right now."
+          );
+          return;
+        }
+
+        try {
+          setJoiningConsultationId(
+            consultation.id
+          );
+
+          setScreenError("");
+
+          const result =
+            await consultationsApi.getPatientJoinConfig(
+              consultation.id
+            );
+
+          rootNavigation.navigate(
+            "VideoConsultation",
+            {
+              consultationId:
+                result.consultation.id,
+              consultationType:
+                result.consultation.type,
+              patientMeeting:
+                result.patientMeeting,
+              patientMeetingUrl:
+                result.patientMeeting
+                  .webUrl,
+            }
+          );
+
+          await loadScreenData(
+            "refresh"
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Unable to join consultation.";
+
+          setScreenError(message);
+
+          Alert.alert(
+            "Unable to join",
+            message
+          );
+        } finally {
+          setJoiningConsultationId(
+            null
+          );
+        }
+      },
+      [
+        joiningConsultationId,
+        loadScreenData,
+        rootNavigation,
+      ]
+    );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top"]}
+    >
+      <StatusBar
+        backgroundColor={
+          BACKGROUND
+        }
+        barStyle="dark-content"
+      />
 
       <View style={styles.screen}>
         <View style={styles.appBar}>
           <View>
-            <Text style={styles.appBarTitle}>Consultations</Text>
-            <Text style={styles.appBarSubtitle}>
-              Book and manage doctor calls
+            <Text
+              style={
+                styles.appBarTitle
+              }
+            >
+              Consultations
+            </Text>
+
+            <Text
+              style={
+                styles.appBarSubtitle
+              }
+            >
+              Request and manage
+              doctor calls
             </Text>
           </View>
-
-          
         </View>
 
         <ScrollView
@@ -368,50 +916,216 @@ const ConsultationsScreen = ({ navigation }: Props) => {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(36, insets.bottom + 112),
+              paddingBottom:
+                Math.max(
+                  36,
+                  insets.bottom + 112
+                ),
             },
           ]}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={
+            false
+          }
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={refreshConsultations}
+              refreshing={
+                isRefreshing
+              }
+              onRefresh={
+                refreshScreen
+              }
               tintColor={PRIMARY}
               colors={[PRIMARY]}
             />
           }
         >
-          <View style={styles.summaryPanel}>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryIconCircle}>
-                <Video size={24} color={PRIMARY} strokeWidth={2.7} />
+          <View
+            style={
+              styles.summaryPanel
+            }
+          >
+            <View
+              style={
+                styles.summaryHeader
+              }
+            >
+              <View
+                style={
+                  styles.summaryIconCircle
+                }
+              >
+                <Video
+                  size={24}
+                  color={PRIMARY}
+                  strokeWidth={2.7}
+                />
               </View>
 
-              <View style={styles.summaryTextBlock}>
-                <Text style={styles.summaryTitle}>Doctor consultation</Text>
-                <Text style={styles.summarySubtitle}>
-                  Request a video call and manage your consultation history.
+              <View
+                style={
+                  styles.summaryTextBlock
+                }
+              >
+                <Text
+                  style={
+                    styles.summaryTitle
+                  }
+                >
+                  Doctor consultation
+                </Text>
+
+                <Text
+                  style={
+                    styles.summarySubtitle
+                  }
+                >
+                  Select an assigned
+                  doctor and send a
+                  consultation request.
                 </Text>
               </View>
             </View>
 
-            <View style={styles.summaryStatsRow}>
-              <SummaryStat label="Active" value={`${activeConsultations.length}`} />
-              <SummaryStat label="Past" value={`${pastConsultations.length}`} />
-              <SummaryStat label="Mode" value="Video" />
+            <View
+              style={
+                styles.summaryStatsRow
+              }
+            >
+              <SummaryStat
+                label="Active"
+                value={`${activeConsultations.length}`}
+              />
+
+              <SummaryStat
+                label="Past"
+                value={`${pastConsultations.length}`}
+              />
+
+              <SummaryStat
+                label="Doctors"
+                value={`${assignedDoctors.length}`}
+              />
             </View>
           </View>
 
-          <View style={styles.formPanel}>
+          <View
+            style={styles.formPanel}
+          >
             <SectionHeader
-              icon={<Stethoscope size={21} color={PRIMARY} strokeWidth={2.6} />}
+              icon={
+                <Stethoscope
+                  size={21}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
               title="Request consultation"
-              subtitle="Tell the doctor what help you need"
+              subtitle="Choose an assigned doctor and describe what help you need"
             />
+
+            {assignedDoctors.length ===
+            0 ? (
+              <View
+                style={
+                  styles.noDoctorPanel
+                }
+              >
+                <View
+                  style={
+                    styles.noDoctorIcon
+                  }
+                >
+                  <Stethoscope
+                    size={25}
+                    color={PRIMARY}
+                    strokeWidth={2.5}
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.noDoctorTextBlock
+                  }
+                >
+                  <Text
+                    style={
+                      styles.noDoctorTitle
+                    }
+                  >
+                    No assigned doctors
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.noDoctorText
+                    }
+                  >
+                    Add an approved doctor
+                    before requesting a
+                    consultation.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={
+                    styles.manageDoctorButton
+                  }
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    rootNavigation?.navigate(
+                      "SelectDoctor"
+                    )
+                  }
+                >
+                  <UserPlus
+                    size={17}
+                    color={SURFACE}
+                    strokeWidth={2.5}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <SelectField
+                label="Assigned doctor"
+                value={
+                  selectedDoctor
+                    ? formatDoctorName(
+                        selectedDoctor
+                          .doctor
+                          .fullName
+                      )
+                    : "Select doctor"
+                }
+                helperText={
+                  selectedDoctor
+                    ?.doctor
+                    .specialization ||
+                  undefined
+                }
+                icon={
+                  <Stethoscope
+                    size={19}
+                    color={PRIMARY}
+                    strokeWidth={2.6}
+                  />
+                }
+                placeholder={
+                  !selectedDoctor
+                }
+                onPress={() =>
+                  setActiveDropdown(
+                    "doctor"
+                  )
+                }
+              />
+            )}
 
             <SelectField
               label="Reason"
-              value={selectedReason}
+              value={
+                selectedReason
+              }
               icon={
                 <MessageSquareText
                   size={19}
@@ -420,31 +1134,65 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                 />
               }
               placeholder={false}
-              onPress={() => setActiveDropdown("reason")}
+              onPress={() =>
+                setActiveDropdown(
+                  "reason"
+                )
+              }
             />
 
             <SelectField
               label="Preferred date"
-              value={preferredDate}
-              icon={
-                <CalendarDays size={19} color={PRIMARY} strokeWidth={2.6} />
+              value={
+                preferredDate
               }
-              placeholder={preferredDate === "Select date"}
-              onPress={() => setActiveDropdown("date")}
+              icon={
+                <CalendarDays
+                  size={19}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
+              placeholder={false}
+              onPress={() =>
+                setActiveDropdown(
+                  "date"
+                )
+              }
             />
 
             <SelectField
               label="Preferred time"
-              value={preferredTime}
-              icon={<Clock3 size={19} color={PRIMARY} strokeWidth={2.6} />}
-              placeholder={preferredTime === "Select time"}
-              onPress={() => setActiveDropdown("time")}
+              value={
+                preferredTime
+              }
+              icon={
+                <Clock3
+                  size={19}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
+              placeholder={false}
+              onPress={() =>
+                setActiveDropdown(
+                  "time"
+                )
+              }
             />
 
-            <Text style={styles.inputLabel}>Notes optional</Text>
+            <Text
+              style={
+                styles.inputLabel
+              }
+            >
+              Notes optional
+            </Text>
 
             <TextInput
-              style={styles.notesInput}
+              style={
+                styles.notesInput
+              }
               value={notes}
               onChangeText={setNotes}
               placeholder="Add symptoms, questions, or medicine concerns..."
@@ -456,184 +1204,515 @@ const ConsultationsScreen = ({ navigation }: Props) => {
             <TouchableOpacity
               style={[
                 styles.primaryButton,
-                isSendingRequest ? styles.disabledButton : undefined,
+                isSendingRequest ||
+                !selectedDoctorId
+                  ? styles.disabledButton
+                  : undefined,
               ]}
               activeOpacity={0.85}
-              onPress={sendConsultationRequest}
-              disabled={isSendingRequest}
+              onPress={
+                sendConsultationRequest
+              }
+              disabled={
+                isSendingRequest ||
+                !selectedDoctorId
+              }
             >
               {isSendingRequest ? (
-                <ActivityIndicator size="small" color={SURFACE} />
+                <ActivityIndicator
+                  size="small"
+                  color={SURFACE}
+                />
               ) : (
                 <>
-                  <Send size={19} color={SURFACE} strokeWidth={2.6} />
-                  <Text style={styles.primaryButtonText}>Send Request</Text>
+                  <Send
+                    size={19}
+                    color={SURFACE}
+                    strokeWidth={2.6}
+                  />
+
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    Send Request
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
           {screenError ? (
-            <View style={styles.errorPanel}>
-              <AlertCircle size={22} color={DANGER} strokeWidth={2.6} />
-              <Text style={styles.errorText}>{screenError}</Text>
+            <View
+              style={
+                styles.errorPanel
+              }
+            >
+              <AlertCircle
+                size={22}
+                color={DANGER}
+                strokeWidth={2.6}
+              />
+
+              <Text
+                style={
+                  styles.errorText
+                }
+              >
+                {screenError}
+              </Text>
             </View>
           ) : null}
 
-          <View style={styles.sectionHeader}>
+          <View
+            style={
+              styles.sectionHeader
+            }
+          >
             <View>
-              <Text style={styles.sectionTitle}>Active requests</Text>
-              <Text style={styles.sectionSubtitle}>
-                {activeConsultations.length > 0
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Active requests
+              </Text>
+
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
+                {activeConsultations.length >
+                0
                   ? `${activeConsultations.length} active consultation${
-                      activeConsultations.length === 1 ? "" : "s"
+                      activeConsultations.length ===
+                      1
+                        ? ""
+                        : "s"
                     }`
                   : "No active consultation right now"}
               </Text>
             </View>
 
             <TouchableOpacity
-              style={styles.refreshButton}
+              style={
+                styles.refreshButton
+              }
               activeOpacity={0.85}
-              onPress={refreshConsultations}
+              onPress={
+                refreshScreen
+              }
             >
-              <RefreshCw size={19} color={PRIMARY} strokeWidth={2.6} />
+              <RefreshCw
+                size={19}
+                color={PRIMARY}
+                strokeWidth={2.6}
+              />
             </TouchableOpacity>
           </View>
 
           {isLoading ? (
             <LoadingRow title="Loading consultations..." />
-          ) : activeConsultations.length === 0 ? (
+          ) : activeConsultations.length ===
+            0 ? (
             <EmptyRow
-              icon={<Video size={22} color={PRIMARY} strokeWidth={2.6} />}
+              icon={
+                <Video
+                  size={22}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
               title="No active requests"
               subtitle="Send a request to start a doctor consultation."
             />
           ) : (
-            <View style={styles.listPanel}>
-              {activeConsultations.map((consultation, index) => (
-                <ConsultationRow
-                  key={consultation.id}
-                  consultation={consultation}
-                  isLast={index === activeConsultations.length - 1}
-                />
-              ))}
+            <View
+              style={
+                styles.listPanel
+              }
+            >
+              {activeConsultations.map(
+                (
+                  consultation,
+                  index
+                ) => (
+                  <ConsultationRow
+                    key={
+                      consultation.id
+                    }
+                    consultation={
+                      consultation
+                    }
+                    isLast={
+                      index ===
+                      activeConsultations.length -
+                        1
+                    }
+                    isJoining={
+                      joiningConsultationId ===
+                      consultation.id
+                    }
+                    onJoin={() =>
+                      joinConsultation(
+                        consultation
+                      )
+                    }
+                  />
+                )
+              )}
             </View>
           )}
 
-          <View style={styles.sectionHeader}>
+          <View
+            style={
+              styles.sectionHeader
+            }
+          >
             <View>
-              <Text style={styles.sectionTitle}>Past consultations</Text>
-              <Text style={styles.sectionSubtitle}>
-                Completed, cancelled and rejected requests
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Past consultations
+              </Text>
+
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
+                Completed, cancelled and
+                rejected requests
               </Text>
             </View>
 
-            <View style={styles.historyIcon}>
-              <History size={20} color={PRIMARY} strokeWidth={2.6} />
+            <View
+              style={
+                styles.historyIcon
+              }
+            >
+              <History
+                size={20}
+                color={PRIMARY}
+                strokeWidth={2.6}
+              />
             </View>
           </View>
 
           {isLoading ? (
             <LoadingRow title="Loading history..." />
-          ) : pastConsultations.length === 0 ? (
+          ) : pastConsultations.length ===
+            0 ? (
             <EmptyRow
-              icon={<History size={22} color={PRIMARY} strokeWidth={2.6} />}
+              icon={
+                <History
+                  size={22}
+                  color={PRIMARY}
+                  strokeWidth={2.6}
+                />
+              }
               title="No past consultations"
               subtitle="Completed consultations will appear here."
             />
           ) : (
-            <View style={styles.listPanel}>
-              {pastConsultations.map((consultation, index) => (
-                <ConsultationRow
-                  key={consultation.id}
-                  consultation={consultation}
-                  isLast={index === pastConsultations.length - 1}
-                />
-              ))}
+            <View
+              style={
+                styles.listPanel
+              }
+            >
+              {pastConsultations.map(
+                (
+                  consultation,
+                  index
+                ) => (
+                  <ConsultationRow
+                    key={
+                      consultation.id
+                    }
+                    consultation={
+                      consultation
+                    }
+                    isLast={
+                      index ===
+                      pastConsultations.length -
+                        1
+                    }
+                    isJoining={
+                      false
+                    }
+                    onJoin={() =>
+                      undefined
+                    }
+                  />
+                )
+              )}
             </View>
           )}
         </ScrollView>
 
         <Modal
-          visible={activeDropdown !== null}
+          visible={
+            activeDropdown !== null
+          }
           transparent
           animationType="fade"
-          onRequestClose={() => setActiveDropdown(null)}
+          onRequestClose={() =>
+            setActiveDropdown(null)
+          }
         >
-          <View style={styles.modalBackdrop}>
+          <View
+            style={
+              styles.modalBackdrop
+            }
+          >
             <TouchableOpacity
-              style={styles.modalDismissArea}
+              style={
+                styles.modalDismissArea
+              }
               activeOpacity={1}
-              onPress={() => setActiveDropdown(null)}
+              onPress={() =>
+                setActiveDropdown(
+                  null
+                )
+              }
             />
 
             <View
               style={[
                 styles.modalCard,
                 {
-                  paddingBottom: Math.max(18, insets.bottom + 12),
+                  paddingBottom:
+                    Math.max(
+                      18,
+                      insets.bottom + 12
+                    ),
                 },
               ]}
             >
-              <View style={styles.modalHandle} />
+              <View
+                style={
+                  styles.modalHandle
+                }
+              />
 
-              <View style={styles.modalHeader}>
-                <View style={styles.modalTitleRow}>
-                  <View style={styles.modalIconCircle}>
-                    {getDropdownIcon(activeDropdown)}
+              <View
+                style={
+                  styles.modalHeader
+                }
+              >
+                <View
+                  style={
+                    styles.modalTitleRow
+                  }
+                >
+                  <View
+                    style={
+                      styles.modalIconCircle
+                    }
+                  >
+                    {getDropdownIcon(
+                      activeDropdown
+                    )}
                   </View>
 
-                  <Text style={styles.modalTitle}>{dropdownTitle}</Text>
+                  <Text
+                    style={
+                      styles.modalTitle
+                    }
+                  >
+                    {dropdownTitle}
+                  </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={styles.modalCloseButton}
+                  style={
+                    styles.modalCloseButton
+                  }
                   activeOpacity={0.85}
-                  onPress={() => setActiveDropdown(null)}
+                  onPress={() =>
+                    setActiveDropdown(
+                      null
+                    )
+                  }
                 >
-                  <X size={20} color={TEXT} strokeWidth={2.6} />
+                  <X
+                    size={20}
+                    color={TEXT}
+                    strokeWidth={2.6}
+                  />
                 </TouchableOpacity>
               </View>
 
-              {dropdownOptions.map((option, index) => {
-                const isSelected =
-                  option === selectedReason ||
-                  option === preferredDate ||
-                  option === preferredTime;
+              {activeDropdown ===
+              "doctor"
+                ? assignedDoctors.map(
+                    (
+                      assignment,
+                      index
+                    ) => {
+                      const isSelected =
+                        assignment
+                          .doctor.id ===
+                        selectedDoctorId;
 
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.modalOption,
-                      index === dropdownOptions.length - 1
-                        ? styles.modalOptionLast
-                        : undefined,
-                      isSelected ? styles.modalOptionSelected : undefined,
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => selectDropdownOption(option)}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        isSelected ? styles.modalOptionTextSelected : undefined,
-                      ]}
-                    >
-                      {option}
-                    </Text>
+                      return (
+                        <TouchableOpacity
+                          key={
+                            assignment.assignmentId
+                          }
+                          style={[
+                            styles.modalDoctorOption,
+                            index ===
+                            assignedDoctors.length -
+                              1
+                              ? styles.modalOptionLast
+                              : undefined,
+                            isSelected
+                              ? styles.modalOptionSelected
+                              : undefined,
+                          ]}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            setSelectedDoctorId(
+                              assignment
+                                .doctor.id
+                            );
 
-                    {isSelected ? (
-                      <CheckCircle2
-                        size={19}
-                        color={PRIMARY}
-                        strokeWidth={2.7}
-                      />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
+                            setActiveDropdown(
+                              null
+                            );
+                          }}
+                        >
+                          <View
+                            style={
+                              styles.modalDoctorIcon
+                            }
+                          >
+                            <Stethoscope
+                              size={19}
+                              color={
+                                PRIMARY
+                              }
+                              strokeWidth={
+                                2.5
+                              }
+                            />
+                          </View>
+
+                          <View
+                            style={
+                              styles.modalDoctorText
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.modalOptionText,
+                                isSelected
+                                  ? styles.modalOptionTextSelected
+                                  : undefined,
+                              ]}
+                            >
+                              {formatDoctorName(
+                                assignment
+                                  .doctor
+                                  .fullName
+                              )}
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.modalDoctorSpecialization
+                              }
+                            >
+                              {assignment
+                                .doctor
+                                .specialization ||
+                                (assignment.assignmentType ===
+                                "PRIMARY"
+                                  ? "Primary doctor"
+                                  : "Specialist doctor")}
+                            </Text>
+                          </View>
+
+                          {isSelected ? (
+                            <CheckCircle2
+                              size={19}
+                              color={
+                                PRIMARY
+                              }
+                              strokeWidth={
+                                2.7
+                              }
+                            />
+                          ) : null}
+                        </TouchableOpacity>
+                      );
+                    }
+                  )
+                : dropdownOptions.map(
+                    (
+                      option,
+                      index
+                    ) => {
+                      const isSelected =
+                        option ===
+                          selectedReason ||
+                        option ===
+                          preferredDate ||
+                        option ===
+                          preferredTime;
+
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.modalOption,
+                            index ===
+                            dropdownOptions.length -
+                              1
+                              ? styles.modalOptionLast
+                              : undefined,
+                            isSelected
+                              ? styles.modalOptionSelected
+                              : undefined,
+                          ]}
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            selectDropdownOption(
+                              option
+                            )
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.modalOptionText,
+                              isSelected
+                                ? styles.modalOptionTextSelected
+                                : undefined,
+                            ]}
+                          >
+                            {option}
+                          </Text>
+
+                          {isSelected ? (
+                            <CheckCircle2
+                              size={19}
+                              color={
+                                PRIMARY
+                              }
+                              strokeWidth={
+                                2.7
+                              }
+                            />
+                          ) : null}
+                        </TouchableOpacity>
+                      );
+                    }
+                  )}
             </View>
           </View>
         </Modal>
@@ -642,11 +1721,30 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   );
 };
 
-const SummaryStat = ({ label, value }: { label: string; value: string }) => {
+const SummaryStat = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) => {
   return (
     <View style={styles.summaryStat}>
-      <Text style={styles.summaryStatValue}>{value}</Text>
-      <Text style={styles.summaryStatLabel}>{label}</Text>
+      <Text
+        style={
+          styles.summaryStatValue
+        }
+      >
+        {value}
+      </Text>
+
+      <Text
+        style={
+          styles.summaryStatLabel
+        }
+      >
+        {label}
+      </Text>
     </View>
   );
 };
@@ -662,11 +1760,28 @@ const SectionHeader = ({
 }) => {
   return (
     <View style={styles.formHeader}>
-      <View style={styles.formIcon}>{icon}</View>
+      <View style={styles.formIcon}>
+        {icon}
+      </View>
 
-      <View style={styles.formHeaderText}>
-        <Text style={styles.formTitle}>{title}</Text>
-        <Text style={styles.formSubtitle}>{subtitle}</Text>
+      <View
+        style={
+          styles.formHeaderText
+        }
+      >
+        <Text
+          style={styles.formTitle}
+        >
+          {title}
+        </Text>
+
+        <Text
+          style={
+            styles.formSubtitle
+          }
+        >
+          {subtitle}
+        </Text>
       </View>
     </View>
   );
@@ -675,40 +1790,79 @@ const SectionHeader = ({
 const SelectField = ({
   label,
   value,
+  helperText,
   icon,
   placeholder,
   onPress,
 }: {
   label: string;
   value: string;
+  helperText?: string;
   icon: ReactNode;
   placeholder: boolean;
   onPress: () => void;
 }) => {
   return (
-    <View style={styles.selectFieldBlock}>
-      <Text style={styles.inputLabel}>{label}</Text>
+    <View
+      style={
+        styles.selectFieldBlock
+      }
+    >
+      <Text style={styles.inputLabel}>
+        {label}
+      </Text>
 
       <TouchableOpacity
         style={styles.selectBox}
         activeOpacity={0.85}
         onPress={onPress}
       >
-        <View style={styles.selectLeft}>
-          <View style={styles.selectIcon}>{icon}</View>
-
-          <Text
-            style={[
-              styles.selectText,
-              placeholder ? styles.placeholderText : undefined,
-            ]}
-            numberOfLines={1}
+        <View
+          style={styles.selectLeft}
+        >
+          <View
+            style={
+              styles.selectIcon
+            }
           >
-            {value}
-          </Text>
+            {icon}
+          </View>
+
+          <View
+            style={
+              styles.selectTextBlock
+            }
+          >
+            <Text
+              style={[
+                styles.selectText,
+                placeholder
+                  ? styles.placeholderText
+                  : undefined,
+              ]}
+              numberOfLines={1}
+            >
+              {value}
+            </Text>
+
+            {helperText ? (
+              <Text
+                style={
+                  styles.selectHelperText
+                }
+                numberOfLines={1}
+              >
+                {helperText}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
-        <ChevronDown size={21} color={MUTED} strokeWidth={2.7} />
+        <ChevronDown
+          size={21}
+          color={MUTED}
+          strokeWidth={2.7}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -717,19 +1871,41 @@ const SelectField = ({
 const ConsultationRow = ({
   consultation,
   isLast,
+  isJoining,
+  onJoin,
 }: {
   consultation: Consultation;
   isLast: boolean;
+  isJoining: boolean;
+  onJoin: () => void;
 }) => {
-  const tone = getStatusTone(consultation.status);
+  const tone = getStatusTone(
+    consultation.status
+  );
+
+  const canJoin =
+    canJoinConsultation(
+      consultation.status
+    );
+
+  const doctorName =
+    consultation.doctorName;
 
   return (
-    <View style={[styles.consultationRow, isLast ? styles.rowLast : undefined]}>
+    <View
+      style={[
+        styles.consultationRow,
+        isLast
+          ? styles.rowLast
+          : undefined,
+      ]}
+    >
       <View
         style={[
           styles.statusIconCircle,
           {
-            backgroundColor: tone.background,
+            backgroundColor:
+              tone.background,
           },
         ]}
       >
@@ -745,53 +1921,174 @@ const ConsultationRow = ({
         </Text>
       </View>
 
-      <View style={styles.consultationInfo}>
-        <Text style={styles.consultationTitle} numberOfLines={1}>
-          {getConsultationTypeLabel(consultation.type)}
+      <View
+        style={
+          styles.consultationInfo
+        }
+      >
+        <Text
+          style={
+            styles.consultationTitle
+          }
+          numberOfLines={1}
+        >
+          {getConsultationTypeLabel(
+            consultation.type
+          )}
         </Text>
 
-        <Text style={styles.consultationSubtitle} numberOfLines={2}>
-          {formatConsultationDate(consultation.createdAt)}
+        {doctorName ? (
+          <Text
+            style={
+              styles.consultationDoctor
+            }
+            numberOfLines={1}
+          >
+            {formatDoctorName(
+              doctorName
+            )}
+          </Text>
+        ) : null}
+
+        <Text
+          style={
+            styles.consultationSubtitle
+          }
+          numberOfLines={1}
+        >
+          {formatConsultationDate(
+            consultation.preferredAt ||
+              consultation.createdAt
+          )}
         </Text>
+
+        <Text
+          style={
+            styles.consultationHint
+          }
+          numberOfLines={2}
+        >
+          {getStatusHint(
+            consultation.status
+          )}
+        </Text>
+
+        {consultation.reason ? (
+          <Text
+            style={
+              styles.consultationReason
+            }
+            numberOfLines={2}
+          >
+            {consultation.reason}
+          </Text>
+        ) : null}
       </View>
 
       <View
-        style={[
-          styles.consultationBadge,
-          {
-            backgroundColor: tone.background,
-          },
-        ]}
+        style={
+          styles.consultationActionColumn
+        }
       >
         <View
           style={[
-            styles.consultationBadgeDot,
+            styles.consultationBadge,
             {
-              backgroundColor: tone.dot,
-            },
-          ]}
-        />
-        <Text
-          style={[
-            styles.consultationBadgeText,
-            {
-              color: tone.text,
+              backgroundColor:
+                tone.background,
             },
           ]}
         >
-          {getStatusLabel(consultation.status)}
-        </Text>
+          <View
+            style={[
+              styles.consultationBadgeDot,
+              {
+                backgroundColor:
+                  tone.dot,
+              },
+            ]}
+          />
+
+          <Text
+            style={[
+              styles.consultationBadgeText,
+              {
+                color: tone.text,
+              },
+            ]}
+          >
+            {getStatusLabel(
+              consultation.status
+            )}
+          </Text>
+        </View>
+
+        {canJoin ? (
+          <TouchableOpacity
+            style={[
+              styles.joinButton,
+              isJoining
+                ? styles.disabledButton
+                : undefined,
+            ]}
+            activeOpacity={0.85}
+            onPress={onJoin}
+            disabled={isJoining}
+          >
+            {isJoining ? (
+              <ActivityIndicator
+                size="small"
+                color={SURFACE}
+              />
+            ) : (
+              <>
+                <PlayCircle
+                  size={14}
+                  color={SURFACE}
+                  strokeWidth={2.7}
+                />
+
+                <Text
+                  style={
+                    styles.joinButtonText
+                  }
+                >
+                  Join
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
 };
 
-const LoadingRow = ({ title }: { title: string }) => {
+const LoadingRow = ({
+  title,
+}: {
+  title: string;
+}) => {
   return (
-    <View style={styles.emptyPanel}>
-      <ActivityIndicator size="small" color={PRIMARY} />
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyText}>Please wait a moment.</Text>
+    <View
+      style={styles.emptyPanel}
+    >
+      <ActivityIndicator
+        size="small"
+        color={PRIMARY}
+      />
+
+      <Text
+        style={styles.emptyTitle}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={styles.emptyText}
+      >
+        Please wait a moment.
+      </Text>
     </View>
   );
 };
@@ -806,10 +2103,28 @@ const EmptyRow = ({
   subtitle: string;
 }) => {
   return (
-    <View style={styles.emptyPanel}>
-      <View style={styles.emptyIconCircle}>{icon}</View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyText}>{subtitle}</Text>
+    <View
+      style={styles.emptyPanel}
+    >
+      <View
+        style={
+          styles.emptyIconCircle
+        }
+      >
+        {icon}
+      </View>
+
+      <Text
+        style={styles.emptyTitle}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={styles.emptyText}
+      >
+        {subtitle}
+      </Text>
     </View>
   );
 };
@@ -829,31 +2144,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
   appBarTitle: {
     color: TEXT,
     fontSize: 28,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: -0.5,
   },
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
     marginTop: 3,
-  },
-  appBarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   scrollView: {
     flex: 1,
@@ -864,11 +2166,10 @@ const styles = StyleSheet.create({
   },
   summaryPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   summaryHeader: {
     flexDirection: "row",
@@ -877,7 +2178,7 @@ const styles = StyleSheet.create({
   summaryIconCircle: {
     width: 50,
     height: 50,
-    borderRadius: 17,
+    borderRadius: 14,
     backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -889,24 +2190,21 @@ const styles = StyleSheet.create({
   summaryTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: -0.25,
+    fontWeight: "700",
   },
   summarySubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 19,
     marginTop: 4,
   },
   summaryStatsRow: {
     flexDirection: "row",
     backgroundColor: SOFT_PANEL,
-    borderRadius: 16,
+    borderRadius: 13,
     padding: 10,
     marginTop: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   summaryStat: {
     flex: 1,
@@ -915,21 +2213,20 @@ const styles = StyleSheet.create({
   summaryStatValue: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   summaryStatLabel: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 3,
   },
   formPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   formHeader: {
     flexDirection: "row",
@@ -939,7 +2236,7 @@ const styles = StyleSheet.create({
   formIcon: {
     width: 42,
     height: 42,
-    borderRadius: 15,
+    borderRadius: 13,
     backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -951,15 +2248,55 @@ const styles = StyleSheet.create({
   formTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: -0.25,
+    fontWeight: "700",
   },
   formSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 17,
     marginTop: 2,
+  },
+  noDoctorPanel: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 13,
+  },
+  noDoctorIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  noDoctorTextBlock: {
+    flex: 1,
+  },
+  noDoctorTitle: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  noDoctorText: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  manageDoctorButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: PRIMARY,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 9,
   },
   selectFieldBlock: {
     marginTop: 13,
@@ -967,14 +2304,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
     marginBottom: 8,
   },
   selectBox: {
     backgroundColor: SOFT_PANEL,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
+    borderRadius: 13,
     paddingHorizontal: 13,
     paddingVertical: 13,
     flexDirection: "row",
@@ -995,65 +2330,69 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
+  },
+  selectTextBlock: {
+    flex: 1,
   },
   selectText: {
-    flex: 1,
     color: TEXT,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
+  },
+  selectHelperText: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 3,
   },
   placeholderText: {
     color: "#A8B0C2",
   },
   notesInput: {
     minHeight: 108,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
+    borderRadius: 13,
     backgroundColor: SOFT_PANEL,
     paddingHorizontal: 14,
     paddingTop: 13,
     paddingBottom: 13,
     color: TEXT,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 21,
   },
   primaryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 16,
+    borderRadius: 13,
     paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     marginTop: 16,
+    ...elevate(1),
   },
   primaryButtonText: {
     color: SURFACE,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 9,
   },
   disabledButton: {
-    opacity: 0.65,
+    opacity: 0.55,
   },
   errorPanel: {
     backgroundColor: DANGER_LIGHT,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: "#FECACA",
     marginBottom: 14,
     flexDirection: "row",
     alignItems: "flex-start",
+    ...elevate(1),
   },
   errorText: {
     flex: 1,
     color: "#B42318",
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
     lineHeight: 19,
     marginLeft: 10,
   },
@@ -1067,48 +2406,45 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: TEXT,
     fontSize: 19,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   sectionSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     marginTop: 2,
   },
   refreshButton: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 13,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   historyIcon: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 13,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   listPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 4,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   consultationRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingVertical: 13,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
   rowLast: {
@@ -1117,14 +2453,14 @@ const styles = StyleSheet.create({
   statusIconCircle: {
     width: 42,
     height: 42,
-    borderRadius: 15,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
   },
   statusIconText: {
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   consultationInfo: {
     flex: 1,
@@ -1133,19 +2469,43 @@ const styles = StyleSheet.create({
   consultationTitle: {
     color: TEXT,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
+  },
+  consultationDoctor: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
   },
   consultationSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 17,
     marginTop: 3,
+  },
+  consultationHint: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  consultationReason: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  consultationActionColumn: {
+    alignItems: "flex-end",
+    minWidth: 82,
   },
   consultationBadge: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
+    borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 6,
   },
@@ -1157,21 +2517,35 @@ const styles = StyleSheet.create({
   },
   consultationBadgeText: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "700",
+  },
+  joinButton: {
+    backgroundColor: PRIMARY,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  joinButtonText: {
+    color: SURFACE,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 4,
   },
   emptyPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 22,
     alignItems: "center",
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   emptyIconCircle: {
     width: 54,
     height: 54,
-    borderRadius: 18,
+    borderRadius: 15,
     backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -1180,14 +2554,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: TEXT,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 10,
     textAlign: "center",
   },
   emptyText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 19,
     textAlign: "center",
     marginTop: 6,
@@ -1202,8 +2576,8 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: SURFACE,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 10,
   },
@@ -1229,7 +2603,7 @@ const styles = StyleSheet.create({
   modalIconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 15,
+    borderRadius: 13,
     backgroundColor: PRIMARY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -1238,27 +2612,52 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   modalCloseButton: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: 13,
     backgroundColor: SOFT_PANEL,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   modalOption: {
     paddingVertical: 15,
     paddingHorizontal: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 14,
+    borderRadius: 13,
+  },
+  modalDoctorOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 13,
+  },
+  modalDoctorIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  modalDoctorText: {
+    flex: 1,
+  },
+  modalDoctorSpecialization: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 3,
   },
   modalOptionLast: {
     borderBottomWidth: 0,
@@ -1271,10 +2670,9 @@ const styles = StyleSheet.create({
   modalOptionText: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   modalOptionTextSelected: {
     color: PRIMARY_DARK,
-    fontWeight: "900",
   },
 });

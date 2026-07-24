@@ -1,19 +1,29 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 
-const formatDateOfBirth = (value?: Date | null) => {
+const formatDateOfBirth = (
+  value?: Date | null
+) => {
   if (!value) {
     return null;
   }
 
-  const day = String(value.getUTCDate()).padStart(2, "0");
-  const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(
+    value.getUTCDate()
+  ).padStart(2, "0");
+
+  const month = String(
+    value.getUTCMonth() + 1
+  ).padStart(2, "0");
+
   const year = value.getUTCFullYear();
 
   return `${day}/${month}/${year}`;
 };
 
-const formatGender = (value?: string | null) => {
+const formatGender = (
+  value?: string | null
+) => {
   if (!value) {
     return null;
   }
@@ -51,56 +61,84 @@ const endOfToday = () => {
 
 const formatPatient = (assignment: any) => {
   const patient = assignment.patient;
-  const latestVital = patient.vitalReadings[0] || null;
-  const activeAlert = patient.patientSafetyAlerts[0] || null;
+  const latestVital =
+    patient.vitalReadings[0] || null;
+  const activeAlert =
+    patient.patientSafetyAlerts[0] || null;
 
   return {
     assignmentId: assignment.id,
+    assignmentType:
+      assignment.assignmentType,
     assignedAt: assignment.createdAt,
     patient: {
       id: patient.id,
       fullName: patient.fullName,
       email: patient.email,
-      phoneNumber: patient.patientProfile?.phoneNumber || null,
-      dateOfBirth: formatDateOfBirth(patient.patientProfile?.dateOfBirth),
-      gender: formatGender(patient.patientProfile?.gender),
-      medicalConditions: patient.patientProfile?.medicalConditions || null,
-      emergencyContact: patient.patientProfile?.emergencyContact || null,
+      phoneNumber:
+        patient.patientProfile?.phoneNumber ||
+        null,
+      dateOfBirth: formatDateOfBirth(
+        patient.patientProfile?.dateOfBirth
+      ),
+      gender: formatGender(
+        patient.patientProfile?.gender
+      ),
+      medicalConditions:
+        patient.patientProfile
+          ?.medicalConditions || null,
+      emergencyContact:
+        patient.patientProfile
+          ?.emergencyContact || null,
     },
     latestVital: latestVital
       ? {
           id: latestVital.id,
-          heartRate: latestVital.heartRate,
+          heartRate:
+            latestVital.heartRate,
           spo2: latestVital.spo2,
-          bpSystolic: latestVital.bpSystolic,
-          bpDiastolic: latestVital.bpDiastolic,
+          bpSystolic:
+            latestVital.bpSystolic,
+          bpDiastolic:
+            latestVital.bpDiastolic,
           glucose: latestVital.glucose,
-          temperature: latestVital.temperature,
+          temperature:
+            latestVital.temperature,
           status: latestVital.status,
           source: latestVital.source,
-          deviceSource: latestVital.deviceSource,
-          recordedAt: latestVital.recordedAt,
+          deviceSource:
+            latestVital.deviceSource,
+          recordedAt:
+            latestVital.recordedAt,
         }
       : null,
-    activeMedicineCount: patient.medicines.length,
+    activeMedicineCount:
+      patient.medicines.length,
     activeAlert: activeAlert
       ? {
           id: activeAlert.id,
           status: activeAlert.status,
           reason: activeAlert.reason,
-          timerEndsAt: activeAlert.timerEndsAt,
-          createdAt: activeAlert.createdAt,
+          timerEndsAt:
+            activeAlert.timerEndsAt,
+          createdAt:
+            activeAlert.createdAt,
         }
       : null,
   };
 };
 
-const formatVitalSummary = (vitalReading: any) => {
+const formatVitalSummary = (
+  vitalReading: any
+) => {
   if (!vitalReading) {
     return null;
   }
 
-  if (vitalReading.spo2 !== null && vitalReading.spo2 !== undefined) {
+  if (
+    vitalReading.spo2 !== null &&
+    vitalReading.spo2 !== undefined
+  ) {
     return {
       label: "SpO2",
       value: `${vitalReading.spo2}%`,
@@ -108,7 +146,10 @@ const formatVitalSummary = (vitalReading: any) => {
     };
   }
 
-  if (vitalReading.heartRate !== null && vitalReading.heartRate !== undefined) {
+  if (
+    vitalReading.heartRate !== null &&
+    vitalReading.heartRate !== undefined
+  ) {
     return {
       label: "Heart rate",
       value: `${vitalReading.heartRate} bpm`,
@@ -129,7 +170,10 @@ const formatVitalSummary = (vitalReading: any) => {
     };
   }
 
-  if (vitalReading.glucose !== null && vitalReading.glucose !== undefined) {
+  if (
+    vitalReading.glucose !== null &&
+    vitalReading.glucose !== undefined
+  ) {
     return {
       label: "Glucose",
       value: `${vitalReading.glucose} mmol/L`,
@@ -155,9 +199,16 @@ const formatVitalSummary = (vitalReading: any) => {
   };
 };
 
-const formatAlert = (alert: any) => {
-  const vitalSummary = formatVitalSummary(alert.vitalReading);
+const canJoinConsultation = (
+  status?: string
+) => {
+  return (
+    status === "ACCEPTED" ||
+    status === "IN_PROGRESS"
+  );
+};
 
+const formatAlert = (alert: any) => {
   return {
     id: alert.id,
     patientId: alert.patientId,
@@ -167,110 +218,157 @@ const formatAlert = (alert: any) => {
     timerEndsAt: alert.timerEndsAt,
     escalatedAt: alert.escalatedAt,
     createdAt: alert.createdAt,
-    patient: {
-      id: alert.patient.id,
-      fullName: alert.patient.fullName,
-      email: alert.patient.email,
-    },
-    vitalSummary,
+    patient: alert.patient
+      ? {
+          id: alert.patient.id,
+          fullName:
+            alert.patient.fullName,
+          email: alert.patient.email,
+        }
+      : null,
+    vitalSummary:
+      formatVitalSummary(
+        alert.vitalReading
+      ),
     consultation: alert.consultation
       ? {
           id: alert.consultation.id,
           type: alert.consultation.type,
-          status: alert.consultation.status,
-          reason: alert.consultation.reason,
-          createdAt: alert.consultation.createdAt,
+          status:
+            alert.consultation.status,
+          reason:
+            alert.consultation.reason,
+          createdAt:
+            alert.consultation.createdAt,
         }
       : null,
-    canJoinCall: Boolean(alert.consultation),
+    canJoinCall:
+      canJoinConsultation(
+        alert.consultation?.status
+      ),
   };
 };
 
-const formatConsultation = (consultation: any) => {
+const formatConsultation = (
+  consultation: any
+) => {
   return {
     id: consultation.id,
     patientId: consultation.patientId,
     doctorId: consultation.doctorId,
-    safetyAlertId: consultation.safetyAlertId,
+    safetyAlertId:
+      consultation.safetyAlertId,
     type: consultation.type,
     status: consultation.status,
     reason: consultation.reason,
-    preferredAt: consultation.preferredAt,
+    preferredAt:
+      consultation.preferredAt,
     notes: consultation.notes,
-    doctorName: consultation.doctorName,
+    doctorName:
+      consultation.doctorName,
     createdAt: consultation.createdAt,
     updatedAt: consultation.updatedAt,
-    patient: {
-      id: consultation.patient.id,
-      fullName: consultation.patient.fullName,
-      email: consultation.patient.email,
-    },
+    patient: consultation.patient
+      ? {
+          id: consultation.patient.id,
+          fullName:
+            consultation.patient.fullName,
+          email:
+            consultation.patient.email,
+        }
+      : null,
   };
 };
 
-const ensureApprovedDoctor = async (doctorId: string) => {
-  const doctor = await prisma.user.findUnique({
-    where: {
-      id: doctorId,
-    },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      role: true,
-      accountStatus: true,
-      isEmailVerified: true,
-      doctorProfile: {
-        select: {
-          phoneNumber: true,
-          gmcNumber: true,
-          specialization: true,
-          clinicName: true,
-          clinicAddress: true,
-          yearsExperience: true,
-          bio: true,
+const ensureApprovedDoctor = async (
+  doctorId: string
+) => {
+  const doctor =
+    await prisma.user.findUnique({
+      where: {
+        id: doctorId,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        isEmailVerified: true,
+        doctorProfile: {
+          select: {
+            phoneNumber: true,
+            gmcNumber: true,
+            specialization: true,
+            clinicName: true,
+            clinicAddress: true,
+            yearsExperience: true,
+            bio: true,
+          },
         },
       },
-    },
-  });
+    });
 
   if (!doctor) {
-    throw new AppError("Doctor not found", 404);
+    throw new AppError(
+      "Doctor not found",
+      404
+    );
   }
 
   if (doctor.role !== "DOCTOR") {
-    throw new AppError("Only doctors can access this resource", 403);
+    throw new AppError(
+      "Only doctors can access this resource",
+      403
+    );
   }
 
   if (!doctor.isEmailVerified) {
-    throw new AppError("Please verify your email first", 403);
+    throw new AppError(
+      "Please verify your email first",
+      403
+    );
   }
 
-  if (doctor.accountStatus !== "ACTIVE" && doctor.accountStatus !== "APPROVED") {
-    throw new AppError("Doctor account is not approved yet", 403);
+  if (
+    doctor.accountStatus !== "ACTIVE" &&
+    doctor.accountStatus !== "APPROVED"
+  ) {
+    throw new AppError(
+      "Doctor account is not approved yet",
+      403
+    );
   }
 
   return doctor;
 };
 
-const getAssignedPatientIds = async (doctorId: string) => {
-  const assignments = await prisma.patientDoctorAssignment.findMany({
-    where: {
-      doctorId,
-      status: "ACTIVE",
-    },
-    select: {
-      patientId: true,
-    },
-  });
+const getAssignedPatientIds = async (
+  doctorId: string
+) => {
+  const assignments =
+    await prisma.patientDoctorAssignment.findMany({
+      where: {
+        doctorId,
+        status: "ACTIVE",
+      },
+      select: {
+        patientId: true,
+      },
+    });
 
-  return assignments.map((assignment) => assignment.patientId);
+  return assignments.map(
+    (assignment) => assignment.patientId
+  );
 };
 
 export const doctorService = {
   async getDashboard(doctorId: string) {
-    const doctor = await ensureApprovedDoctor(doctorId);
-    const assignedPatientIds = await getAssignedPatientIds(doctorId);
+    const doctor =
+      await ensureApprovedDoctor(doctorId);
+
+    const assignedPatientIds =
+      await getAssignedPatientIds(doctorId);
 
     const todayStart = startOfToday();
     const todayEnd = endOfToday();
@@ -291,35 +389,30 @@ export const doctorService = {
         },
       }),
 
-      assignedPatientIds.length === 0
-        ? 0
-        : prisma.safetyAlert.count({
-            where: {
-              patientId: {
-                in: assignedPatientIds,
-              },
-              status: {
-                in: ["ACTIVE", "ESCALATED"],
-              },
-            },
-          }),
+      prisma.safetyAlert.count({
+        where: {
+          doctorId,
+          status: {
+            in: ["ACTIVE", "ESCALATED"],
+          },
+        },
+      }),
 
-      assignedPatientIds.length === 0
-        ? 0
-        : prisma.consultation.count({
-            where: {
-              patientId: {
-                in: assignedPatientIds,
-              },
-              createdAt: {
-                gte: todayStart,
-                lte: todayEnd,
-              },
-              status: {
-                notIn: ["CANCELLED", "REJECTED"],
-              },
-            },
-          }),
+      prisma.consultation.count({
+        where: {
+          doctorId,
+          createdAt: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+          status: {
+            notIn: [
+              "CANCELLED",
+              "REJECTED",
+            ],
+          },
+        },
+      }),
 
       assignedPatientIds.length === 0
         ? 0
@@ -336,64 +429,60 @@ export const doctorService = {
             },
           }),
 
-      assignedPatientIds.length === 0
-        ? []
-        : prisma.safetyAlert.findMany({
-            where: {
-              patientId: {
-                in: assignedPatientIds,
-              },
-              status: {
-                in: ["ACTIVE", "ESCALATED"],
-              },
+      prisma.safetyAlert.findMany({
+        where: {
+          doctorId,
+          status: {
+            in: ["ACTIVE", "ESCALATED"],
+          },
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
             },
-            include: {
-              patient: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                },
-              },
-              vitalReading: true,
-              consultation: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 3,
-          }),
+          },
+          vitalReading: true,
+          consultation: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 3,
+      }),
 
-      assignedPatientIds.length === 0
-        ? []
-        : prisma.consultation.findMany({
-            where: {
-              patientId: {
-                in: assignedPatientIds,
-              },
-              status: {
-                in: ["PENDING", "ACCEPTED", "IN_PROGRESS"],
-              },
-            },
-            include: {
-              patient: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                },
-              },
-            },
-            orderBy: [
-              {
-                preferredAt: "asc",
-              },
-              {
-                createdAt: "desc",
-              },
+      prisma.consultation.findMany({
+        where: {
+          doctorId,
+          status: {
+            in: [
+              "PENDING",
+              "ACCEPTED",
+              "IN_PROGRESS",
             ],
-            take: 3,
-          }),
+          },
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: [
+          {
+            preferredAt: "asc",
+          },
+          {
+            createdAt: "desc",
+          },
+        ],
+        take: 3,
+      }),
 
       prisma.patientDoctorAssignment.findMany({
         where: {
@@ -431,8 +520,12 @@ export const doctorService = {
               },
               patientSafetyAlerts: {
                 where: {
+                  doctorId,
                   status: {
-                    in: ["ACTIVE", "ESCALATED"],
+                    in: [
+                      "ACTIVE",
+                      "ESCALATED",
+                    ],
                   },
                 },
                 orderBy: {
@@ -462,87 +555,111 @@ export const doctorService = {
         id: doctor.id,
         fullName: doctor.fullName,
         email: doctor.email,
-        accountStatus: doctor.accountStatus,
-        specialization: doctor.doctorProfile?.specialization || null,
-        clinicName: doctor.doctorProfile?.clinicName || null,
+        accountStatus:
+          doctor.accountStatus,
+        specialization:
+          doctor.doctorProfile
+            ?.specialization || null,
+        clinicName:
+          doctor.doctorProfile
+            ?.clinicName || null,
       },
       stats: {
-        assignedPatients: assignedPatientsCount,
-        activeAlerts: activeAlertsCount,
-        todayConsultations: todayConsultationsCount,
-        pendingMedicineReviews: pendingMedicineReviewsCount,
+        assignedPatients:
+          assignedPatientsCount,
+        activeAlerts:
+          activeAlertsCount,
+        todayConsultations:
+          todayConsultationsCount,
+        pendingMedicineReviews:
+          pendingMedicineReviewsCount,
       },
-      urgentAlerts: urgentAlerts.map(formatAlert),
-      upcomingConsultations: upcomingConsultations.map(formatConsultation),
-      recentPatients: recentAssignments.map(formatPatient),
+      urgentAlerts:
+        urgentAlerts.map(formatAlert),
+      upcomingConsultations:
+        upcomingConsultations.map(
+          formatConsultation
+        ),
+      recentPatients:
+        recentAssignments.map(
+          formatPatient
+        ),
     };
   },
 
-  async listAssignedPatients(doctorId: string) {
+  async listAssignedPatients(
+    doctorId: string
+  ) {
     await ensureApprovedDoctor(doctorId);
 
-    const assignments = await prisma.patientDoctorAssignment.findMany({
-      where: {
-        doctorId,
-        status: "ACTIVE",
-      },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            patientProfile: {
-              select: {
-                phoneNumber: true,
-                dateOfBirth: true,
-                gender: true,
-                medicalConditions: true,
-                emergencyContact: true,
-              },
-            },
-            vitalReadings: {
-              orderBy: {
-                recordedAt: "desc",
-              },
-              take: 1,
-            },
-            medicines: {
-              where: {
-                isActive: true,
-              },
-              select: {
-                id: true,
-              },
-            },
-            patientSafetyAlerts: {
-              where: {
-                status: {
-                  in: ["ACTIVE", "ESCALATED"],
+    const assignments =
+      await prisma.patientDoctorAssignment.findMany({
+        where: {
+          doctorId,
+          status: "ACTIVE",
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              patientProfile: {
+                select: {
+                  phoneNumber: true,
+                  dateOfBirth: true,
+                  gender: true,
+                  medicalConditions: true,
+                  emergencyContact: true,
                 },
               },
-              orderBy: {
-                createdAt: "desc",
+              vitalReadings: {
+                orderBy: {
+                  recordedAt: "desc",
+                },
+                take: 1,
               },
-              take: 1,
-              select: {
-                id: true,
-                status: true,
-                reason: true,
-                timerEndsAt: true,
-                createdAt: true,
+              medicines: {
+                where: {
+                  isActive: true,
+                },
+                select: {
+                  id: true,
+                },
+              },
+              patientSafetyAlerts: {
+                where: {
+                  doctorId,
+                  status: {
+                    in: [
+                      "ACTIVE",
+                      "ESCALATED",
+                    ],
+                  },
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 1,
+                select: {
+                  id: true,
+                  status: true,
+                  reason: true,
+                  timerEndsAt: true,
+                  createdAt: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     return {
-      patients: assignments.map(formatPatient),
+      patients:
+        assignments.map(formatPatient),
     };
   },
 };
