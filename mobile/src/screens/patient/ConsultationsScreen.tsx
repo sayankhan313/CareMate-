@@ -29,10 +29,10 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Clock3,
   History,
   MessageSquareText,
-  PlayCircle,
   RefreshCw,
   Send,
   Stethoscope,
@@ -429,11 +429,6 @@ const ConsultationsScreen = ({
     setIsSendingRequest,
   ] = useState(false);
 
-  const [
-    joiningConsultationId,
-    setJoiningConsultationId,
-  ] = useState<string | null>(null);
-
   const [screenError, setScreenError] =
     useState("");
 
@@ -803,79 +798,17 @@ const ConsultationsScreen = ({
       selectedReason,
     ]);
 
-  const joinConsultation =
-    useCallback(
-      async (
-        consultation: Consultation
-      ) => {
-        if (
-          joiningConsultationId
-        ) {
-          return;
-        }
+  const openActiveCallsScreen = useCallback(() => {
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open calls",
+        "Active Calls screen is not available right now."
+      );
+      return;
+    }
 
-        if (!rootNavigation) {
-          Alert.alert(
-            "Unable to open call",
-            "Video consultation screen is not available right now."
-          );
-          return;
-        }
-
-        try {
-          setJoiningConsultationId(
-            consultation.id
-          );
-
-          setScreenError("");
-
-          const result =
-            await consultationsApi.getPatientJoinConfig(
-              consultation.id
-            );
-
-          rootNavigation.navigate(
-            "VideoConsultation",
-            {
-              consultationId:
-                result.consultation.id,
-              consultationType:
-                result.consultation.type,
-              patientMeeting:
-                result.patientMeeting,
-              patientMeetingUrl:
-                result.patientMeeting
-                  .webUrl,
-            }
-          );
-
-          await loadScreenData(
-            "refresh"
-          );
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Unable to join consultation.";
-
-          setScreenError(message);
-
-          Alert.alert(
-            "Unable to join",
-            message
-          );
-        } finally {
-          setJoiningConsultationId(
-            null
-          );
-        }
-      },
-      [
-        joiningConsultationId,
-        loadScreenData,
-        rootNavigation,
-      ]
-    );
+    rootNavigation.navigate("PatientActiveCalls");
+  }, [rootNavigation]);
 
   return (
     <SafeAreaView
@@ -1351,14 +1284,8 @@ const ConsultationsScreen = ({
                       activeConsultations.length -
                         1
                     }
-                    isJoining={
-                      joiningConsultationId ===
-                      consultation.id
-                    }
-                    onJoin={() =>
-                      joinConsultation(
-                        consultation
-                      )
+                    onOpenActiveCalls={
+                      openActiveCallsScreen
                     }
                   />
                 )
@@ -1441,10 +1368,7 @@ const ConsultationsScreen = ({
                       pastConsultations.length -
                         1
                     }
-                    isJoining={
-                      false
-                    }
-                    onJoin={() =>
+                    onOpenActiveCalls={() =>
                       undefined
                     }
                   />
@@ -1871,19 +1795,17 @@ const SelectField = ({
 const ConsultationRow = ({
   consultation,
   isLast,
-  isJoining,
-  onJoin,
+  onOpenActiveCalls,
 }: {
   consultation: Consultation;
   isLast: boolean;
-  isJoining: boolean;
-  onJoin: () => void;
+  onOpenActiveCalls: () => void;
 }) => {
   const tone = getStatusTone(
     consultation.status
   );
 
-  const canJoin =
+  const canOpenActiveCall =
     canJoinConsultation(
       consultation.status
     );
@@ -1892,13 +1814,26 @@ const ConsultationRow = ({
     consultation.doctorName;
 
   return (
-    <View
+    <TouchableOpacity
       style={[
         styles.consultationRow,
         isLast
           ? styles.rowLast
           : undefined,
       ]}
+      activeOpacity={
+        canOpenActiveCall
+          ? 0.84
+          : 1
+      }
+      onPress={
+        canOpenActiveCall
+          ? onOpenActiveCalls
+          : undefined
+      }
+      disabled={
+        !canOpenActiveCall
+      }
     >
       <View
         style={[
@@ -1968,9 +1903,11 @@ const ConsultationRow = ({
           }
           numberOfLines={2}
         >
-          {getStatusHint(
-            consultation.status
-          )}
+          {canOpenActiveCall
+            ? "Tap to open the active call screen."
+            : getStatusHint(
+                consultation.status
+              )}
         </Text>
 
         {consultation.reason ? (
@@ -2023,44 +1960,29 @@ const ConsultationRow = ({
           </Text>
         </View>
 
-        {canJoin ? (
-          <TouchableOpacity
-            style={[
-              styles.joinButton,
-              isJoining
-                ? styles.disabledButton
-                : undefined,
-            ]}
-            activeOpacity={0.85}
-            onPress={onJoin}
-            disabled={isJoining}
+        {canOpenActiveCall ? (
+          <View
+            style={
+              styles.openCallIndicator
+            }
           >
-            {isJoining ? (
-              <ActivityIndicator
-                size="small"
-                color={SURFACE}
-              />
-            ) : (
-              <>
-                <PlayCircle
-                  size={14}
-                  color={SURFACE}
-                  strokeWidth={2.7}
-                />
+            <Text
+              style={
+                styles.openCallText
+              }
+            >
+              Open
+            </Text>
 
-                <Text
-                  style={
-                    styles.joinButtonText
-                  }
-                >
-                  Join
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            <ChevronRight
+              size={17}
+              color={PRIMARY}
+              strokeWidth={2.7}
+            />
+          </View>
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -2519,20 +2441,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
-  joinButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  openCallIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 10,
+    paddingVertical: 3,
   },
-  joinButtonText: {
-    color: SURFACE,
+  openCallText: {
+    color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "700",
-    marginLeft: 4,
+    marginRight: 2,
   },
   emptyPanel: {
     backgroundColor: SURFACE,

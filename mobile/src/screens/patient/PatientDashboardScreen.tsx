@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -40,10 +39,12 @@ import {
   Search,
   ShieldAlert,
   UserRound,
+  Video,
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../../services/tokenStorage";
+import { consultationsApi } from "../../services/consultationsApi";
 import type {
   PatientTabParamList,
   RootStackParamList,
@@ -153,7 +154,6 @@ const ON_DANGER_CONTAINER = "#8C1D24";
 const DASHBOARD_AUTO_REFRESH_MS = 30_000;
 
 
-const rippleFor = (color: string) => ({ color, borderless: false });
 
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") {
@@ -347,6 +347,7 @@ export const PatientDashboardScreen = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [activeCallCount, setActiveCallCount] = useState(0);
   const [actionLoadingReminderId, setActionLoadingReminderId] = useState<
     string | null
   >(null);
@@ -364,6 +365,22 @@ export const PatientDashboardScreen = ({
       routes: [{ name: "Login" }],
     });
   }, [navigation]);
+
+  const loadActiveCallCount = useCallback(async () => {
+    try {
+      const result = await consultationsApi.listConsultations();
+
+      const count = result.filter(
+        (consultation) =>
+          consultation.status === "ACCEPTED" ||
+          consultation.status === "IN_PROGRESS"
+      ).length;
+
+      setActiveCallCount(count);
+    } catch (error) {
+      setActiveCallCount(0);
+    }
+  }, []);
 
   const loadDashboard = useCallback(
     async (mode: "initial" | "refresh" | "silent" = "initial") => {
@@ -429,16 +446,18 @@ export const PatientDashboardScreen = ({
 
   useFocusEffect(
     useCallback(() => {
-      loadDashboard("initial");
+      void loadDashboard("initial");
+      void loadActiveCallCount();
 
       const intervalId = setInterval(() => {
-        loadDashboard("silent");
+        void loadDashboard("silent");
+        void loadActiveCallCount();
       }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
         clearInterval(intervalId);
       };
-    }, [loadDashboard])
+    }, [loadActiveCallCount, loadDashboard])
   );
 
   const removeMedicineFromDashboardCard = (reminderId: string) => {
@@ -639,6 +658,20 @@ export const PatientDashboardScreen = ({
     navigation.navigate("Vitals");
   };
 
+  const openActiveCallsScreen = () => {
+    const rootNavigation = getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Active Calls screen is not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.navigate("PatientActiveCalls");
+  };
+
   const openOrdersScreen = () => {
     navigation.navigate("PatientOrders");
   };
@@ -690,26 +723,23 @@ export const PatientDashboardScreen = ({
           </View>
 
           <View style={styles.topActions}>
-            <Pressable
+            <TouchableOpacity
               style={styles.iconButton}
-              android_ripple={rippleFor(SURFACE_VARIANT)}
               onPress={() => showComingSoon("Search")}
             >
               <Search size={22} color={TEXT} strokeWidth={2} />
-            </Pressable>
+            </TouchableOpacity>
 
-            <Pressable
+            <TouchableOpacity
               style={styles.iconButton}
-              android_ripple={rippleFor(SURFACE_VARIANT)}
               onPress={() => showComingSoon("Notifications")}
             >
               <Bell size={22} color={TEXT} strokeWidth={2} />
               <View style={styles.notificationDot} />
-            </Pressable>
+            </TouchableOpacity>
 
-            <Pressable
+            <TouchableOpacity
               style={styles.avatar}
-              android_ripple={rippleFor("#3457C6")}
               onPress={openPatientProfileScreen}
             >
               {patientInitial ? (
@@ -717,7 +747,7 @@ export const PatientDashboardScreen = ({
               ) : (
                 <UserRound size={19} color={SURFACE} />
               )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -733,7 +763,10 @@ export const PatientDashboardScreen = ({
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() => loadDashboard("refresh")}
+              onRefresh={() => {
+                void loadDashboard("refresh");
+                void loadActiveCallCount();
+              }}
               tintColor={PRIMARY}
               colors={[PRIMARY]}
             />
@@ -758,22 +791,20 @@ export const PatientDashboardScreen = ({
               <Text style={styles.errorTitle}>Dashboard unavailable</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
-              <Pressable
+              <TouchableOpacity
                 style={styles.retryButton}
-                android_ripple={rippleFor("#3457C6")}
                 onPress={() => loadDashboard("initial")}
               >
                 <RefreshCw size={17} color={SURFACE} strokeWidth={2.2} />
                 <Text style={styles.retryButtonText}>Try again</Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           ) : null}
 
           {!isLoading && !errorMessage ? (
             <>
-              <Pressable
+              <TouchableOpacity
                 style={styles.healthCard}
-                android_ripple={rippleFor("#3457C6")}
                 onPress={openVitalsScreen}
               >
                 <View style={styles.healthCardTop}>
@@ -839,7 +870,7 @@ export const PatientDashboardScreen = ({
                     unit="mmHg"
                   />
                 </View>
-              </Pressable>
+              </TouchableOpacity>
 
               <ScrollView
                 horizontal
@@ -865,6 +896,19 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
+                  label="Active Calls"
+                  icon={
+                    <Video
+                      size={23}
+                      color={ON_PRIMARY_CONTAINER}
+                      strokeWidth={2}
+                    />
+                  }
+                  badgeCount={activeCallCount}
+                  onPress={openActiveCallsScreen}
+                />
+
+                <CategoryShortcut
                   label="Safety"
                   icon={
                     <ShieldAlert size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />
@@ -876,13 +920,12 @@ export const PatientDashboardScreen = ({
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My plan</Text>
 
-                <Pressable
-                  android_ripple={rippleFor(SURFACE_VARIANT)}
+                <TouchableOpacity
                   hitSlop={8}
                   onPress={openMedicinesScreen}
                 >
                   <Text style={styles.sectionAction}>View meds</Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.whitePanel}>
@@ -946,18 +989,17 @@ export const PatientDashboardScreen = ({
         </ScrollView>
 
         {!isLoading && !errorMessage ? (
-          <Pressable
+          <TouchableOpacity
             style={[
               styles.fab,
               {
                 bottom: Math.max(24, insets.bottom + 20),
               },
             ]}
-            android_ripple={rippleFor("#3457C6")}
             onPress={openAddMedicineScreen}
           >
             <Plus size={24} color={SURFACE} strokeWidth={2.4} />
-          </Pressable>
+          </TouchableOpacity>
         ) : null}
       </View>
     </SafeAreaView>
@@ -967,21 +1009,34 @@ export const PatientDashboardScreen = ({
 const CategoryShortcut = ({
   label,
   icon,
+  badgeCount,
   onPress,
 }: {
   label: string;
   icon: ReactNode;
+  badgeCount?: number;
   onPress: () => void;
 }) => {
   return (
-    <Pressable
+    <TouchableOpacity
       style={styles.categoryItem}
-      android_ripple={rippleFor(SURFACE_VARIANT)}
+      activeOpacity={0.84}
       onPress={onPress}
     >
-      <View style={styles.categoryIconCircle}>{icon}</View>
+      <View style={styles.categoryIconCircle}>
+        {icon}
+
+        {badgeCount !== undefined && badgeCount > 0 ? (
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
       <Text style={styles.categoryLabel}>{label}</Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -1021,9 +1076,8 @@ const MedicineOrderMiniBar = ({
   const statusText = formatOrderStatus(order?.status || "PREPARING");
 
   return (
-    <Pressable
+    <TouchableOpacity
       style={styles.orderMiniCard}
-      android_ripple={rippleFor(SURFACE_VARIANT)}
       onPress={onPress}
     >
       <View style={styles.orderMiniHeader}>
@@ -1054,7 +1108,7 @@ const MedicineOrderMiniBar = ({
           isLast
         />
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -1159,13 +1213,12 @@ const MedicinePlanBlock = ({
           </Text>
         </View>
 
-        <Pressable
+        <TouchableOpacity
           style={styles.smallPrimaryButton}
-          android_ripple={rippleFor("#3457C6")}
           onPress={onAddMedicine}
         >
           <Text style={styles.smallPrimaryButtonText}>Add</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -1174,9 +1227,8 @@ const MedicinePlanBlock = ({
 
   return (
     <View>
-      <Pressable
+      <TouchableOpacity
         style={styles.medicineTopRow}
-        android_ripple={rippleFor(SURFACE_VARIANT)}
         onPress={onOpenMedicines}
       >
         <View style={styles.timeBox}>
@@ -1207,7 +1259,7 @@ const MedicinePlanBlock = ({
         {hasMultipleMedicines ? (
           <ChevronRight size={20} color={MUTED} strokeWidth={2.2} />
         ) : null}
-      </Pressable>
+      </TouchableOpacity>
 
       {hasMultipleMedicines ? (
         <View style={styles.previewList}>
@@ -1228,12 +1280,11 @@ const MedicinePlanBlock = ({
         </View>
       ) : (
         <View style={styles.medicineActions}>
-          <Pressable
+          <TouchableOpacity
             style={[
               styles.takenButton,
               isTakingNextMedicine ? styles.disabledButton : undefined,
             ]}
-            android_ripple={rippleFor("#2C8F68")}
             disabled={isMedicineActionDisabled}
             onPress={() => onMarkTaken(firstMedicine.reminderId)}
           >
@@ -1241,14 +1292,13 @@ const MedicinePlanBlock = ({
             <Text style={styles.takenButtonText}>
               {isTakingNextMedicine ? "Saving..." : "Taken"}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable
+          <TouchableOpacity
             style={[
               styles.snoozeButton,
               isSnoozingNextMedicine ? styles.disabledButton : undefined,
             ]}
-            android_ripple={rippleFor("#C7D3FA")}
             disabled={isMedicineActionDisabled}
             onPress={() => onSnooze(firstMedicine.reminderId)}
           >
@@ -1256,7 +1306,7 @@ const MedicinePlanBlock = ({
             <Text style={styles.snoozeButtonText}>
               {isSnoozingNextMedicine ? "Snoozing..." : "Snooze"}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -1432,6 +1482,26 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
+  },
+  categoryBadge: {
+    position: "absolute",
+    top: -6,
+    right: -7,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: DANGER,
+    borderWidth: 2,
+    borderColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  categoryBadgeText: {
+    color: SURFACE,
+    fontSize: 9,
+    fontWeight: "700",
   },
   categoryLabel: {
     color: TEXT,
