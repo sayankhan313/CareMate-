@@ -1,4 +1,8 @@
-import { useCallback, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +31,7 @@ import {
   Clock3,
   HeartPulse,
   LogOut,
+  NotebookPen,
   Pill,
   RefreshCw,
   ShieldCheck,
@@ -44,10 +49,13 @@ import {
   type DoctorUpcomingConsultation,
   type DoctorUrgentAlert,
 } from "../../services/doctor/doctorDashboardApi";
+import { doctorConsultationsApi } from "../../services/doctor/doctorConsultationsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
-type DoctorDashboardScreenProps =
-  BottomTabScreenProps<DoctorTabParamList, "Home">;
+type DoctorDashboardScreenProps = BottomTabScreenProps<
+  DoctorTabParamList,
+  "Home"
+>;
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
@@ -66,13 +74,10 @@ const WARNING = "#F6A545";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
 
+const DOCTOR_DASHBOARD_AUTO_REFRESH_MS = 30_000;
+
 const elevate = (level: 1 | 2 | 3 = 2) => {
-  const elevation =
-    level === 1
-      ? 2
-      : level === 2
-        ? 4
-        : 7;
+  const elevation = level === 1 ? 2 : level === 2 ? 4 : 7;
 
   return {
     elevation,
@@ -190,6 +195,14 @@ const getVitalTone = (status?: string | null) => {
   };
 };
 
+const isActionableConsultation = (status: string) => {
+  return (
+    status === "PENDING" ||
+    status === "ACCEPTED" ||
+    status === "IN_PROGRESS"
+  );
+};
+
 export const DoctorDashboardScreen = ({
   navigation,
   route,
@@ -199,14 +212,14 @@ export const DoctorDashboardScreen = ({
   const [dashboard, setDashboard] =
     useState<DoctorDashboardData | null>(null);
 
-  const [isLoading, setIsLoading] =
-    useState(true);
+  const [
+    actionableConsultationCount,
+    setActionableConsultationCount,
+  ] = useState(0);
 
-  const [isRefreshing, setIsRefreshing] =
-    useState(false);
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const routeUser = route.params?.user;
 
@@ -215,17 +228,13 @@ export const DoctorDashboardScreen = ({
     routeUser?.fullName ||
     "";
 
-  const firstName =
-    getFirstName(doctorName);
-
-  const initials =
-    getInitials(doctorName);
+  const firstName = getFirstName(doctorName);
+  const initials = getInitials(doctorName);
 
   const resetToLogin = useCallback(async () => {
     await tokenStorage.removeToken();
 
-    const rootNavigation =
-      navigation.getParent();
+    const rootNavigation = navigation.getParent();
 
     if (rootNavigation) {
       rootNavigation.dispatch(
@@ -256,28 +265,66 @@ export const DoctorDashboardScreen = ({
 
   const loadDashboard = useCallback(
     async (
-      mode: "initial" | "refresh" = "initial"
+      mode: "initial" | "refresh" | "silent" = "initial"
     ) => {
       try {
         if (mode === "initial") {
           setIsLoading(true);
-        } else {
+        }
+
+        if (mode === "refresh") {
           setIsRefreshing(true);
         }
 
-        setErrorMessage("");
+        if (mode !== "silent") {
+          setErrorMessage("");
+        }
 
-        const data =
-          await doctorDashboardApi.getDashboard();
+        const [
+          dashboardData,
+          consultationResult,
+        ] = await Promise.all([
+          doctorDashboardApi.getDashboard(),
 
-        setDashboard(data);
+          doctorConsultationsApi
+            .listConsultations("ALL", "ALL")
+            .catch(() => null),
+        ]);
+
+        setDashboard(dashboardData);
+
+        if (consultationResult) {
+          const count =
+            consultationResult.consultations.filter(
+              (consultation) =>
+                isActionableConsultation(
+                  consultation.status
+                )
+            ).length;
+
+          setActionableConsultationCount(count);
+        } else {
+          const fallbackCount =
+            dashboardData.upcomingConsultations.filter(
+              (consultation) =>
+                isActionableConsultation(
+                  consultation.status
+                )
+            ).length;
+
+          setActionableConsultationCount(
+            fallbackCount
+          );
+        }
       } catch (error) {
         const message =
           error instanceof Error
             ? error.message
             : "Unable to load doctor dashboard.";
 
-        setErrorMessage(message);
+        if (mode !== "silent") {
+          setErrorMessage(message);
+        }
 
         if (
           message
@@ -287,8 +334,13 @@ export const DoctorDashboardScreen = ({
           await resetToLogin();
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (mode === "initial") {
+          setIsLoading(false);
+        }
+
+        if (mode === "refresh") {
+          setIsRefreshing(false);
+        }
       }
     },
     [resetToLogin]
@@ -297,6 +349,14 @@ export const DoctorDashboardScreen = ({
   useFocusEffect(
     useCallback(() => {
       void loadDashboard("initial");
+
+      const intervalId = setInterval(() => {
+        void loadDashboard("silent");
+      }, DOCTOR_DASHBOARD_AUTO_REFRESH_MS);
+
+      return () => {
+        clearInterval(intervalId);
+      };
     }, [loadDashboard])
   );
 
@@ -322,10 +382,6 @@ export const DoctorDashboardScreen = ({
     navigation.navigate("Patients");
   };
 
-  const openPrescriptionPatients = () => {
-    navigation.navigate("Patients");
-  };
-
   const openConsultations = () => {
     navigation.navigate("Consultations");
   };
@@ -338,11 +394,48 @@ export const DoctorDashboardScreen = ({
     navigation.navigate("Alerts");
   };
 
+  const openPrescriptionPatients = () => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open prescriptions",
+        "The prescription patient selector is not available right now."
+      );
+
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorSelectPrescriptionPatient",
+      })
+    );
+  };
+
+  const openAddNotePatients = () => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to add note",
+        "The patient note selector is not available right now."
+      );
+
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorSelectNotePatient",
+      })
+    );
+  };
+
   const openPatientDetail = (
     patient: DoctorDashboardPatient
   ) => {
-    const rootNavigation =
-      navigation.getParent();
+    const rootNavigation = navigation.getParent();
 
     if (!rootNavigation) {
       navigation.navigate("Patients");
@@ -354,29 +447,21 @@ export const DoctorDashboardScreen = ({
         name: "DoctorPatientDetail",
         params: {
           patientId: patient.patient.id,
-          patientName:
-            patient.patient.fullName,
+          patientName: patient.patient.fullName,
         },
       })
     );
   };
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={["top"]}
-    >
-      <StatusBar
-        backgroundColor={BACKGROUND}
-        barStyle="dark-content"
-      />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greetingText}>
-              {getGreetingText()}, Dr{" "}
-              {firstName}
+              {getGreetingText()}, Dr {firstName}
             </Text>
 
             <Text style={styles.headerSubText}>
@@ -431,9 +516,7 @@ export const DoctorDashboardScreen = ({
         >
           {isLoading ? (
             <View style={styles.stateCard}>
-              <ActivityIndicator
-                color={DOCTOR_PRIMARY}
-              />
+              <ActivityIndicator color={DOCTOR_PRIMARY} />
 
               <Text style={styles.stateText}>
                 Loading doctor dashboard...
@@ -488,14 +571,8 @@ export const DoctorDashboardScreen = ({
                   DOCTOR_PRIMARY,
                   DOCTOR_SECONDARY,
                 ]}
-                start={{
-                  x: 0,
-                  y: 0,
-                }}
-                end={{
-                  x: 1,
-                  y: 1,
-                }}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.heroCard}
               >
                 <View style={styles.heroTopRow}>
@@ -534,10 +611,7 @@ export const DoctorDashboardScreen = ({
                 <View style={styles.heroStatsRow}>
                   <View style={styles.heroStatBox}>
                     <Text style={styles.heroStatValue}>
-                      {
-                        dashboard.stats
-                          .assignedPatients
-                      }
+                      {dashboard.stats.assignedPatients}
                     </Text>
 
                     <Text style={styles.heroStatLabel}>
@@ -545,16 +619,11 @@ export const DoctorDashboardScreen = ({
                     </Text>
                   </View>
 
-                  <View
-                    style={styles.heroStatDivider}
-                  />
+                  <View style={styles.heroStatDivider} />
 
                   <View style={styles.heroStatBox}>
                     <Text style={styles.heroStatValue}>
-                      {
-                        dashboard.stats
-                          .activeAlerts
-                      }
+                      {dashboard.stats.activeAlerts}
                     </Text>
 
                     <Text style={styles.heroStatLabel}>
@@ -564,7 +633,14 @@ export const DoctorDashboardScreen = ({
                 </View>
               </LinearGradient>
 
-              <View style={styles.quickActionsRow}>
+              <ScrollView
+  horizontal
+  nestedScrollEnabled
+  removeClippedSubviews={false}
+  showsHorizontalScrollIndicator={false}
+  style={styles.quickActionsScroll}
+  contentContainerStyle={styles.quickActionsRow}
+>
                 <QuickAction
                   title="Patients"
                   icon={
@@ -586,6 +662,7 @@ export const DoctorDashboardScreen = ({
                       strokeWidth={2.6}
                     />
                   }
+                  badgeCount={actionableConsultationCount}
                   onPress={openConsultations}
                 />
 
@@ -599,8 +676,7 @@ export const DoctorDashboardScreen = ({
                     />
                   }
                   badgeCount={
-                    dashboard.stats
-                      .pendingMedicineReviews
+                    dashboard.stats.pendingMedicineReviews
                   }
                   onPress={openMedicineReviews}
                 />
@@ -614,11 +690,21 @@ export const DoctorDashboardScreen = ({
                       strokeWidth={2.6}
                     />
                   }
-                  onPress={
-                    openPrescriptionPatients
-                  }
+                  onPress={openPrescriptionPatients}
                 />
-              </View>
+
+                <QuickAction
+                  title="Add Note"
+                  icon={
+                    <NotebookPen
+                      size={25}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.6}
+                    />
+                  }
+                  onPress={openAddNotePatients}
+                />
+              </ScrollView>
 
               <View style={styles.sectionHeader}>
                 <View>
@@ -642,19 +728,16 @@ export const DoctorDashboardScreen = ({
                 </TouchableOpacity>
               </View>
 
-              {dashboard.urgentAlerts.length >
-              0 ? (
+              {dashboard.urgentAlerts.length > 0 ? (
                 <View style={styles.alertStack}>
-                  {dashboard.urgentAlerts.map(
-                    (alert) => (
-                      <UrgentAlertPanel
-                        key={alert.id}
-                        alert={alert}
-                        onOpen={openAlerts}
-                        onJoin={openAlerts}
-                      />
-                    )
-                  )}
+                  {dashboard.urgentAlerts.map((alert) => (
+                    <UrgentAlertPanel
+                      key={alert.id}
+                      alert={alert}
+                      onOpen={openAlerts}
+                      onJoin={openAlerts}
+                    />
+                  ))}
                 </View>
               ) : (
                 <TouchableOpacity
@@ -670,11 +753,7 @@ export const DoctorDashboardScreen = ({
                     />
                   </View>
 
-                  <View
-                    style={
-                      styles.safePanelTextBlock
-                    }
-                  >
+                  <View style={styles.safePanelTextBlock}>
                     <Text style={styles.safePanelTitle}>
                       No active alerts
                     </Text>
@@ -717,8 +796,7 @@ export const DoctorDashboardScreen = ({
               </View>
 
               <View style={styles.cardStack}>
-                {dashboard.upcomingConsultations
-                  .length > 0 ? (
+                {dashboard.upcomingConsultations.length > 0 ? (
                   dashboard.upcomingConsultations.map(
                     (consultation) => (
                       <ConsultationCard
@@ -765,19 +843,16 @@ export const DoctorDashboardScreen = ({
               </View>
 
               <View style={styles.cardStack}>
-                {dashboard.recentPatients.length >
-                0 ? (
-                  dashboard.recentPatients.map(
-                    (patient) => (
-                      <PatientCard
-                        key={patient.assignmentId}
-                        patient={patient}
-                        onPress={() =>
-                          openPatientDetail(patient)
-                        }
-                      />
-                    )
-                  )
+                {dashboard.recentPatients.length > 0 ? (
+                  dashboard.recentPatients.map((patient) => (
+                    <PatientCard
+                      key={patient.assignmentId}
+                      patient={patient}
+                      onPress={() =>
+                        openPatientDetail(patient)
+                      }
+                    />
+                  ))
                 ) : (
                   <EmptyCard
                     icon={
@@ -823,23 +898,14 @@ const QuickAction = ({
         {badgeCount !== undefined &&
         badgeCount > 0 ? (
           <View style={styles.quickActionBadge}>
-            <Text
-              style={
-                styles.quickActionBadgeText
-              }
-            >
-              {badgeCount > 99
-                ? "99+"
-                : badgeCount}
+            <Text style={styles.quickActionBadgeText}>
+              {badgeCount > 99 ? "99+" : badgeCount}
             </Text>
           </View>
         ) : null}
       </View>
 
-      <Text
-        style={styles.quickActionText}
-        numberOfLines={1}
-      >
+      <Text style={styles.quickActionText} numberOfLines={1}>
         {title}
       </Text>
     </TouchableOpacity>
@@ -901,10 +967,7 @@ const UrgentAlertPanel = ({
         </Text>
       </View>
 
-      <Text
-        style={styles.urgentReason}
-        numberOfLines={2}
-      >
+      <Text style={styles.urgentReason} numberOfLines={2}>
         {alert.reason}
       </Text>
 
@@ -923,17 +986,11 @@ const UrgentAlertPanel = ({
 
         <View style={styles.alertButtons}>
           <TouchableOpacity
-            style={
-              styles.alertSecondaryButton
-            }
+            style={styles.alertSecondaryButton}
             activeOpacity={0.86}
             onPress={onOpen}
           >
-            <Text
-              style={
-                styles.alertSecondaryText
-              }
-            >
+            <Text style={styles.alertSecondaryText}>
               View
             </Text>
           </TouchableOpacity>
@@ -950,9 +1007,7 @@ const UrgentAlertPanel = ({
             disabled={!alert.canJoinCall}
           >
             <Text style={styles.alertPrimaryText}>
-              {alert.canJoinCall
-                ? "Join"
-                : "No call"}
+              {alert.canJoinCall ? "Join" : "No call"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1007,7 +1062,7 @@ const ConsultationCard = ({
             : "Manual Consultation"}
         </Text>
 
-        <Text style={styles.listSubtitle}>
+        <Text style={styles.listSubtitle} numberOfLines={1}>
           {patientName} •{" "}
           {formatDateTime(
             consultation.preferredAt ||
@@ -1046,9 +1101,7 @@ const PatientCard = ({
       onPress={onPress}
     >
       <View style={styles.patientAvatar}>
-        <Text
-          style={styles.patientAvatarText}
-        >
+        <Text style={styles.patientAvatarText}>
           {getInitials(
             patient.patient.fullName
           )}
@@ -1056,13 +1109,12 @@ const PatientCard = ({
       </View>
 
       <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>
+        <Text style={styles.listTitle} numberOfLines={1}>
           {patient.patient.fullName}
         </Text>
 
         <Text style={styles.listSubtitle}>
-          {patient.activeMedicineCount} active
-          medicine
+          {patient.activeMedicineCount} active medicine
           {patient.activeMedicineCount === 1
             ? ""
             : "s"}
@@ -1073,8 +1125,7 @@ const PatientCard = ({
         style={[
           styles.vitalChip,
           {
-            backgroundColor:
-              tone.background,
+            backgroundColor: tone.background,
           },
         ]}
       >
@@ -1273,8 +1324,7 @@ const styles = StyleSheet.create({
   heroBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor:
-      "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -1299,8 +1349,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   heroStatsRow: {
-    backgroundColor:
-      "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -1325,19 +1374,25 @@ const styles = StyleSheet.create({
   heroStatDivider: {
     width: 1,
     height: 36,
-    backgroundColor:
-      "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
-  quickActionsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginTop: 18,
-    marginBottom: 2,
-  },
+quickActionsScroll: {
+  marginTop: 12,
+  marginHorizontal: -16,
+  overflow: "visible",
+},
+quickActionsRow: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  paddingTop: 8,
+  paddingHorizontal: 16,
+  paddingBottom: 4,
+  paddingRight: 24,
+},
   quickAction: {
-    flex: 1,
+    width: 88,
     alignItems: "center",
+    marginRight: 8,
   },
   quickActionIcon: {
     width: 66,
@@ -1348,20 +1403,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 9,
   },
-  quickActionBadge: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: DANGER,
-    borderWidth: 2,
-    borderColor: BACKGROUND,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
+ quickActionBadge: {
+  position: "absolute",
+  top: -4,
+  right: -4,
+  minWidth: 22,
+  height: 22,
+  borderRadius: 11,
+  backgroundColor: DANGER,
+  borderWidth: 2,
+  borderColor: BACKGROUND,
+  alignItems: "center",
+  justifyContent: "center",
+  paddingHorizontal: 5,
+  zIndex: 10,
+  elevation: 5,
+},
   quickActionBadgeText: {
     color: SURFACE,
     fontSize: 9,
@@ -1586,6 +1643,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 5,
+    marginLeft: 8,
   },
   statusChipText: {
     color: DOCTOR_DARK,

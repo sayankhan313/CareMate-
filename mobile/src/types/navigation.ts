@@ -92,28 +92,24 @@ export type ConsultationCompletionStatus =
 
 export type RootStackParamList = {
   Splash: undefined;
+
   Welcome: undefined;
+
   Login: undefined;
+
   RoleSelection: undefined;
 
   PatientSignup: undefined;
+
   DoctorSignup: undefined;
+
   PharmacySignup: undefined;
 
-  SelectDoctor: undefined;
+  EmailVerification: {
+    email?: string;
+  };
 
-  PharmacyPendingApproval:
-    | {
-        user?: any;
-        email?: string;
-      }
-    | undefined;
-
-  PharmacyDashboard:
-    | {
-        user?: any;
-      }
-    | undefined;
+  ForgotPassword: undefined;
 
   DoctorPendingApproval:
     | {
@@ -122,11 +118,12 @@ export type RootStackParamList = {
       }
     | undefined;
 
-  EmailVerification: {
-    email?: string;
-  };
-
-  ForgotPassword: undefined;
+  PharmacyPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
 
   PatientTabs:
     | (NavigatorScreenParams<PatientTabParamList> & {
@@ -140,20 +137,16 @@ export type RootStackParamList = {
       })
     | undefined;
 
-  DoctorPatientDetail: {
-    patientId: string;
-    patientName?: string;
-  };
-
-  DoctorPrescription: {
-    patientId: string;
-    patientName: string;
-  };
-
   AdminTabs:
     | (NavigatorScreenParams<AdminTabParamList> & {
         user?: any;
       })
+    | undefined;
+
+  PharmacyDashboard:
+    | {
+        user?: any;
+      }
     | undefined;
 
   AdminDashboard: undefined;
@@ -177,6 +170,10 @@ export type RootStackParamList = {
         user?: any;
       }
     | undefined;
+
+  SelectDoctor: undefined;
+
+  PatientActiveCalls: undefined;
 
   AddMedicine:
     | {
@@ -237,5 +234,24 @@ export type RootStackParamList = {
     participantRole?: ConsultationParticipantRole;
     endedBy?: ConsultationEndedBy;
     completionStatus?: ConsultationCompletionStatus;
+  };
+
+  DoctorPatientDetail: {
+    patientId: string;
+    patientName?: string;
+  };
+
+  DoctorSelectPrescriptionPatient: undefined;
+
+  DoctorPrescription: {
+    patientId: string;
+    patientName: string;
+  };
+
+  DoctorSelectNotePatient: undefined;
+
+  DoctorAddNote: {
+    patientId: string;
+    patientName: string;
   };
 };
