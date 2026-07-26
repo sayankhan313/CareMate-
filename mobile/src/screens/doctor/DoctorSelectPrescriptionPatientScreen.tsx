@@ -132,7 +132,7 @@ const getAge = (
     (
       monthDifference === 0 &&
       today.getDate() <
-        birthDate.getDate()
+      birthDate.getDate()
     )
   ) {
     age -= 1;
@@ -576,7 +576,7 @@ export const DoctorSelectPrescriptionPatientScreen = ({
                 }{" "}
                 patient
                 {filteredPatients.length ===
-                1
+                  1
                   ? ""
                   : "s"}{" "}
                 available
@@ -693,8 +693,8 @@ export const DoctorSelectPrescriptionPatientScreen = ({
           ) : null}
 
           {!isLoading &&
-          !errorMessage &&
-          patients.length === 0 ? (
+            !errorMessage &&
+            patients.length === 0 ? (
             <View
               style={
                 styles.stateCard
@@ -736,9 +736,9 @@ export const DoctorSelectPrescriptionPatientScreen = ({
           ) : null}
 
           {!isLoading &&
-          !errorMessage &&
-          patients.length > 0 &&
-          filteredPatients.length ===
+            !errorMessage &&
+            patients.length > 0 &&
+            filteredPatients.length ===
             0 ? (
             <View
               style={
@@ -780,8 +780,8 @@ export const DoctorSelectPrescriptionPatientScreen = ({
           ) : null}
 
           {!isLoading &&
-          !errorMessage &&
-          filteredPatients.length >
+            !errorMessage &&
+            filteredPatients.length >
             0 ? (
             <View
               style={
@@ -789,16 +789,12 @@ export const DoctorSelectPrescriptionPatientScreen = ({
               }
             >
               {filteredPatients.map(
-                (patient) => (
+                (patient, index) => (
                   <PatientSelectionCard
-                    key={
-                      patient.assignmentId
-                    }
+                    key={`${patient.assignmentId || "assignment"}-${patient.patient.id}-${index}`}
                     patient={patient}
                     onPress={() =>
-                      openPrescription(
-                        patient
-                      )
+                      openPrescription(patient)
                     }
                   />
                 )

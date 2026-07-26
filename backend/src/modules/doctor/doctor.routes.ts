@@ -42,17 +42,17 @@ router.get(
 );
 
 router.get(
-  "/medicine-reviews/:reminderId",
+  "/medicine-reviews/:requestId",
   doctorMedicineReviewsController.getReviewDetail
 );
 
 router.post(
-  "/medicine-reviews/:reminderId/approve",
+  "/medicine-reviews/:requestId/approve",
   doctorMedicineReviewsController.approveReview
 );
 
 router.post(
-  "/medicine-reviews/:reminderId/reject",
+  "/medicine-reviews/:requestId/reject",
   doctorMedicineReviewsController.rejectReview
 );
 

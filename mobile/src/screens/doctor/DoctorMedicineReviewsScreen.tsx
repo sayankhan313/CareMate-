@@ -6,6 +6,7 @@ import {
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   RefreshControl,
@@ -26,8 +27,10 @@ import {
   Clock3,
   FileCheck2,
   Pill,
+  PlusCircle,
   RefreshCw,
   Stethoscope,
+  Trash2,
   UserRound,
   X,
   XCircle,
@@ -41,6 +44,8 @@ import {
   doctorMedicineReviewsApi,
   type DoctorMedicineReview,
   type DoctorMedicineReviewFilter,
+  type DoctorMedicineReviewRequestType,
+  type DoctorMedicineReviewTypeFilter,
 } from "../../services/doctor/doctorMedicineReviewsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
@@ -49,9 +54,18 @@ type Props = BottomTabScreenProps<
   "Reviews"
 >;
 
+type DecisionAction =
+  | "APPROVE"
+  | "REJECT";
+
 type ActiveAction = {
-  reminderId: string;
-  action: "APPROVE" | "REJECT";
+  requestId: string;
+  action: DecisionAction;
+} | null;
+
+type DecisionModalState = {
+  review: DoctorMedicineReview;
+  action: DecisionAction;
 } | null;
 
 const BACKGROUND = "#EEF1FA";
@@ -77,7 +91,11 @@ const DANGER = "#EF4D56";
 const DANGER_DARK = "#B42318";
 const DANGER_LIGHT = "#FFEDEE";
 
-const FILTERS: {
+const INFO = "#4C6FE0";
+const INFO_DARK = "#2144A5";
+const INFO_LIGHT = "#E8EDFF";
+
+const STATUS_FILTERS: {
   label: string;
   value: DoctorMedicineReviewFilter;
 }[] = [
@@ -97,114 +115,99 @@ const FILTERS: {
     label: "Rejected",
     value: "REJECTED",
   },
+  {
+    label: "Applied",
+    value: "APPLIED",
+  },
 ];
 
-const elevate = (
-  level: 1 | 2 = 1
-) => ({
-  elevation:
-    level === 1 ? 2 : 4,
+const TYPE_FILTERS: {
+  label: string;
+  value: DoctorMedicineReviewTypeFilter;
+}[] = [
+  {
+    label: "All requests",
+    value: "ALL",
+  },
+  {
+    label: "Add medicine",
+    value: "ADD",
+  },
+  {
+    label: "Remove medicine",
+    value: "DELETE",
+  },
+];
+
+const elevate = (level: 1 | 2 = 1) => ({
+  elevation: level === 1 ? 2 : 4,
   shadowColor: "#172033",
-  shadowOpacity:
-    Platform.OS === "android"
-      ? 0
-      : 0.08,
-  shadowRadius:
-    level === 1 ? 4 : 8,
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08,
+  shadowRadius: level === 1 ? 4 : 8,
   shadowOffset: {
     width: 0,
     height: level === 1 ? 2 : 4,
   },
 });
 
-const formatStatus = (
-  status: string
-) => {
+const formatStatus = (status: string) => {
   return status
     .toLowerCase()
     .split("_")
-    .map(
-      (part) =>
-        part.charAt(0).toUpperCase() +
-        part.slice(1)
-    )
+    .map((part) => {
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
     .join(" ");
 };
 
-const formatFrequency = (
-  review: DoctorMedicineReview
-) => {
-  if (
-    review.frequency === "CUSTOM"
-  ) {
-    return (
-      review.customFrequency ||
-      "Custom schedule"
-    );
+const formatFrequency = (review: DoctorMedicineReview) => {
+  if (review.frequency === "CUSTOM") {
+    return review.customFrequency || "Custom schedule";
   }
 
-  return formatStatus(
-    review.frequency
-  );
+  return formatStatus(review.frequency);
 };
 
-const formatDate = (
-  value?: string | null
-) => {
+const formatDate = (value?: string | null) => {
   if (!value) {
     return "Not available";
   }
 
   const date = new Date(value);
 
-  if (
-    Number.isNaN(date.getTime())
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "Not available";
   }
 
-  return date.toLocaleDateString(
-    undefined,
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }
-  );
+  return date.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
-const formatTime = (
-  value: string
-) => {
-  const [hourText, minuteText] =
-    value.split(":");
+const formatTime = (value?: string | null) => {
+  if (!value) {
+    return "Not set";
+  }
+
+  const [hourText, minuteText] = value.split(":");
 
   const hour = Number(hourText);
   const minute = Number(minuteText);
 
-  if (
-    Number.isNaN(hour) ||
-    Number.isNaN(minute)
-  ) {
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
     return value;
   }
 
   const date = new Date();
 
-  date.setHours(
-    hour,
-    minute,
-    0,
-    0
-  );
+  date.setHours(hour, minute, 0, 0);
 
-  return date.toLocaleTimeString(
-    undefined,
-    {
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  );
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const getStatusTone = (
@@ -226,6 +229,14 @@ const getStatusTone = (
     };
   }
 
+  if (status === "APPLIED") {
+    return {
+      background: INFO_LIGHT,
+      text: INFO_DARK,
+      solid: INFO,
+    };
+  }
+
   return {
     background: WARNING_LIGHT,
     text: WARNING_DARK,
@@ -233,855 +244,700 @@ const getStatusTone = (
   };
 };
 
-export const DoctorMedicineReviewsScreen =
-  ({ navigation }: Props) => {
-    const insets =
-      useSafeAreaInsets();
+const getRequestTypeTone = (
+  requestType: DoctorMedicineReviewRequestType
+) => {
+  if (requestType === "DELETE") {
+    return {
+      label: "Remove medicine",
+      background: DANGER_LIGHT,
+      text: DANGER_DARK,
+      icon: DANGER,
+    };
+  }
 
-    const rootNavigation =
-      navigation.getParent<any>();
+  return {
+    label: "Add medicine",
+    background: DOCTOR_LIGHT,
+    text: DOCTOR_DARK,
+    icon: DOCTOR_PRIMARY,
+  };
+};
 
-    const [reviews, setReviews] =
-      useState<
-        DoctorMedicineReview[]
-      >([]);
+export const DoctorMedicineReviewsScreen = ({
+  navigation,
+}: Props) => {
+  const insets = useSafeAreaInsets();
+  const rootNavigation = navigation.getParent<any>();
 
-    const [summary, setSummary] =
-      useState({
-        total: 0,
-        pending: 0,
-        approved: 0,
-        rejected: 0,
+  const [reviews, setReviews] = useState<DoctorMedicineReview[]>([]);
+
+  const [summary, setSummary] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    applied: 0,
+    additions: 0,
+    deletions: 0,
+  });
+
+  const [selectedStatus, setSelectedStatus] =
+    useState<DoctorMedicineReviewFilter>("ALL");
+
+  const [selectedType, setSelectedType] =
+    useState<DoctorMedicineReviewTypeFilter>("ALL");
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const [activeAction, setActiveAction] =
+    useState<ActiveAction>(null);
+
+  const [decisionModal, setDecisionModal] =
+    useState<DecisionModalState>(null);
+
+  const [decisionNote, setDecisionNote] = useState("");
+
+  const visibleReviews = useMemo(() => {
+    return reviews.filter((review) => {
+      const statusMatches =
+        selectedStatus === "ALL" ||
+        review.reviewStatus === selectedStatus;
+
+      const typeMatches =
+        selectedType === "ALL" ||
+        review.requestType === selectedType;
+
+      return statusMatches && typeMatches;
+    });
+  }, [reviews, selectedStatus, selectedType]);
+
+  const loadReviews = useCallback(
+    async (
+      mode: "initial" | "refresh" = "initial"
+    ) => {
+      try {
+        if (mode === "initial") {
+          setIsLoading(true);
+        } else {
+          setIsRefreshing(true);
+        }
+
+        setErrorMessage("");
+
+        const result = await doctorMedicineReviewsApi.listReviews(
+          "ALL",
+          "ALL"
+        );
+
+        setReviews(result.reviews || []);
+
+        setSummary(
+          result.summary || {
+            total: 0,
+            pending: 0,
+            approved: 0,
+            rejected: 0,
+            applied: 0,
+            additions: 0,
+            deletions: 0,
+          }
+        );
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load medicine reviews."
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadReviews("initial");
+    }, [loadReviews])
+  );
+
+  const openPatient = (review: DoctorMedicineReview) => {
+    if (!rootNavigation) {
+      return;
+    }
+
+    rootNavigation.navigate("DoctorPatientDetail", {
+      patientId: review.patient.id,
+      patientName: review.patient.fullName,
+    });
+  };
+
+  const openDecisionModal = (
+    review: DoctorMedicineReview,
+    action: DecisionAction
+  ) => {
+    if (activeAction) {
+      return;
+    }
+
+    setDecisionModal({
+      review,
+      action,
+    });
+
+    setDecisionNote("");
+  };
+
+  const closeDecisionModal = () => {
+    if (activeAction) {
+      return;
+    }
+
+    setDecisionModal(null);
+    setDecisionNote("");
+  };
+
+  const submitDecision = async () => {
+    if (!decisionModal || activeAction) {
+      return;
+    }
+
+    const note = decisionNote.trim();
+
+    if (
+      decisionModal.action === "REJECT" &&
+      note.length < 3
+    ) {
+      Alert.alert(
+        "Reason required",
+        "Please enter a clear rejection reason."
+      );
+
+      return;
+    }
+
+    const review = decisionModal.review;
+
+    try {
+      setActiveAction({
+        requestId: review.id,
+        action: decisionModal.action,
       });
 
-    const [
-      selectedFilter,
-      setSelectedFilter,
-    ] =
-      useState<DoctorMedicineReviewFilter>(
-        "ALL"
-      );
-
-    const [
-      isLoading,
-      setIsLoading,
-    ] = useState(true);
-
-    const [
-      isRefreshing,
-      setIsRefreshing,
-    ] = useState(false);
-
-    const [
-      errorMessage,
-      setErrorMessage,
-    ] = useState("");
-
-    const [
-      activeAction,
-      setActiveAction,
-    ] =
-      useState<ActiveAction>(null);
-
-    const [
-      rejectReview,
-      setRejectReview,
-    ] =
-      useState<DoctorMedicineReview | null>(
-        null
-      );
-
-    const [
-      rejectionNote,
-      setRejectionNote,
-    ] = useState("");
-
-    const visibleReviews =
-      useMemo(() => {
-        if (
-          selectedFilter === "ALL"
-        ) {
-          return reviews;
-        }
-
-        return reviews.filter(
-          (review) =>
-            review.reviewStatus ===
-            selectedFilter
+      if (decisionModal.action === "APPROVE") {
+        await doctorMedicineReviewsApi.approveReview(
+          review.id,
+          note || undefined
         );
-      }, [
-        reviews,
-        selectedFilter,
-      ]);
-
-    const loadReviews = useCallback(
-      async (
-        mode:
-          | "initial"
-          | "refresh" = "initial"
-      ) => {
-        try {
-          if (mode === "initial") {
-            setIsLoading(true);
-          } else {
-            setIsRefreshing(true);
-          }
-
-          setErrorMessage("");
-
-          const result =
-            await doctorMedicineReviewsApi.listReviews(
-              "ALL"
-            );
-
-          setReviews(
-            result.reviews || []
-          );
-
-          setSummary(
-            result.summary || {
-              total: 0,
-              pending: 0,
-              approved: 0,
-              rejected: 0,
-            }
-          );
-        } catch (error) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "Unable to load medicine reviews."
-          );
-        } finally {
-          setIsLoading(false);
-          setIsRefreshing(false);
-        }
-      },
-      []
-    );
-
-    useFocusEffect(
-      useCallback(() => {
-        void loadReviews(
-          "initial"
+      } else {
+        await doctorMedicineReviewsApi.rejectReview(
+          review.id,
+          note
         );
-      }, [loadReviews])
-    );
-
-    const openPatient = (
-      review: DoctorMedicineReview
-    ) => {
-      if (!rootNavigation) {
-        return;
       }
 
-      rootNavigation.navigate(
-        "DoctorPatientDetail",
-        {
-          patientId:
-            review.patient.id,
-          patientName:
-            review.patient.fullName,
-        }
-      );
-    };
+      setDecisionModal(null);
+      setDecisionNote("");
 
-    const approveMedicineReview =
-      async (
-        review: DoctorMedicineReview
-      ) => {
-        if (activeAction) {
-          return;
-        }
+      await loadReviews("refresh");
 
-        try {
-          setActiveAction({
-            reminderId: review.id,
-            action: "APPROVE",
-          });
+      const actionLabel =
+        decisionModal.action === "APPROVE"
+          ? "approved"
+          : "rejected";
 
-          await doctorMedicineReviewsApi.approveReview(
-            review.id
-          );
+      const requestLabel =
+        review.requestType === "DELETE"
+          ? "medicine removal"
+          : "medicine addition";
 
-          await loadReviews(
-            "refresh"
-          );
+      const resultMessage =
+        review.requestType === "ADD" &&
+        decisionModal.action === "APPROVE"
+          ? "The patient can now add this medicine to their active schedule."
+          : review.requestType === "DELETE" &&
+              decisionModal.action === "APPROVE"
+            ? "The medicine and its future reminders have been deactivated."
+            : "The patient can now review your decision note.";
 
-          Alert.alert(
-            "Medicine approved",
-            `${review.medicine.name} has been approved.`
-          );
-        } catch (error) {
-          Alert.alert(
-            "Unable to approve",
-            error instanceof Error
-              ? error.message
-              : "Medicine review could not be approved."
-          );
-        } finally {
-          setActiveAction(null);
-        }
-      };
-
-    const confirmApprove = (
-      review: DoctorMedicineReview
-    ) => {
       Alert.alert(
-        "Approve medicine",
-        `Approve ${review.medicine.name} for ${review.patient.fullName}?`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "Approve",
-            onPress: () => {
-              void approveMedicineReview(
-                review
-              );
-            },
-          },
-        ]
+        `${formatStatus(requestLabel)} ${actionLabel}`,
+        resultMessage
       );
-    };
+    } catch (error) {
+      Alert.alert(
+        "Unable to save decision",
+        error instanceof Error
+          ? error.message
+          : "Medicine review could not be updated."
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  };
 
-    const openRejectModal = (
-      review: DoctorMedicineReview
-    ) => {
-      setRejectReview(review);
-      setRejectionNote("");
-    };
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
-    const closeRejectModal = () => {
-      if (activeAction) {
-        return;
-      }
+      <View style={styles.screen}>
+        <View style={styles.appBar}>
+          <View style={styles.appBarTextBlock}>
+            <Text style={styles.appBarTitle}>Medicine Reviews</Text>
 
-      setRejectReview(null);
-      setRejectionNote("");
-    };
+            <Text style={styles.appBarSubtitle}>
+              Review medicine additions and removal requests
+            </Text>
+          </View>
 
-    const submitRejection =
-      async () => {
-        if (
-          !rejectReview ||
-          activeAction
-        ) {
-          return;
-        }
+          <TouchableOpacity
+            style={styles.refreshButton}
+            activeOpacity={0.85}
+            onPress={() => void loadReviews("refresh")}
+          >
+            <RefreshCw
+              size={20}
+              color={DOCTOR_PRIMARY}
+              strokeWidth={2.6}
+            />
+          </TouchableOpacity>
+        </View>
 
-        const note =
-          rejectionNote.trim();
-
-        if (note.length < 3) {
-          Alert.alert(
-            "Reason required",
-            "Please enter a clear rejection reason."
-          );
-          return;
-        }
-
-        try {
-          setActiveAction({
-            reminderId:
-              rejectReview.id,
-            action: "REJECT",
-          });
-
-          await doctorMedicineReviewsApi.rejectReview(
-            rejectReview.id,
-            note
-          );
-
-          setRejectReview(null);
-          setRejectionNote("");
-
-          await loadReviews(
-            "refresh"
-          );
-
-          Alert.alert(
-            "Medicine rejected",
-            "The patient can now review the doctor's decision note."
-          );
-        } catch (error) {
-          Alert.alert(
-            "Unable to reject",
-            error instanceof Error
-              ? error.message
-              : "Medicine review could not be rejected."
-          );
-        } finally {
-          setActiveAction(null);
-        }
-      };
-
-    return (
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={["top"]}
-      >
-        <StatusBar
-          backgroundColor={
-            BACKGROUND
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(
+                36,
+                insets.bottom + 112
+              ),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void loadReviews("refresh")}
+              tintColor={DOCTOR_PRIMARY}
+              colors={[DOCTOR_PRIMARY]}
+            />
           }
-          barStyle="dark-content"
-        />
+        >
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryTopRow}>
+              <View style={styles.summaryIcon}>
+                <FileCheck2
+                  size={27}
+                  color={DOCTOR_PRIMARY}
+                  strokeWidth={2.7}
+                />
+              </View>
 
-        <View style={styles.screen}>
-          <View style={styles.appBar}>
+              <View style={styles.summaryTextBlock}>
+                <Text style={styles.summaryTitle}>
+                  Clinical medicine review
+                </Text>
+
+                <Text style={styles.summaryText}>
+                  {summary.additions} addition request
+                  {summary.additions === 1 ? "" : "s"} and{" "}
+                  {summary.deletions} removal request
+                  {summary.deletions === 1 ? "" : "s"}.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryStats}>
+              <SummaryItem
+                value={summary.pending}
+                label="Pending"
+                tone={WARNING}
+              />
+
+              <View style={styles.summaryDivider} />
+
+              <SummaryItem
+                value={summary.approved}
+                label="Approved"
+                tone={SUCCESS}
+              />
+
+              <View style={styles.summaryDivider} />
+
+              <SummaryItem
+                value={summary.rejected}
+                label="Rejected"
+                tone={DANGER}
+              />
+
+              <View style={styles.summaryDivider} />
+
+              <SummaryItem
+                value={summary.applied}
+                label="Applied"
+                tone={INFO}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.filterLabel}>Request type</Text>
+
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+          >
+            {TYPE_FILTERS.map((filter) => {
+              const selected = selectedType === filter.value;
+
+              return (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterChip,
+                    selected
+                      ? styles.filterChipSelected
+                      : undefined,
+                  ]}
+                  activeOpacity={0.84}
+                  onPress={() => setSelectedType(filter.value)}
+                >
+                  {filter.value === "ADD" ? (
+                    <PlusCircle
+                      size={14}
+                      color={
+                        selected
+                          ? DOCTOR_DARK
+                          : MUTED
+                      }
+                      strokeWidth={2.5}
+                    />
+                  ) : null}
+
+                  {filter.value === "DELETE" ? (
+                    <Trash2
+                      size={14}
+                      color={
+                        selected
+                          ? DOCTOR_DARK
+                          : MUTED
+                      }
+                      strokeWidth={2.5}
+                    />
+                  ) : null}
+
+                  <Text
+                    style={[
+                      styles.filterText,
+                      selected
+                        ? styles.filterTextSelected
+                        : undefined,
+                      filter.value !== "ALL"
+                        ? styles.filterTextWithIcon
+                        : undefined,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={styles.filterLabel}>Decision status</Text>
+
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+          >
+            {STATUS_FILTERS.map((filter) => {
+              const selected = selectedStatus === filter.value;
+
+              return (
+                <TouchableOpacity
+                  key={filter.value}
+                  style={[
+                    styles.filterChip,
+                    selected
+                      ? styles.filterChipSelected
+                      : undefined,
+                  ]}
+                  activeOpacity={0.84}
+                  onPress={() => setSelectedStatus(filter.value)}
+                >
+                  {selected ? (
+                    <CheckCircle2
+                      size={14}
+                      color={DOCTOR_DARK}
+                      strokeWidth={2.5}
+                    />
+                  ) : null}
+
+                  <Text
+                    style={[
+                      styles.filterText,
+                      selected
+                        ? styles.filterTextSelected
+                        : undefined,
+                      selected
+                        ? styles.filterTextWithIcon
+                        : undefined,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {errorMessage ? (
+            <View style={styles.errorCard}>
+              <AlertCircle
+                size={22}
+                color={DANGER}
+                strokeWidth={2.6}
+              />
+
+              <View style={styles.errorTextBlock}>
+                <Text style={styles.errorTitle}>
+                  Unable to load reviews
+                </Text>
+
+                <Text style={styles.errorText}>
+                  {errorMessage}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.sectionHeader}>
             <View>
-              <Text
-                style={styles.appBarTitle}
-              >
-                Medicine Reviews
+              <Text style={styles.sectionTitle}>
+                Review requests
               </Text>
 
-              <Text
-                style={
-                  styles.appBarSubtitle
-                }
-              >
-                Review patient medicine requests
+              <Text style={styles.sectionSubtitle}>
+                {visibleReviews.length === 1
+                  ? "1 request"
+                  : `${visibleReviews.length} requests`}
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={
-                styles.refreshButton
-              }
-              activeOpacity={0.85}
-              onPress={() =>
-                void loadReviews(
-                  "refresh"
-                )
-              }
-            >
-              <RefreshCw
+            <View style={styles.sectionIcon}>
+              <Pill
                 size={20}
                 color={DOCTOR_PRIMARY}
                 strokeWidth={2.6}
               />
-            </TouchableOpacity>
+            </View>
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                paddingBottom:
-                  Math.max(
-                    36,
-                    insets.bottom +
-                      112
-                  ),
-              },
-            ]}
-            showsVerticalScrollIndicator={
-              false
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={
-                  isRefreshing
+          {isLoading ? (
+            <View style={styles.stateCard}>
+              <ActivityIndicator color={DOCTOR_PRIMARY} />
+
+              <Text style={styles.stateTitle}>
+                Loading medicine reviews...
+              </Text>
+            </View>
+          ) : visibleReviews.length === 0 ? (
+            <View style={styles.stateCard}>
+              <View style={styles.emptyIcon}>
+                <FileCheck2
+                  size={29}
+                  color={DOCTOR_PRIMARY}
+                  strokeWidth={2.6}
+                />
+              </View>
+
+              <Text style={styles.stateTitle}>
+                No medicine reviews
+              </Text>
+
+              <Text style={styles.stateText}>
+                Patient medicine requests matching these filters
+                will appear here.
+              </Text>
+            </View>
+          ) : (
+            visibleReviews.map((review) => (
+              <MedicineReviewCard
+                key={review.id}
+                review={review}
+                activeAction={activeAction}
+                onPatient={() => openPatient(review)}
+                onApprove={() =>
+                  openDecisionModal(review, "APPROVE")
                 }
-                onRefresh={() =>
-                  void loadReviews(
-                    "refresh"
-                  )
+                onReject={() =>
+                  openDecisionModal(review, "REJECT")
                 }
-                tintColor={
-                  DOCTOR_PRIMARY
-                }
-                colors={[
-                  DOCTOR_PRIMARY,
-                ]}
               />
-            }
-          >
-            <View
-              style={styles.summaryCard}
-            >
-              <View
-                style={
-                  styles.summaryTopRow
-                }
-              >
-                <View
-                  style={
-                    styles.summaryIcon
-                  }
-                >
-                  <FileCheck2
-                    size={27}
-                    color={
-                      DOCTOR_PRIMARY
-                    }
-                    strokeWidth={2.7}
-                  />
-                </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
 
-                <View
-                  style={
-                    styles.summaryTextBlock
-                  }
-                >
-                  <Text
-                    style={
-                      styles.summaryTitle
-                    }
-                  >
-                    Clinical medicine review
-                  </Text>
+      <Modal
+        visible={Boolean(decisionModal)}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDecisionModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>
+                  {decisionModal?.action === "APPROVE"
+                    ? "Approve request"
+                    : "Reject request"}
+                </Text>
 
-                  <Text
-                    style={
-                      styles.summaryText
-                    }
-                  >
-                    Verify medicines submitted by your assigned patients.
-                  </Text>
-                </View>
+                <Text style={styles.modalSubtitle}>
+                  {decisionModal?.review.medicine.name || ""}
+                </Text>
               </View>
 
-              <View
-                style={
-                  styles.summaryStats
-                }
+              <TouchableOpacity
+                style={styles.modalClose}
+                activeOpacity={0.84}
+                onPress={closeDecisionModal}
+                disabled={Boolean(activeAction)}
               >
-                <SummaryItem
-                  value={
-                    summary.pending
-                  }
-                  label="Pending"
-                  tone={WARNING}
-                />
-
-                <View
-                  style={
-                    styles.summaryDivider
-                  }
-                />
-
-                <SummaryItem
-                  value={
-                    summary.approved
-                  }
-                  label="Approved"
-                  tone={SUCCESS}
-                />
-
-                <View
-                  style={
-                    styles.summaryDivider
-                  }
-                />
-
-                <SummaryItem
-                  value={
-                    summary.rejected
-                  }
-                  label="Rejected"
-                  tone={DANGER}
-                />
-              </View>
+                <X size={20} color={TEXT} strokeWidth={2.6} />
+              </TouchableOpacity>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={
-                false
-              }
-              contentContainerStyle={
-                styles.filtersRow
-              }
-            >
-              {FILTERS.map(
-                (filter) => {
-                  const selected =
-                    selectedFilter ===
-                    filter.value;
-
-                  return (
-                    <TouchableOpacity
-                      key={
-                        filter.value
-                      }
-                      style={[
-                        styles.filterChip,
-                        selected
-                          ? styles.filterChipSelected
-                          : undefined,
-                      ]}
-                      activeOpacity={
-                        0.84
-                      }
-                      onPress={() =>
-                        setSelectedFilter(
-                          filter.value
-                        )
-                      }
-                    >
-                      {selected ? (
-                        <CheckCircle2
-                          size={14}
-                          color={
-                            DOCTOR_DARK
-                          }
-                          strokeWidth={
-                            2.5
-                          }
-                        />
-                      ) : null}
-
-                      <Text
-                        style={[
-                          styles.filterText,
-                          selected
-                            ? styles.filterTextSelected
-                            : undefined,
-                        ]}
-                      >
-                        {filter.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </ScrollView>
-
-            {errorMessage ? (
-              <View
-                style={styles.errorCard}
-              >
-                <AlertCircle
-                  size={22}
-                  color={DANGER}
+            {decisionModal?.review.requestType === "DELETE" ? (
+              <View style={styles.modalWarningPanel}>
+                <Trash2
+                  size={18}
+                  color={DANGER_DARK}
                   strokeWidth={2.6}
                 />
 
-                <View
-                  style={
-                    styles.errorTextBlock
-                  }
-                >
-                  <Text
-                    style={
-                      styles.errorTitle
-                    }
-                  >
-                    Unable to load reviews
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.errorText
-                    }
-                  >
-                    {errorMessage}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-
-            <View
-              style={
-                styles.sectionHeader
-              }
-            >
-              <View>
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Review requests
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  {visibleReviews.length ===
-                  1
-                    ? "1 request"
-                    : `${visibleReviews.length} requests`}
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Pill
-                  size={20}
-                  color={
-                    DOCTOR_PRIMARY
-                  }
-                  strokeWidth={2.6}
-                />
-              </View>
-            </View>
-
-            {isLoading ? (
-              <View
-                style={styles.stateCard}
-              >
-                <ActivityIndicator
-                  color={
-                    DOCTOR_PRIMARY
-                  }
-                />
-
-                <Text
-                  style={
-                    styles.stateTitle
-                  }
-                >
-                  Loading medicine reviews...
-                </Text>
-              </View>
-            ) : visibleReviews.length ===
-              0 ? (
-              <View
-                style={styles.stateCard}
-              >
-                <View
-                  style={
-                    styles.emptyIcon
-                  }
-                >
-                  <FileCheck2
-                    size={29}
-                    color={
-                      DOCTOR_PRIMARY
-                    }
-                    strokeWidth={2.6}
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.stateTitle
-                  }
-                >
-                  No medicine reviews
-                </Text>
-
-                <Text
-                  style={
-                    styles.stateText
-                  }
-                >
-                  Patient medicine requests assigned to you will appear here.
+                <Text style={styles.modalWarningText}>
+                  Approval will deactivate this medicine and all
+                  future reminders. Existing history will remain.
                 </Text>
               </View>
             ) : (
-              visibleReviews.map(
-                (review) => (
-                  <MedicineReviewCard
-                    key={review.id}
-                    review={review}
-                    activeAction={
-                      activeAction
-                    }
-                    onPatient={() =>
-                      openPatient(
-                        review
-                      )
-                    }
-                    onApprove={() =>
-                      confirmApprove(
-                        review
-                      )
-                    }
-                    onReject={() =>
-                      openRejectModal(
-                        review
-                      )
-                    }
-                  />
-                )
-              )
+              <View style={styles.modalInfoPanel}>
+                <PlusCircle
+                  size={18}
+                  color={DOCTOR_DARK}
+                  strokeWidth={2.6}
+                />
+
+                <Text style={styles.modalInfoText}>
+                  Approval allows the patient to add this medicine
+                  to their active schedule.
+                </Text>
+              </View>
             )}
-          </ScrollView>
-        </View>
 
-        <Modal
-          visible={Boolean(
-            rejectReview
-          )}
-          transparent
-          animationType="fade"
-          onRequestClose={
-            closeRejectModal
-          }
-        >
-          <View
-            style={
-              styles.modalBackdrop
-            }
-          >
-            <View
-              style={styles.modalCard}
-            >
-              <View
-                style={
-                  styles.modalHeader
-                }
+            <Text style={styles.inputLabel}>
+              {decisionModal?.action === "REJECT"
+                ? "Rejection reason"
+                : "Decision note (optional)"}
+            </Text>
+
+            <TextInput
+              style={styles.noteInput}
+              placeholder={
+                decisionModal?.action === "REJECT"
+                  ? "Explain why this request is being rejected..."
+                  : "Add instructions or advice for the patient..."
+              }
+              placeholderTextColor={MUTED}
+              multiline
+              value={decisionNote}
+              onChangeText={setDecisionNote}
+              maxLength={500}
+              textAlignVertical="top"
+              editable={!activeAction}
+            />
+
+            <Text style={styles.characterCount}>
+              {decisionNote.length}/500
+            </Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                activeOpacity={0.84}
+                onPress={closeDecisionModal}
+                disabled={Boolean(activeAction)}
               >
-                <View>
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    Reject medicine
-                  </Text>
+                <Text style={styles.modalCancelText}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
 
-                  <Text
-                    style={
-                      styles.modalSubtitle
-                    }
-                  >
-                    {rejectReview
-                      ?.medicine.name ||
-                      ""}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={
-                    styles.modalClose
-                  }
-                  activeOpacity={0.84}
-                  onPress={
-                    closeRejectModal
-                  }
-                  disabled={Boolean(
-                    activeAction
-                  )}
-                >
-                  <X
-                    size={20}
-                    color={TEXT}
-                    strokeWidth={2.6}
+              <TouchableOpacity
+                style={[
+                  decisionModal?.action === "REJECT"
+                    ? styles.modalRejectButton
+                    : styles.modalApproveButton,
+                  activeAction
+                    ? styles.disabledButton
+                    : undefined,
+                ]}
+                activeOpacity={0.84}
+                onPress={() => void submitDecision()}
+                disabled={Boolean(activeAction)}
+              >
+                {activeAction ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={SURFACE}
                   />
-                </TouchableOpacity>
-              </View>
-
-              <Text
-                style={
-                  styles.inputLabel
-                }
-              >
-                Decision note
-              </Text>
-
-              <TextInput
-                style={styles.noteInput}
-                placeholder="Explain why this medicine request is being rejected..."
-                placeholderTextColor={
-                  MUTED
-                }
-                multiline
-                value={rejectionNote}
-                onChangeText={
-                  setRejectionNote
-                }
-                maxLength={500}
-                textAlignVertical="top"
-                editable={
-                  !activeAction
-                }
-              />
-
-              <Text
-                style={
-                  styles.characterCount
-                }
-              >
-                {rejectionNote.length}/500
-              </Text>
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <TouchableOpacity
-                  style={
-                    styles.modalCancelButton
-                  }
-                  activeOpacity={0.84}
-                  onPress={
-                    closeRejectModal
-                  }
-                  disabled={Boolean(
-                    activeAction
-                  )}
-                >
-                  <Text
-                    style={
-                      styles.modalCancelText
-                    }
-                  >
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.modalRejectButton,
-                    activeAction
-                      ? styles.disabledButton
-                      : undefined,
-                  ]}
-                  activeOpacity={0.84}
-                  onPress={() =>
-                    void submitRejection()
-                  }
-                  disabled={Boolean(
-                    activeAction
-                  )}
-                >
-                  {activeAction
-                    ?.action ===
-                  "REJECT" ? (
-                    <ActivityIndicator
-                      size="small"
+                ) : decisionModal?.action === "REJECT" ? (
+                  <>
+                    <XCircle
+                      size={17}
                       color={SURFACE}
+                      strokeWidth={2.6}
                     />
-                  ) : (
-                    <>
-                      <XCircle
-                        size={17}
-                        color={SURFACE}
-                        strokeWidth={2.6}
-                      />
 
-                      <Text
-                        style={
-                          styles.modalRejectText
-                        }
-                      >
-                        Reject
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+                    <Text style={styles.modalActionText}>
+                      Reject
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2
+                      size={17}
+                      color={SURFACE}
+                      strokeWidth={2.6}
+                    />
+
+                    <Text style={styles.modalActionText}>
+                      Approve
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </SafeAreaView>
-    );
-  };
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+};
 
 const SummaryItem = ({
   value,
@@ -1093,9 +949,7 @@ const SummaryItem = ({
   tone: string;
 }) => {
   return (
-    <View
-      style={styles.summaryItem}
-    >
+    <View style={styles.summaryItem}>
       <View
         style={[
           styles.summaryDot,
@@ -1105,17 +959,9 @@ const SummaryItem = ({
         ]}
       />
 
-      <Text
-        style={styles.summaryValue}
-      >
-        {value}
-      </Text>
+      <Text style={styles.summaryValue}>{value}</Text>
 
-      <Text
-        style={styles.summaryLabel}
-      >
-        {label}
-      </Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
 };
@@ -1133,71 +979,102 @@ const MedicineReviewCard = ({
   onApprove: () => void;
   onReject: () => void;
 }) => {
-  const tone = getStatusTone(
-    review.reviewStatus
-  );
+  const statusTone = getStatusTone(review.reviewStatus);
+  const requestTone = getRequestTypeTone(review.requestType);
 
   const approving =
-    activeAction?.reminderId ===
-      review.id &&
-    activeAction.action ===
-      "APPROVE";
+    activeAction?.requestId === review.id &&
+    activeAction.action === "APPROVE";
 
-  const busy =
-    Boolean(activeAction);
+  const rejecting =
+    activeAction?.requestId === review.id &&
+    activeAction.action === "REJECT";
+
+  const busy = Boolean(activeAction);
 
   return (
-    <View
-      style={styles.reviewCard}
-    >
+    <View style={styles.reviewCard}>
       <View
         style={[
           styles.reviewAccent,
           {
             backgroundColor:
-              tone.solid,
+              review.requestType === "DELETE"
+                ? DANGER
+                : statusTone.solid,
           },
         ]}
       />
 
-      <View
-        style={styles.reviewHeader}
-      >
+      <View style={styles.requestTypeRow}>
+        <View
+          style={[
+            styles.requestTypeBadge,
+            {
+              backgroundColor: requestTone.background,
+            },
+          ]}
+        >
+          {review.requestType === "DELETE" ? (
+            <Trash2
+              size={14}
+              color={requestTone.icon}
+              strokeWidth={2.6}
+            />
+          ) : (
+            <PlusCircle
+              size={14}
+              color={requestTone.icon}
+              strokeWidth={2.6}
+            />
+          )}
+
+          <Text
+            style={[
+              styles.requestTypeText,
+              {
+                color: requestTone.text,
+              },
+            ]}
+          >
+            {requestTone.label}
+          </Text>
+        </View>
+
+        <Text style={styles.requestDate}>
+          {formatDate(review.createdAt)}
+        </Text>
+      </View>
+
+      <View style={styles.reviewHeader}>
         <View
           style={[
             styles.medicineIcon,
             {
               backgroundColor:
-                tone.background,
+                review.requestType === "DELETE"
+                  ? DANGER_LIGHT
+                  : statusTone.background,
             },
           ]}
         >
           <Pill
             size={23}
-            color={tone.text}
+            color={
+              review.requestType === "DELETE"
+                ? DANGER
+                : statusTone.text
+            }
             strokeWidth={2.6}
           />
         </View>
 
-        <View
-          style={
-            styles.reviewHeading
-          }
-        >
-          <Text
-            style={
-              styles.medicineName
-            }
-            numberOfLines={1}
-          >
+        <View style={styles.reviewHeading}>
+          <Text style={styles.medicineName} numberOfLines={1}>
             {review.medicine.name}
           </Text>
 
-          <Text
-            style={
-              styles.medicineDose
-            }
-          >
+          <Text style={styles.medicineDose}>
             {review.medicine.dose}
           </Text>
         </View>
@@ -1206,8 +1083,7 @@ const MedicineReviewCard = ({
           style={[
             styles.statusBadge,
             {
-              backgroundColor:
-                tone.background,
+              backgroundColor: statusTone.background,
             },
           ]}
         >
@@ -1215,8 +1091,7 @@ const MedicineReviewCard = ({
             style={[
               styles.statusDot,
               {
-                backgroundColor:
-                  tone.solid,
+                backgroundColor: statusTone.solid,
               },
             ]}
           />
@@ -1225,30 +1100,22 @@ const MedicineReviewCard = ({
             style={[
               styles.statusText,
               {
-                color: tone.text,
+                color: statusTone.text,
               },
             ]}
           >
-            {formatStatus(
-              review.reviewStatus
-            )}
+            {formatStatus(review.reviewStatus)}
           </Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={
-          styles.patientPanel
-        }
+        style={styles.patientPanel}
         activeOpacity={0.84}
         onPress={onPatient}
         disabled={busy}
       >
-        <View
-          style={
-            styles.patientIcon
-          }
-        >
+        <View style={styles.patientIcon}>
           <UserRound
             size={18}
             color={DOCTOR_PRIMARY}
@@ -1256,25 +1123,10 @@ const MedicineReviewCard = ({
           />
         </View>
 
-        <View
-          style={
-            styles.patientTextBlock
-          }
-        >
-          <Text
-            style={
-              styles.patientLabel
-            }
-          >
-            Patient
-          </Text>
+        <View style={styles.patientTextBlock}>
+          <Text style={styles.patientLabel}>Patient</Text>
 
-          <Text
-            style={
-              styles.patientName
-            }
-            numberOfLines={1}
-          >
+          <Text style={styles.patientName} numberOfLines={1}>
             {review.patient.fullName}
           </Text>
         </View>
@@ -1286,87 +1138,97 @@ const MedicineReviewCard = ({
         />
       </TouchableOpacity>
 
-      <View
-        style={
-          styles.detailsPanel
-        }
-      >
-        <DetailRow
-          icon={
-            <Clock3
-              size={17}
-              color={WARNING_DARK}
-              strokeWidth={2.5}
-            />
-          }
-          label="Schedule"
-          value={`${formatFrequency(
-            review
-          )} · ${formatTime(
-            review.timeOfDay
-          )}`}
-        />
+      {review.requestType === "ADD" ? (
+        <View style={styles.detailsPanel}>
+          <DetailRow
+            icon={
+              <Clock3
+                size={17}
+                color={WARNING_DARK}
+                strokeWidth={2.5}
+              />
+            }
+            label="Schedule"
+            value={`${formatFrequency(review)} · ${formatTime(
+              review.timeOfDay
+            )}`}
+          />
 
-        <DetailRow
-          icon={
-            <CalendarDays
-              size={17}
-              color={DOCTOR_PRIMARY}
-              strokeWidth={2.5}
-            />
-          }
-          label="Start date"
-          value={formatDate(
-            review.startDate
-          )}
-        />
+          <DetailRow
+            icon={
+              <CalendarDays
+                size={17}
+                color={DOCTOR_PRIMARY}
+                strokeWidth={2.5}
+              />
+            }
+            label="Start date"
+            value={formatDate(review.startDate)}
+          />
 
-        <DetailRow
-          icon={
-            <FileCheck2
-              size={17}
-              color={DOCTOR_PRIMARY}
-              strokeWidth={2.5}
-            />
-          }
-          label="Source"
-          value={formatStatus(
-            review.medicine.source
-          )}
-        />
-      </View>
+          <DetailRow
+            icon={
+              <FileCheck2
+                size={17}
+                color={DOCTOR_PRIMARY}
+                strokeWidth={2.5}
+              />
+            }
+            label="Source"
+            value={formatStatus(review.medicine.source)}
+          />
+        </View>
+      ) : (
+        <View style={styles.deletionStatePanel}>
+          <Trash2
+            size={18}
+            color={DANGER_DARK}
+            strokeWidth={2.6}
+          />
 
-      <View
-        style={
-          styles.instructionsPanel
-        }
-      >
-        <Text
-          style={
-            styles.instructionsLabel
-          }
-        >
+          <View style={styles.deletionStateTextBlock}>
+            <Text style={styles.deletionStateTitle}>
+              Removal review
+            </Text>
+
+            <Text style={styles.deletionStateText}>
+              {review.medicine.isActive
+                ? "Medicine remains active while this request is pending."
+                : "Medicine is no longer active in the patient schedule."}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.instructionsPanel}>
+        <Text style={styles.instructionsLabel}>
           Instructions
         </Text>
 
-        <Text
-          style={
-            styles.instructionsText
-          }
-        >
-          {review.medicine
-            .instructions ||
+        <Text style={styles.instructionsText}>
+          {review.medicine.instructions ||
             "No instructions provided."}
         </Text>
       </View>
+
+      {review.patientReason ? (
+        <View style={styles.patientReasonPanel}>
+          <Text style={styles.patientReasonLabel}>
+            Patient removal reason
+          </Text>
+
+          <Text style={styles.patientReasonText}>
+            {review.patientReason}
+          </Text>
+        </View>
+      ) : null}
 
       {review.reviewNote ? (
         <View
           style={[
             styles.decisionPanel,
             {
-              backgroundColor:
-                tone.background,
+              backgroundColor: statusTone.background,
             },
           ]}
         >
@@ -1374,7 +1236,7 @@ const MedicineReviewCard = ({
             style={[
               styles.decisionLabel,
               {
-                color: tone.text,
+                color: statusTone.text,
               },
             ]}
           >
@@ -1385,7 +1247,7 @@ const MedicineReviewCard = ({
             style={[
               styles.decisionText,
               {
-                color: tone.text,
+                color: statusTone.text,
               },
             ]}
           >
@@ -1394,43 +1256,41 @@ const MedicineReviewCard = ({
         </View>
       ) : null}
 
-      {review.reviewStatus ===
-      "PENDING" ? (
-        <View
-          style={styles.actions}
-        >
+      {review.reviewStatus === "PENDING" ? (
+        <View style={styles.actions}>
           <TouchableOpacity
             style={[
               styles.rejectButton,
-              busy
-                ? styles.disabledButton
-                : undefined,
+              busy ? styles.disabledButton : undefined,
             ]}
             activeOpacity={0.84}
             onPress={onReject}
             disabled={busy}
           >
-            <XCircle
-              size={17}
-              color={DANGER_DARK}
-              strokeWidth={2.6}
-            />
+            {rejecting ? (
+              <ActivityIndicator
+                size="small"
+                color={DANGER_DARK}
+              />
+            ) : (
+              <>
+                <XCircle
+                  size={17}
+                  color={DANGER_DARK}
+                  strokeWidth={2.6}
+                />
 
-            <Text
-              style={
-                styles.rejectButtonText
-              }
-            >
-              Reject
-            </Text>
+                <Text style={styles.rejectButtonText}>
+                  Reject
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.approveButton,
-              busy
-                ? styles.disabledButton
-                : undefined,
+              busy ? styles.disabledButton : undefined,
             ]}
             activeOpacity={0.84}
             onPress={onApprove}
@@ -1449,11 +1309,7 @@ const MedicineReviewCard = ({
                   strokeWidth={2.6}
                 />
 
-                <Text
-                  style={
-                    styles.approveButtonText
-                  }
-                >
+                <Text style={styles.approveButtonText}>
                   Approve
                 </Text>
               </>
@@ -1461,12 +1317,10 @@ const MedicineReviewCard = ({
           </TouchableOpacity>
         </View>
       ) : (
-        <View
-          style={styles.reviewMeta}
-        >
+        <View style={styles.reviewMeta}>
           <CheckCircle2
             size={16}
-            color={tone.text}
+            color={statusTone.text}
             strokeWidth={2.5}
           />
 
@@ -1474,14 +1328,13 @@ const MedicineReviewCard = ({
             style={[
               styles.reviewMetaText,
               {
-                color: tone.text,
+                color: statusTone.text,
               },
             ]}
           >
-            Reviewed{" "}
-            {formatDate(
-              review.reviewedAt
-            )}
+            {review.reviewStatus === "APPLIED"
+              ? `Applied ${formatDate(review.appliedAt)}`
+              : `Reviewed ${formatDate(review.reviewedAt)}`}
           </Text>
         </View>
       )}
@@ -1500,31 +1353,12 @@ const DetailRow = ({
 }) => {
   return (
     <View style={styles.detailRow}>
-      <View
-        style={styles.detailIcon}
-      >
-        {icon}
-      </View>
+      <View style={styles.detailIcon}>{icon}</View>
 
-      <View
-        style={
-          styles.detailTextBlock
-        }
-      >
-        <Text
-          style={
-            styles.detailLabel
-          }
-        >
-          {label}
-        </Text>
+      <View style={styles.detailTextBlock}>
+        <Text style={styles.detailLabel}>{label}</Text>
 
-        <Text
-          style={
-            styles.detailValue
-          }
-          numberOfLines={1}
-        >
+        <Text style={styles.detailValue} numberOfLines={1}>
           {value}
         </Text>
       </View>
@@ -1550,6 +1384,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  appBarTextBlock: {
+    flex: 1,
+    paddingRight: 12,
   },
   appBarTitle: {
     color: TEXT,
@@ -1582,7 +1420,7 @@ const styles = StyleSheet.create({
     backgroundColor: DOCTOR_PRIMARY,
     borderRadius: 17,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 15,
     ...elevate(2),
   },
   summaryTopRow: {
@@ -1633,12 +1471,12 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     color: SURFACE,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: "700",
   },
   summaryLabel: {
     color: "#D7FFFA",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     marginTop: 2,
   },
@@ -1646,6 +1484,12 @@ const styles = StyleSheet.create({
     width: 1,
     height: 35,
     backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  filterLabel: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 7,
   },
   filtersRow: {
     paddingBottom: 14,
@@ -1673,6 +1517,8 @@ const styles = StyleSheet.create({
   filterTextSelected: {
     color: DOCTOR_DARK,
     fontWeight: "700",
+  },
+  filterTextWithIcon: {
     marginLeft: 6,
   },
   errorCard: {
@@ -1769,6 +1615,29 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
+  },
+  requestTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 11,
+  },
+  requestTypeBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  requestTypeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    marginLeft: 5,
+  },
+  requestDate: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
   },
   reviewHeader: {
     flexDirection: "row",
@@ -1879,6 +1748,30 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 2,
   },
+  deletionStatePanel: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  deletionStateTextBlock: {
+    flex: 1,
+    marginLeft: 9,
+  },
+  deletionStateTitle: {
+    color: DANGER_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  deletionStateText: {
+    color: DANGER_DARK,
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 17,
+    marginTop: 3,
+  },
   instructionsPanel: {
     borderRadius: 13,
     backgroundColor: "#FFF9EE",
@@ -1892,6 +1785,24 @@ const styles = StyleSheet.create({
   },
   instructionsText: {
     color: WARNING_DARK,
+    fontSize: 12,
+    fontWeight: "500",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  patientReasonPanel: {
+    borderRadius: 13,
+    backgroundColor: DANGER_LIGHT,
+    padding: 12,
+    marginTop: 12,
+  },
+  patientReasonLabel: {
+    color: DANGER_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  patientReasonText: {
+    color: DANGER_DARK,
     fontSize: 12,
     fontWeight: "500",
     lineHeight: 18,
@@ -1982,6 +1893,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  modalHeaderText: {
+    flex: 1,
+    paddingRight: 12,
+  },
   modalTitle: {
     color: TEXT,
     fontSize: 19,
@@ -2001,11 +1916,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  modalWarningPanel: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    marginTop: 15,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  modalWarningText: {
+    flex: 1,
+    color: DANGER_DARK,
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 17,
+    marginLeft: 8,
+  },
+  modalInfoPanel: {
+    backgroundColor: DOCTOR_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    marginTop: 15,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  modalInfoText: {
+    flex: 1,
+    color: DOCTOR_DARK,
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 17,
+    marginLeft: 8,
+  },
   inputLabel: {
     color: TEXT,
     fontSize: 12,
     fontWeight: "700",
-    marginTop: 18,
+    marginTop: 17,
     marginBottom: 7,
   },
   noteInput: {
@@ -2055,7 +2002,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 7,
   },
-  modalRejectText: {
+  modalApproveButton: {
+    flex: 1,
+    minHeight: 45,
+    borderRadius: 12,
+    backgroundColor: SUCCESS,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 7,
+  },
+  modalActionText: {
     color: SURFACE,
     fontSize: 13,
     fontWeight: "700",

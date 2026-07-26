@@ -3,13 +3,11 @@ import { AppError } from "../../utils/AppError.js";
 
 import type {
   CreateMedicineInput,
+  RequestMedicineDeletionInput,
+  ResubmitMedicineReviewInput,
   SnoozeMedicineInput,
   UpdateMedicineInput,
 } from "./medicine.types.js";
-
-type ReviewStatus =
-  | "PENDING"
-  | "NOT_REQUESTED";
 
 const reminderRelations = {
   reviewDoctor: {
@@ -24,6 +22,37 @@ const reminderRelations = {
       id: true,
       fullName: true,
       email: true,
+    },
+  },
+} as const;
+
+const reviewRequestRelations = {
+  doctor: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      doctorProfile: {
+        select: {
+          specialization: true,
+        },
+      },
+    },
+  },
+  reviewedByDoctor: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+  },
+  medicine: {
+    include: {
+      reminders: {
+        orderBy: {
+          timeOfDay: "asc" as const,
+        },
+      },
     },
   },
 } as const;
@@ -46,12 +75,12 @@ const parseDate = (dateText: string) => {
     Date.UTC(year, month - 1, day)
   );
 
-  const isInvalidDate =
+  const invalidDate =
     parsedDate.getUTCFullYear() !== year ||
     parsedDate.getUTCMonth() !== month - 1 ||
     parsedDate.getUTCDate() !== day;
 
-  if (isInvalidDate) {
+  if (invalidDate) {
     throw new AppError(
       "Please enter a valid date",
       400
@@ -61,9 +90,7 @@ const parseDate = (dateText: string) => {
   return parsedDate;
 };
 
-const parseDateTime = (
-  dateTimeText: string
-) => {
+const parseDateTime = (dateTimeText: string) => {
   const parsedDate = new Date(dateTimeText);
 
   if (Number.isNaN(parsedDate.getTime())) {
@@ -92,10 +119,7 @@ const getEndOfDay = (date: Date) => {
   return end;
 };
 
-const addDays = (
-  date: Date,
-  days: number
-) => {
+const addDays = (date: Date, days: number) => {
   const nextDate = new Date(date);
 
   nextDate.setDate(nextDate.getDate() + days);
@@ -117,8 +141,7 @@ const getScheduledDateTimeForDate = (
   date: Date,
   timeOfDay: string
 ) => {
-  const [hourText, minuteText] =
-    timeOfDay.split(":");
+  const [hourText, minuteText] = timeOfDay.split(":");
 
   const scheduledFor = new Date(date);
 
@@ -150,23 +173,20 @@ const isSameScheduledDateTime = (
   firstDate: Date,
   secondDate: Date
 ) => {
-  return (
-    firstDate.getTime() ===
-    secondDate.getTime()
-  );
+  return firstDate.getTime() === secondDate.getTime();
 };
 
 const isReminderActiveOnDate = (
   reminder: any,
   date: Date
 ) => {
-  const reminderStartDate =
-    getStartOfDay(reminder.startDate);
+  const reminderStartDate = getStartOfDay(
+    reminder.startDate
+  );
 
-  const reminderEndDate =
-    reminder.endDate
-      ? getStartOfDay(reminder.endDate)
-      : null;
+  const reminderEndDate = reminder.endDate
+    ? getStartOfDay(reminder.endDate)
+    : null;
 
   const targetDate = getStartOfDay(date);
 
@@ -184,9 +204,7 @@ const isReminderActiveOnDate = (
   return true;
 };
 
-const getPeriodFromTime = (
-  timeOfDay: string
-) => {
+const getPeriodFromTime = (timeOfDay: string) => {
   const hour = Number(
     timeOfDay.split(":")[0]
   );
@@ -200,131 +218,6 @@ const getPeriodFromTime = (
   }
 
   return "Evening";
-};
-
-const getReviewStatus = (
-  sendToDoctorForReview?: boolean
-): ReviewStatus => {
-  return sendToDoctorForReview
-    ? "PENDING"
-    : "NOT_REQUESTED";
-};
-
-const getPrimaryReviewDoctor = async (
-  patientId: string
-) => {
-  const assignment =
-    await prisma.patientDoctorAssignment.findFirst({
-      where: {
-        patientId,
-        status: "ACTIVE",
-        assignmentType: "PRIMARY",
-        doctor: {
-          is: {
-            role: "DOCTOR",
-            isEmailVerified: true,
-            accountStatus: {
-              in: ["ACTIVE", "APPROVED"],
-            },
-          },
-        },
-      },
-      select: {
-        doctor: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-  if (!assignment) {
-    throw new AppError(
-      "Please assign an active primary doctor before requesting a medicine review.",
-      400
-    );
-  }
-
-  return assignment.doctor;
-};
-
-const getReviewRequestData = async (
-  patientId: string,
-  sendToDoctorForReview: boolean
-) => {
-  if (!sendToDoctorForReview) {
-    return {
-      sendToDoctorForReview: false,
-      reviewStatus: "NOT_REQUESTED" as const,
-      reviewDoctorId: null,
-      reviewedByDoctorId: null,
-      reviewedAt: null,
-      reviewNote: null,
-    };
-  }
-
-  const doctor =
-    await getPrimaryReviewDoctor(patientId);
-
-  return {
-    sendToDoctorForReview: true,
-    reviewStatus: "PENDING" as const,
-    reviewDoctorId: doctor.id,
-    reviewedByDoctorId: null,
-    reviewedAt: null,
-    reviewNote: null,
-  };
-};
-
-const formatReminder = (
-  reminder: any
-) => {
-  return {
-    id: reminder.id,
-    frequency: reminder.frequency,
-    customFrequency:
-      reminder.customFrequency,
-    timeOfDay: reminder.timeOfDay,
-    startDate: reminder.startDate,
-    endDate: reminder.endDate,
-    sendToDoctorForReview:
-      reminder.sendToDoctorForReview,
-    reviewStatus:
-      reminder.reviewStatus,
-    reviewDoctorId:
-      reminder.reviewDoctorId,
-    reviewedByDoctorId:
-      reminder.reviewedByDoctorId,
-    reviewedAt: reminder.reviewedAt,
-    reviewNote: reminder.reviewNote,
-    reviewDoctor:
-      reminder.reviewDoctor || null,
-    reviewedByDoctor:
-      reminder.reviewedByDoctor || null,
-    isActive: reminder.isActive,
-  };
-};
-
-const formatMedicine = (
-  medicine: any
-) => {
-  return {
-    id: medicine.id,
-    name: medicine.name,
-    dose: medicine.dose,
-    instructions:
-      medicine.instructions,
-    source: medicine.source,
-    isActive: medicine.isActive,
-    createdAt: medicine.createdAt,
-    updatedAt: medicine.updatedAt,
-    reminders:
-      medicine.reminders.map(
-        formatReminder
-      ),
-  };
 };
 
 const buildSummary = (items: any[]) => {
@@ -363,6 +256,297 @@ const buildSummary = (items: any[]) => {
   };
 };
 
+const findPrimaryReviewDoctor = async (
+  patientId: string
+) => {
+  const assignment =
+    await prisma.patientDoctorAssignment.findFirst({
+      where: {
+        patientId,
+        status: "ACTIVE",
+        assignmentType: "PRIMARY",
+        doctor: {
+          is: {
+            role: "DOCTOR",
+            isEmailVerified: true,
+            accountStatus: {
+              in: ["ACTIVE", "APPROVED"],
+            },
+          },
+        },
+      },
+      select: {
+        doctor: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+  return assignment?.doctor || null;
+};
+
+const getPrimaryReviewDoctor = async (
+  patientId: string
+) => {
+  const doctor =
+    await findPrimaryReviewDoctor(patientId);
+
+  if (!doctor) {
+    throw new AppError(
+      "Please assign an active primary doctor before requesting a medicine review.",
+      400
+    );
+  }
+
+  return doctor;
+};
+
+const ensureNoPendingRequest = async (
+  patientId: string,
+  medicineId: string
+) => {
+  const pendingRequest =
+    await prisma.medicineReviewRequest.findFirst({
+      where: {
+        patientId,
+        medicineId,
+        status: "PENDING",
+      },
+      select: {
+        id: true,
+        requestType: true,
+      },
+    });
+
+  if (pendingRequest) {
+    const requestLabel =
+      pendingRequest.requestType === "DELETE"
+        ? "deletion"
+        : "medicine";
+
+    throw new AppError(
+      `A ${requestLabel} review is already pending for this medicine.`,
+      400
+    );
+  }
+};
+
+const getMedicineForPatient = async (
+  patientId: string,
+  medicineId: string,
+  includeInactive = true
+) => {
+  const medicine =
+    await prisma.medicine.findFirst({
+      where: {
+        id: medicineId,
+        patientId,
+        ...(includeInactive
+          ? {}
+          : {
+              isActive: true,
+            }),
+      },
+      include: {
+        reminders: {
+          include: reminderRelations,
+          orderBy: {
+            timeOfDay: "asc",
+          },
+        },
+        reviewRequests: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            reviewedByDoctor: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+  if (!medicine) {
+    throw new AppError(
+      "Medicine not found",
+      404
+    );
+  }
+
+  return medicine;
+};
+
+const getReviewRequestForPatient = async (
+  patientId: string,
+  requestId: string
+) => {
+  const request =
+    await prisma.medicineReviewRequest.findFirst({
+      where: {
+        id: requestId,
+        patientId,
+      },
+      include: reviewRequestRelations,
+    });
+
+  if (!request) {
+    throw new AppError(
+      "Medicine review request not found",
+      404
+    );
+  }
+
+  return request;
+};
+
+const formatReminder = (reminder: any) => {
+  return {
+    id: reminder.id,
+    frequency: reminder.frequency,
+    customFrequency: reminder.customFrequency,
+    timeOfDay: reminder.timeOfDay,
+    startDate: reminder.startDate,
+    endDate: reminder.endDate,
+    sendToDoctorForReview:
+      reminder.sendToDoctorForReview,
+    reviewStatus: reminder.reviewStatus,
+    reviewDoctorId: reminder.reviewDoctorId,
+    reviewedByDoctorId:
+      reminder.reviewedByDoctorId,
+    reviewedAt: reminder.reviewedAt,
+    reviewNote: reminder.reviewNote,
+    reviewDoctor: reminder.reviewDoctor || null,
+    reviewedByDoctor:
+      reminder.reviewedByDoctor || null,
+    isActive: reminder.isActive,
+  };
+};
+
+const formatReviewRequest = (request: any) => {
+  const reminder =
+    request.medicine?.reminders?.[0] || null;
+
+  return {
+    id: request.id,
+    patientId: request.patientId,
+    doctorId: request.doctorId,
+    reviewedByDoctorId:
+      request.reviewedByDoctorId,
+    medicineId: request.medicineId,
+    requestType: request.requestType,
+    status: request.status,
+    patientReason: request.patientReason,
+    doctorNote: request.doctorNote,
+    reviewedAt: request.reviewedAt,
+    patientSeenAt: request.patientSeenAt,
+    appliedAt: request.appliedAt,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+    isUnread:
+      request.status !== "PENDING" &&
+      !request.patientSeenAt,
+    canApply:
+      request.requestType === "ADD" &&
+      request.status === "APPROVED",
+    canResubmit:
+      request.requestType === "ADD" &&
+      request.status === "REJECTED",
+    doctor: request.doctor || null,
+    reviewedByDoctor:
+      request.reviewedByDoctor || null,
+    medicine: request.medicine
+      ? {
+          id: request.medicine.id,
+          name: request.medicine.name,
+          dose: request.medicine.dose,
+          instructions:
+            request.medicine.instructions,
+          source: request.medicine.source,
+          isActive: request.medicine.isActive,
+          frequency:
+            reminder?.frequency || null,
+          customFrequency:
+            reminder?.customFrequency || null,
+          timeOfDay:
+            reminder?.timeOfDay || null,
+          startDate:
+            reminder?.startDate || null,
+          endDate:
+            reminder?.endDate || null,
+        }
+      : null,
+  };
+};
+
+const formatMedicine = (medicine: any) => {
+  const pendingDeletionRequest =
+    medicine.reviewRequests?.find(
+      (request: any) =>
+        request.requestType === "DELETE" &&
+        request.status === "PENDING"
+    ) || null;
+
+  const latestReviewRequest =
+    medicine.reviewRequests?.[0] || null;
+
+  return {
+    id: medicine.id,
+    name: medicine.name,
+    dose: medicine.dose,
+    instructions: medicine.instructions,
+    source: medicine.source,
+    isActive: medicine.isActive,
+    createdAt: medicine.createdAt,
+    updatedAt: medicine.updatedAt,
+    reminders: medicine.reminders.map(
+      formatReminder
+    ),
+    deletionReviewPending:
+      Boolean(pendingDeletionRequest),
+    pendingDeletionRequestId:
+      pendingDeletionRequest?.id || null,
+    latestReviewRequest: latestReviewRequest
+      ? {
+          id: latestReviewRequest.id,
+          requestType:
+            latestReviewRequest.requestType,
+          status: latestReviewRequest.status,
+          patientReason:
+            latestReviewRequest.patientReason,
+          doctorNote:
+            latestReviewRequest.doctorNote,
+          reviewedAt:
+            latestReviewRequest.reviewedAt,
+          patientSeenAt:
+            latestReviewRequest.patientSeenAt,
+          appliedAt:
+            latestReviewRequest.appliedAt,
+          doctor:
+            latestReviewRequest.doctor || null,
+          reviewedByDoctor:
+            latestReviewRequest.reviewedByDoctor ||
+            null,
+        }
+      : null,
+  };
+};
+
 const getReminderForPatient = async (
   reminderId: string,
   patientId: string
@@ -392,75 +576,147 @@ const getReminderForPatient = async (
   return reminder;
 };
 
+const validateDateRange = (
+  startDate: Date,
+  endDate: Date | null
+) => {
+  if (endDate && endDate < startDate) {
+    throw new AppError(
+      "End date cannot be before start date",
+      400
+    );
+  }
+};
+
 export const medicineService = {
   async createMedicine(
     patientId: string,
     data: CreateMedicineInput
   ) {
-    const startDate =
-      parseDate(data.startDate);
+    const startDate = parseDate(data.startDate);
 
     const endDate = data.endDate
       ? parseDate(data.endDate)
       : null;
 
-    if (
-      endDate &&
-      endDate < startDate
-    ) {
-      throw new AppError(
-        "End date cannot be before start date",
-        400
-      );
-    }
+    validateDateRange(
+      startDate,
+      endDate
+    );
 
-    const reviewData =
-      await getReviewRequestData(
-        patientId,
-        data.sendToDoctorForReview ||
-          false
-      );
+    const requestingReview =
+      data.sendToDoctorForReview === true;
+
+    const reviewDoctor =
+      requestingReview
+        ? await getPrimaryReviewDoctor(
+            patientId
+          )
+        : null;
 
     const medicine =
-      await prisma.medicine.create({
-        data: {
-          patientId,
-          name: data.name.trim(),
-          dose: data.dose.trim(),
-          instructions:
-            data.instructions?.trim() ||
-            null,
-          source:
-            data.source || "MANUAL",
-          reminders: {
-            create: {
-              frequency: data.frequency,
-              customFrequency:
-                data.customFrequency?.trim() ||
+      await prisma.$transaction(async (tx) => {
+        const createdMedicine =
+          await tx.medicine.create({
+            data: {
+              patientId,
+              name: data.name.trim(),
+              dose: data.dose.trim(),
+              instructions:
+                data.instructions?.trim() ||
                 null,
-              timeOfDay: data.timeOfDay,
-              startDate,
-              endDate,
-              ...reviewData,
+              source:
+                data.source || "MANUAL",
+              isActive: !requestingReview,
+              reminders: {
+                create: {
+                  frequency: data.frequency,
+                  customFrequency:
+                    data.customFrequency?.trim() ||
+                    null,
+                  timeOfDay: data.timeOfDay,
+                  startDate,
+                  endDate,
+                  isActive: !requestingReview,
+                  sendToDoctorForReview:
+                    requestingReview,
+                  reviewStatus:
+                    requestingReview
+                      ? "PENDING"
+                      : "NOT_REQUESTED",
+                  reviewDoctorId:
+                    reviewDoctor?.id || null,
+                  reviewedByDoctorId: null,
+                  reviewedAt: null,
+                  reviewNote: null,
+                },
+              },
+            },
+          });
+
+        if (
+          requestingReview &&
+          reviewDoctor
+        ) {
+          await tx.medicineReviewRequest.create({
+            data: {
+              patientId,
+              doctorId: reviewDoctor.id,
+              medicineId:
+                createdMedicine.id,
+              requestType: "ADD",
+              status: "PENDING",
+            },
+          });
+        }
+
+        return tx.medicine.findUnique({
+          where: {
+            id: createdMedicine.id,
+          },
+          include: {
+            reminders: {
+              include: reminderRelations,
+              orderBy: {
+                timeOfDay: "asc",
+              },
+            },
+            reviewRequests: {
+              include: {
+                doctor: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                  },
+                },
+                reviewedByDoctor: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
             },
           },
-        },
-        include: {
-          reminders: {
-            include: reminderRelations,
-            orderBy: {
-              timeOfDay: "asc",
-            },
-          },
-        },
+        });
       });
+
+    if (!medicine) {
+      throw new AppError(
+        "Medicine could not be created",
+        500
+      );
+    }
 
     return formatMedicine(medicine);
   },
 
-  async listMedicines(
-    patientId: string
-  ) {
+  async listMedicines(patientId: string) {
     const medicines =
       await prisma.medicine.findMany({
         where: {
@@ -477,22 +733,38 @@ export const medicineService = {
               timeOfDay: "asc",
             },
           },
+          reviewRequests: {
+            include: {
+              doctor: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                },
+              },
+              reviewedByDoctor: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",
         },
       });
 
-    return medicines.map(
-      formatMedicine
-    );
+    return medicines.map(formatMedicine);
   },
 
-  async getTodayMedicines(
-    patientId: string
-  ) {
-    const { start, end } =
-      getUpcomingRange();
+  async getTodayMedicines(patientId: string) {
+    const { start, end } = getUpcomingRange();
 
     const now = new Date();
 
@@ -503,6 +775,15 @@ export const medicineService = {
           isActive: true,
         },
         include: {
+          reviewRequests: {
+            where: {
+              requestType: "DELETE",
+              status: "PENDING",
+            },
+            select: {
+              id: true,
+            },
+          },
           reminders: {
             where: {
               isActive: true,
@@ -543,6 +824,9 @@ export const medicineService = {
 
     const upcomingItems =
       medicines.flatMap((medicine) => {
+        const deletionRequest =
+          medicine.reviewRequests[0] || null;
+
         return medicine.reminders.flatMap(
           (reminder) => {
             const items = [];
@@ -574,12 +858,11 @@ export const medicineService = {
 
               const doseLog =
                 reminder.doseLogs.find(
-                  (log) => {
-                    return isSameScheduledDateTime(
+                  (log) =>
+                    isSameScheduledDateTime(
                       log.scheduledFor,
                       scheduledFor
-                    );
-                  }
+                    )
                 );
 
               const status =
@@ -602,26 +885,25 @@ export const medicineService = {
                   reminder.customFrequency,
                 timeOfDay:
                   reminder.timeOfDay,
-                period:
-                  getPeriodFromTime(
-                    reminder.timeOfDay
-                  ),
+                period: getPeriodFromTime(
+                  reminder.timeOfDay
+                ),
                 scheduledFor,
                 scheduledDate:
-                  getDateKey(
-                    scheduledFor
-                  ),
+                  getDateKey(scheduledFor),
                 startDate:
                   reminder.startDate,
-                endDate:
-                  reminder.endDate,
+                endDate: reminder.endDate,
                 status,
                 takenAt:
-                  doseLog?.takenAt ||
-                  null,
+                  doseLog?.takenAt || null,
                 snoozedUntil:
                   doseLog?.snoozedUntil ||
                   null,
+                deletionReviewPending:
+                  Boolean(deletionRequest),
+                pendingDeletionRequestId:
+                  deletionRequest?.id || null,
               });
             }
 
@@ -631,8 +913,7 @@ export const medicineService = {
       });
 
     return {
-      summary:
-        buildSummary(upcomingItems),
+      summary: buildSummary(upcomingItems),
       medicines: upcomingItems,
     };
   },
@@ -642,27 +923,10 @@ export const medicineService = {
     medicineId: string
   ) {
     const medicine =
-      await prisma.medicine.findFirst({
-        where: {
-          id: medicineId,
-          patientId,
-        },
-        include: {
-          reminders: {
-            include: reminderRelations,
-            orderBy: {
-              timeOfDay: "asc",
-            },
-          },
-        },
-      });
-
-    if (!medicine) {
-      throw new AppError(
-        "Medicine not found",
-        404
+      await getMedicineForPatient(
+        patientId,
+        medicineId
       );
-    }
 
     return formatMedicine(medicine);
   },
@@ -673,243 +937,150 @@ export const medicineService = {
     data: UpdateMedicineInput
   ) {
     const medicine =
-      await prisma.medicine.findFirst({
-        where: {
-          id: medicineId,
-          patientId,
-        },
-        include: {
-          reminders: {
-            where: {
-              isActive: true,
-            },
-            take: 1,
-          },
-        },
-      });
-
-    if (!medicine) {
-      throw new AppError(
-        "Medicine not found",
-        404
+      await getMedicineForPatient(
+        patientId,
+        medicineId
       );
-    }
 
     const reminder =
-      medicine.reminders[0] || null;
+      medicine.reminders.find(
+        (item: any) => item.isActive
+      ) ||
+      medicine.reminders[0] ||
+      null;
 
-    const medicineUpdateData = {
-      ...(data.name !== undefined
-        ? {
-            name: data.name.trim(),
-          }
-        : {}),
-      ...(data.dose !== undefined
-        ? {
-            dose: data.dose.trim(),
-          }
-        : {}),
-      ...(data.instructions !== undefined
-        ? {
-            instructions:
-              data.instructions.trim() ||
-              null,
-          }
-        : {}),
-      ...(data.isActive !== undefined
-        ? {
-            isActive: data.isActive,
-          }
-        : {}),
-    };
-
-    const clinicalFieldsChanged =
-      data.name !== undefined ||
-      data.dose !== undefined ||
-      data.instructions !== undefined ||
-      data.frequency !== undefined ||
-      data.customFrequency !== undefined ||
-      data.timeOfDay !== undefined ||
-      data.startDate !== undefined ||
-      data.endDate !== undefined;
-
-    const reminderFieldsChanged =
-      data.frequency !== undefined ||
-      data.customFrequency !== undefined ||
-      data.timeOfDay !== undefined ||
-      data.startDate !== undefined ||
-      data.endDate !== undefined ||
-      data.sendToDoctorForReview !==
-        undefined;
-
-    const nextSendToDoctorForReview =
-      data.sendToDoctorForReview ??
-      reminder?.sendToDoctorForReview ??
-      false;
-
-    const shouldResetReview =
-      nextSendToDoctorForReview &&
-      (data.sendToDoctorForReview ===
-        true ||
-        clinicalFieldsChanged ||
-        !reminder ||
-        !reminder.reviewDoctorId);
-
-    const shouldUpdateReminder =
-      reminderFieldsChanged ||
-      shouldResetReview;
-
-    let reviewUpdateData: any = {};
-
-    if (!nextSendToDoctorForReview) {
-      if (
-        data.sendToDoctorForReview !==
-          undefined ||
-        reminder?.sendToDoctorForReview
-      ) {
-        reviewUpdateData =
-          await getReviewRequestData(
-            patientId,
-            false
-          );
-      }
-    } else if (shouldResetReview) {
-      reviewUpdateData =
-        await getReviewRequestData(
-          patientId,
-          true
-        );
-    }
-
-    const parsedStartDate =
+    const startDate =
       data.startDate !== undefined
         ? parseDate(data.startDate)
-        : undefined;
+        : reminder?.startDate || new Date();
 
-    const parsedEndDate =
+    const endDate =
       data.endDate !== undefined
         ? data.endDate
           ? parseDate(data.endDate)
           : null
-        : undefined;
-
-    const effectiveStartDate =
-      parsedStartDate ||
-      reminder?.startDate ||
-      null;
-
-    const effectiveEndDate =
-      parsedEndDate !== undefined
-        ? parsedEndDate
         : reminder?.endDate || null;
 
-    if (
-      effectiveStartDate &&
-      effectiveEndDate &&
-      effectiveEndDate <
-        effectiveStartDate
-    ) {
-      throw new AppError(
-        "End date cannot be before start date",
-        400
+    validateDateRange(
+      startDate,
+      endDate
+    );
+
+    const requestingReview =
+      data.sendToDoctorForReview === true;
+
+    const reviewDoctor =
+      requestingReview
+        ? await getPrimaryReviewDoctor(
+            patientId
+          )
+        : null;
+
+    if (requestingReview) {
+      await ensureNoPendingRequest(
+        patientId,
+        medicineId
       );
     }
 
-    await prisma.$transaction(
-      async (tx) => {
-        await tx.medicine.update({
-          where: {
-            id: medicineId,
-          },
-          data: medicineUpdateData,
-        });
-
-        if (!shouldUpdateReminder) {
-          return;
-        }
-
-        const reminderData = {
-          ...(data.frequency !== undefined
+    await prisma.$transaction(async (tx) => {
+      await tx.medicine.update({
+        where: {
+          id: medicineId,
+        },
+        data: {
+          ...(data.name !== undefined
             ? {
-                frequency:
-                  data.frequency,
+                name: data.name.trim(),
               }
             : {}),
-          ...(data.customFrequency !==
-          undefined
+          ...(data.dose !== undefined
             ? {
-                customFrequency:
-                  data.customFrequency.trim() ||
+                dose: data.dose.trim(),
+              }
+            : {}),
+          ...(data.instructions !== undefined
+            ? {
+                instructions:
+                  data.instructions.trim() ||
                   null,
               }
             : {}),
-          ...(data.timeOfDay !== undefined
+          ...(requestingReview
             ? {
-                timeOfDay:
-                  data.timeOfDay,
+                isActive: false,
               }
-            : {}),
-          ...(parsedStartDate !== undefined
-            ? {
-                startDate:
-                  parsedStartDate,
-              }
-            : {}),
-          ...(parsedEndDate !== undefined
-            ? {
-                endDate:
-                  parsedEndDate,
-              }
-            : {}),
-          ...reviewUpdateData,
-        };
+            : data.isActive !== undefined
+              ? {
+                  isActive: data.isActive,
+                }
+              : {}),
+        },
+      });
 
-        if (reminder) {
-          await tx.medicineReminder.update({
-            where: {
-              id: reminder.id,
-            },
-            data: reminderData,
-          });
+      const reminderData = {
+        frequency:
+          data.frequency ||
+          reminder?.frequency ||
+          "ONCE_DAILY",
+        customFrequency:
+          data.customFrequency !== undefined
+            ? data.customFrequency.trim() ||
+              null
+            : reminder?.customFrequency ||
+              null,
+        timeOfDay:
+          data.timeOfDay ||
+          reminder?.timeOfDay ||
+          "08:00",
+        startDate,
+        endDate,
+        ...(requestingReview
+          ? {
+              isActive: false,
+              sendToDoctorForReview: true,
+              reviewStatus:
+                "PENDING" as const,
+              reviewDoctorId:
+                reviewDoctor?.id || null,
+              reviewedByDoctorId: null,
+              reviewedAt: null,
+              reviewNote: null,
+            }
+          : {}),
+      };
 
-          return;
-        }
-
-        const fallbackReviewData =
-          Object.keys(
-            reviewUpdateData
-          ).length > 0
-            ? reviewUpdateData
-            : await getReviewRequestData(
-                patientId,
-                nextSendToDoctorForReview
-              );
-
+      if (reminder) {
+        await tx.medicineReminder.update({
+          where: {
+            id: reminder.id,
+          },
+          data: reminderData,
+        });
+      } else {
         await tx.medicineReminder.create({
           data: {
             medicineId,
-            frequency:
-              data.frequency ||
-              "ONCE_DAILY",
-            customFrequency:
-              data.customFrequency?.trim() ||
-              null,
-            timeOfDay:
-              data.timeOfDay ||
-              "08:00",
-            startDate: data.startDate
-              ? parseDate(
-                  data.startDate
-                )
-              : new Date(),
-            endDate: data.endDate
-              ? parseDate(data.endDate)
-              : null,
-            ...fallbackReviewData,
+            ...reminderData,
           },
         });
       }
-    );
+
+      if (
+        requestingReview &&
+        reviewDoctor
+      ) {
+        await tx.medicineReviewRequest.create({
+          data: {
+            patientId,
+            doctorId: reviewDoctor.id,
+            medicineId,
+            requestType: "ADD",
+            status: "PENDING",
+          },
+        });
+      }
+    });
 
     return medicineService.getMedicineById(
       patientId,
@@ -922,45 +1093,375 @@ export const medicineService = {
     medicineId: string
   ) {
     const medicine =
-      await prisma.medicine.findFirst({
-        where: {
-          id: medicineId,
-          patientId,
-        },
-      });
+      await getMedicineForPatient(
+        patientId,
+        medicineId
+      );
 
-    if (!medicine) {
+    await ensureNoPendingRequest(
+      patientId,
+      medicineId
+    );
+
+    const primaryDoctor =
+      await findPrimaryReviewDoctor(patientId);
+
+    if (
+      medicine.isActive &&
+      primaryDoctor
+    ) {
       throw new AppError(
-        "Medicine not found",
-        404
+        "This medicine must be sent to your primary doctor for deletion review.",
+        400
       );
     }
 
-    await prisma.$transaction(
-      async (tx) => {
-        await tx.medicine.update({
-          where: {
-            id: medicineId,
-          },
-          data: {
-            isActive: false,
-          },
-        });
+    await prisma.$transaction(async (tx) => {
+      await tx.medicine.update({
+        where: {
+          id: medicineId,
+        },
+        data: {
+          isActive: false,
+        },
+      });
 
-        await tx.medicineReminder.updateMany({
-          where: {
-            medicineId,
-          },
-          data: {
-            isActive: false,
-          },
-        });
-      }
-    );
+      await tx.medicineReminder.updateMany({
+        where: {
+          medicineId,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    });
 
     return {
       message:
         "Medicine removed successfully",
+    };
+  },
+
+  async requestMedicineDeletion(
+    patientId: string,
+    medicineId: string,
+    data: RequestMedicineDeletionInput
+  ) {
+    const medicine =
+      await getMedicineForPatient(
+        patientId,
+        medicineId,
+        false
+      );
+
+    await ensureNoPendingRequest(
+      patientId,
+      medicineId
+    );
+
+    const doctor =
+      await getPrimaryReviewDoctor(patientId);
+
+    const request =
+      await prisma.medicineReviewRequest.create({
+        data: {
+          patientId,
+          doctorId: doctor.id,
+          medicineId: medicine.id,
+          requestType: "DELETE",
+          status: "PENDING",
+          patientReason:
+            data.reason.trim(),
+        },
+        include: reviewRequestRelations,
+      });
+
+    return {
+      message:
+        "Medicine deletion request sent to your primary doctor.",
+      request:
+        formatReviewRequest(request),
+    };
+  },
+
+  async listMedicineReviewRequests(
+    patientId: string
+  ) {
+    const requests =
+      await prisma.medicineReviewRequest.findMany({
+        where: {
+          patientId,
+        },
+        include: reviewRequestRelations,
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 100,
+      });
+
+    const pending = requests.filter(
+      (request) =>
+        request.status === "PENDING"
+    ).length;
+
+    const approved = requests.filter(
+      (request) =>
+        request.status === "APPROVED"
+    ).length;
+
+    const rejected = requests.filter(
+      (request) =>
+        request.status === "REJECTED"
+    ).length;
+
+    const applied = requests.filter(
+      (request) =>
+        request.status === "APPLIED"
+    ).length;
+
+    const unread = requests.filter(
+      (request) =>
+        request.status !== "PENDING" &&
+        !request.patientSeenAt
+    ).length;
+
+    return {
+      summary: {
+        total: requests.length,
+        pending,
+        approved,
+        rejected,
+        applied,
+        unread,
+      },
+      requests:
+        requests.map(formatReviewRequest),
+    };
+  },
+
+  async markMedicineReviewSeen(
+    patientId: string,
+    requestId: string
+  ) {
+    await getReviewRequestForPatient(
+      patientId,
+      requestId
+    );
+
+    const updatedRequest =
+      await prisma.medicineReviewRequest.update({
+        where: {
+          id: requestId,
+        },
+        data: {
+          patientSeenAt: new Date(),
+        },
+        include: reviewRequestRelations,
+      });
+
+    return {
+      request:
+        formatReviewRequest(updatedRequest),
+    };
+  },
+
+  async applyApprovedMedicineReview(
+    patientId: string,
+    requestId: string
+  ) {
+    const request =
+      await getReviewRequestForPatient(
+        patientId,
+        requestId
+      );
+
+    if (request.requestType !== "ADD") {
+      throw new AppError(
+        "Only approved medicine additions can be applied.",
+        400
+      );
+    }
+
+    if (request.status !== "APPROVED") {
+      throw new AppError(
+        "Only approved medicine reviews can be applied.",
+        400
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.medicine.update({
+        where: {
+          id: request.medicineId,
+        },
+        data: {
+          isActive: true,
+        },
+      });
+
+      await tx.medicineReminder.updateMany({
+        where: {
+          medicineId:
+            request.medicineId,
+        },
+        data: {
+          isActive: true,
+        },
+      });
+
+      await tx.medicineReviewRequest.update({
+        where: {
+          id: request.id,
+        },
+        data: {
+          status: "APPLIED",
+          appliedAt: new Date(),
+          patientSeenAt: new Date(),
+        },
+      });
+    });
+
+    const updatedRequest =
+      await getReviewRequestForPatient(
+        patientId,
+        requestId
+      );
+
+    return {
+      message:
+        "Medicine added to your active medication schedule.",
+      request:
+        formatReviewRequest(updatedRequest),
+    };
+  },
+
+  async resubmitMedicineReview(
+    patientId: string,
+    requestId: string,
+    data: ResubmitMedicineReviewInput
+  ) {
+    const request =
+      await getReviewRequestForPatient(
+        patientId,
+        requestId
+      );
+
+    if (request.requestType !== "ADD") {
+      throw new AppError(
+        "Only rejected medicine additions can be resubmitted.",
+        400
+      );
+    }
+
+    if (request.status !== "REJECTED") {
+      throw new AppError(
+        "Only rejected medicine reviews can be resubmitted.",
+        400
+      );
+    }
+
+    await ensureNoPendingRequest(
+      patientId,
+      request.medicineId
+    );
+
+    const doctor =
+      await getPrimaryReviewDoctor(patientId);
+
+    const startDate =
+      parseDate(data.startDate);
+
+    const endDate = data.endDate
+      ? parseDate(data.endDate)
+      : null;
+
+    validateDateRange(
+      startDate,
+      endDate
+    );
+
+    const reminder =
+      request.medicine.reminders[0] ||
+      null;
+
+    const newRequest =
+      await prisma.$transaction(async (tx) => {
+        await tx.medicine.update({
+          where: {
+            id: request.medicineId,
+          },
+          data: {
+            name: data.name.trim(),
+            dose: data.dose.trim(),
+            instructions:
+              data.instructions?.trim() ||
+              null,
+            isActive: false,
+          },
+        });
+
+        const reminderData = {
+          frequency: data.frequency,
+          customFrequency:
+            data.customFrequency?.trim() ||
+            null,
+          timeOfDay: data.timeOfDay,
+          startDate,
+          endDate,
+          isActive: false,
+          sendToDoctorForReview: true,
+          reviewStatus:
+            "PENDING" as const,
+          reviewDoctorId: doctor.id,
+          reviewedByDoctorId: null,
+          reviewedAt: null,
+          reviewNote: null,
+        };
+
+        if (reminder) {
+          await tx.medicineReminder.update({
+            where: {
+              id: reminder.id,
+            },
+            data: reminderData,
+          });
+        } else {
+          await tx.medicineReminder.create({
+            data: {
+              medicineId:
+                request.medicineId,
+              ...reminderData,
+            },
+          });
+        }
+
+        await tx.medicineReviewRequest.update({
+          where: {
+            id: request.id,
+          },
+          data: {
+            patientSeenAt: new Date(),
+          },
+        });
+
+        return tx.medicineReviewRequest.create({
+          data: {
+            patientId,
+            doctorId: doctor.id,
+            medicineId:
+              request.medicineId,
+            requestType: "ADD",
+            status: "PENDING",
+          },
+          include: reviewRequestRelations,
+        });
+      });
+
+    return {
+      message:
+        "Updated medicine sent to your primary doctor for review.",
+      request:
+        formatReviewRequest(newRequest),
     };
   },
 
@@ -1057,9 +1558,7 @@ export const medicineService = {
       );
 
     const snoozedUntil =
-      parseDateTime(
-        data.snoozedUntil
-      );
+      parseDateTime(data.snoozedUntil);
 
     const doseLog =
       await prisma.medicineDoseLog.upsert({

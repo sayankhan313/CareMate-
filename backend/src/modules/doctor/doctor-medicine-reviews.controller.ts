@@ -58,201 +58,200 @@ const getValidationMessage = (
   return "Invalid request data";
 };
 
-export const doctorMedicineReviewsController =
-  {
-    async listReviews(
-      req: Request,
-      res: Response,
-      next: NextFunction
-    ) {
-      try {
-        const doctorId =
-          getDoctorId(req);
+export const doctorMedicineReviewsController = {
+  async listReviews(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const doctorId =
+        getDoctorId(req);
 
-        const parsed =
-          doctorMedicineReviewsQuerySchema.safeParse(
-            req.query
-          );
+      const parsed =
+        doctorMedicineReviewsQuerySchema.safeParse(
+          req.query
+        );
 
-        if (!parsed.success) {
-          throw new AppError(
-            getValidationMessage(
-              parsed.error
-            ),
-            400
-          );
-        }
-
-        const result =
-          await doctorMedicineReviewsService.listReviews(
-            doctorId,
-            parsed.data
-          );
-
-        return res.status(200).json({
-          success: true,
-          message:
-            "Medicine reviews fetched successfully",
-          data: result,
-        });
-      } catch (error) {
-        next(error);
+      if (!parsed.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsed.error
+          ),
+          400
+        );
       }
-    },
 
-    async getReviewDetail(
-      req: Request,
-      res: Response,
-      next: NextFunction
-    ) {
-      try {
-        const doctorId =
-          getDoctorId(req);
+      const result =
+        await doctorMedicineReviewsService.listReviews(
+          doctorId,
+          parsed.data
+        );
 
-        const parsed =
-          doctorMedicineReviewParamsSchema.safeParse(
-            req.params
-          );
+      return res.status(200).json({
+        success: true,
+        message:
+          "Medicine reviews fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 
-        if (!parsed.success) {
-          throw new AppError(
-            getValidationMessage(
-              parsed.error
-            ),
-            400
-          );
-        }
+  async getReviewDetail(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const doctorId =
+        getDoctorId(req);
 
-        const result =
-          await doctorMedicineReviewsService.getReviewDetail(
-            doctorId,
-            parsed.data.reminderId
-          );
+      const parsed =
+        doctorMedicineReviewParamsSchema.safeParse(
+          req.params
+        );
 
-        return res.status(200).json({
-          success: true,
-          message:
-            "Medicine review fetched successfully",
-          data: result,
-        });
-      } catch (error) {
-        next(error);
+      if (!parsed.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsed.error
+          ),
+          400
+        );
       }
-    },
 
-    async approveReview(
-      req: Request,
-      res: Response,
-      next: NextFunction
-    ) {
-      try {
-        const doctorId =
-          getDoctorId(req);
+      const result =
+        await doctorMedicineReviewsService.getReviewDetail(
+          doctorId,
+          parsed.data.requestId
+        );
 
-        const parsedParams =
-          doctorMedicineReviewParamsSchema.safeParse(
-            req.params
-          );
+      return res.status(200).json({
+        success: true,
+        message:
+          "Medicine review fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 
-        if (
-          !parsedParams.success
-        ) {
-          throw new AppError(
-            getValidationMessage(
-              parsedParams.error
-            ),
-            400
-          );
-        }
+  async approveReview(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const doctorId =
+        getDoctorId(req);
 
-        const parsedBody =
-          approveMedicineReviewSchema.safeParse(
-            req.body
-          );
+      const parsedParams =
+        doctorMedicineReviewParamsSchema.safeParse(
+          req.params
+        );
 
-        if (!parsedBody.success) {
-          throw new AppError(
-            getValidationMessage(
-              parsedBody.error
-            ),
-            400
-          );
-        }
-
-        const result =
-          await doctorMedicineReviewsService.approveReview(
-            doctorId,
-            parsedParams.data
-              .reminderId,
-            parsedBody.data
-          );
-
-        return res.status(200).json({
-          success: true,
-          message:
-            "Medicine review approved successfully",
-          data: result,
-        });
-      } catch (error) {
-        next(error);
+      if (!parsedParams.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsedParams.error
+          ),
+          400
+        );
       }
-    },
 
-    async rejectReview(
-      req: Request,
-      res: Response,
-      next: NextFunction
-    ) {
-      try {
-        const doctorId =
-          getDoctorId(req);
+      const parsedBody =
+        approveMedicineReviewSchema.safeParse(
+          req.body
+        );
 
-        const parsedParams =
-          doctorMedicineReviewParamsSchema.safeParse(
-            req.params
-          );
-
-        if (
-          !parsedParams.success
-        ) {
-          throw new AppError(
-            getValidationMessage(
-              parsedParams.error
-            ),
-            400
-          );
-        }
-
-        const parsedBody =
-          rejectMedicineReviewSchema.safeParse(
-            req.body
-          );
-
-        if (!parsedBody.success) {
-          throw new AppError(
-            getValidationMessage(
-              parsedBody.error
-            ),
-            400
-          );
-        }
-
-        const result =
-          await doctorMedicineReviewsService.rejectReview(
-            doctorId,
-            parsedParams.data
-              .reminderId,
-            parsedBody.data
-          );
-
-        return res.status(200).json({
-          success: true,
-          message:
-            "Medicine review rejected successfully",
-          data: result,
-        });
-      } catch (error) {
-        next(error);
+      if (!parsedBody.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsedBody.error
+          ),
+          400
+        );
       }
-    },
-  };
+
+      const result =
+        await doctorMedicineReviewsService.approveReview(
+          doctorId,
+          parsedParams.data.requestId,
+          parsedBody.data
+        );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          result.review.requestType ===
+          "DELETE"
+            ? "Medicine deletion approved successfully"
+            : "Medicine addition approved successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async rejectReview(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const doctorId =
+        getDoctorId(req);
+
+      const parsedParams =
+        doctorMedicineReviewParamsSchema.safeParse(
+          req.params
+        );
+
+      if (!parsedParams.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsedParams.error
+          ),
+          400
+        );
+      }
+
+      const parsedBody =
+        rejectMedicineReviewSchema.safeParse(
+          req.body
+        );
+
+      if (!parsedBody.success) {
+        throw new AppError(
+          getValidationMessage(
+            parsedBody.error
+          ),
+          400
+        );
+      }
+
+      const result =
+        await doctorMedicineReviewsService.rejectReview(
+          doctorId,
+          parsedParams.data.requestId,
+          parsedBody.data
+        );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          result.review.requestType ===
+          "DELETE"
+            ? "Medicine deletion rejected successfully"
+            : "Medicine addition rejected successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+};

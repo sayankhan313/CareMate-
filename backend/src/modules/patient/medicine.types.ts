@@ -1,4 +1,7 @@
-export type MedicineSource = "MANUAL" | "SCANNER" | "DOCTOR_PRESCRIBED";
+export type MedicineSource =
+  | "MANUAL"
+  | "SCANNER"
+  | "DOCTOR_PRESCRIBED";
 
 export type MedicineFrequency =
   | "ONCE_DAILY"
@@ -13,13 +16,11 @@ export type CreateMedicineInput = {
   dose: string;
   instructions?: string;
   source?: MedicineSource;
-
   frequency: MedicineFrequency;
   customFrequency?: string;
   timeOfDay: string;
   startDate: string;
   endDate?: string;
-
   sendToDoctorForReview?: boolean;
 };
 
@@ -28,7 +29,6 @@ export type UpdateMedicineInput = {
   dose?: string;
   instructions?: string;
   isActive?: boolean;
-
   frequency?: MedicineFrequency;
   customFrequency?: string;
   timeOfDay?: string;
@@ -37,12 +37,31 @@ export type UpdateMedicineInput = {
   sendToDoctorForReview?: boolean;
 };
 
+export type RequestMedicineDeletionInput = {
+  reason: string;
+};
+
+export type ResubmitMedicineReviewInput = {
+  name: string;
+  dose: string;
+  instructions?: string;
+  frequency: MedicineFrequency;
+  customFrequency?: string;
+  timeOfDay: string;
+  startDate: string;
+  endDate?: string;
+};
+
 export type MedicineIdParams = {
   medicineId: string;
 };
 
 export type ReminderIdParams = {
   reminderId: string;
+};
+
+export type MedicineReviewRequestIdParams = {
+  requestId: string;
 };
 
 export type SnoozeMedicineInput = {

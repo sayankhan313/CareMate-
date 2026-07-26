@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +36,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  FileCheck2,
   HeartPulse,
   MessageSquareText,
   Pill,
@@ -43,8 +49,9 @@ import {
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
-import { tokenStorage } from "../../services/tokenStorage";
 import { consultationsApi } from "../../services/consultationsApi";
+import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
+import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
   RootStackParamList,
@@ -55,11 +62,21 @@ type PatientDashboardScreenProps = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-type DashboardStatus = "STABLE" | "WARNING" | "CRITICAL" | "NO_DATA";
+type DashboardStatus =
+  | "STABLE"
+  | "WARNING"
+  | "CRITICAL"
+  | "NO_DATA";
 
-type MedicineStatus = "PENDING" | "TAKEN" | "MISSED" | "SNOOZED";
+type MedicineStatus =
+  | "PENDING"
+  | "TAKEN"
+  | "MISSED"
+  | "SNOOZED";
 
-type DashboardMedicineActionType = "TAKEN" | "SNOOZE";
+type DashboardMedicineActionType =
+  | "TAKEN"
+  | "SNOOZE";
 
 type DashboardMedicine = {
   medicineId: string;
@@ -89,6 +106,7 @@ type DashboardData = {
     firstName: string;
     email: string;
   };
+
   healthStatus: {
     status: DashboardStatus;
     label: string;
@@ -99,16 +117,23 @@ type DashboardData = {
     bpDiastolic: number | null;
     glucose: number | null;
     temperature: number | null;
-    source: "HEALTH_CONNECT" | "SIMULATED" | "MANUAL" | null;
+    source:
+      | "HEALTH_CONNECT"
+      | "SIMULATED"
+      | "MANUAL"
+      | null;
     deviceSource: string | null;
     recordedAt: string | null;
   };
+
   nextMedicineGroup: NextMedicineGroup | null;
+
   latestDoctorNote: {
     id: string;
     note: string;
     createdAt: string;
   } | null;
+
   medicineOrder: {
     id: string;
     status: string;
@@ -127,16 +152,15 @@ type DashboardApiResponse = {
   data: DashboardData;
 };
 
-
 const BACKGROUND = "#F2F3F8";
-const SURFACE = "#FFFFFF"; 
-const SURFACE_VARIANT = "#E7E9F2"; 
-const TEXT = "#1B1D2A"; 
-const MUTED = "#5F6270"; 
+const SURFACE = "#FFFFFF";
+const SURFACE_VARIANT = "#E7E9F2";
+const TEXT = "#1B1D2A";
+const MUTED = "#5F6270";
 const SOFT_PANEL = "#F3F4FA";
 
 const PRIMARY = "#4C6FE0";
-const PRIMARY_CONTAINER = "#E1E7FF"; 
+const PRIMARY_CONTAINER = "#E1E7FF";
 const ON_PRIMARY_CONTAINER = "#0C2A8C";
 
 const SUCCESS = "#3A9D75";
@@ -153,19 +177,23 @@ const ON_DANGER_CONTAINER = "#8C1D24";
 
 const DASHBOARD_AUTO_REFRESH_MS = 30_000;
 
-
-
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") {
     return result.message;
   }
 
   if (Array.isArray(result?.message)) {
-    return result.message[0]?.message || "Unable to load dashboard.";
+    return (
+      result.message[0]?.message ||
+      "Unable to load dashboard."
+    );
   }
 
   if (Array.isArray(result?.errors)) {
-    return result.errors[0]?.message || "Unable to load dashboard.";
+    return (
+      result.errors[0]?.message ||
+      "Unable to load dashboard."
+    );
   }
 
   return "Unable to load dashboard.";
@@ -185,7 +213,9 @@ const getGreetingText = () => {
   return "Good evening";
 };
 
-const getStatusTone = (status: DashboardStatus) => {
+const getStatusTone = (
+  status: DashboardStatus
+) => {
   if (status === "STABLE") {
     return {
       background: SUCCESS_CONTAINER,
@@ -221,7 +251,9 @@ const getStatusTone = (status: DashboardStatus) => {
   };
 };
 
-const formatTime = (value?: string | null) => {
+const formatTime = (
+  value?: string | null
+) => {
   if (!value) {
     return "Not scheduled";
   }
@@ -235,11 +267,16 @@ const formatTime = (value?: string | null) => {
     });
   }
 
-  const [hourText, minuteText] = value.split(":");
+  const [hourText, minuteText] =
+    value.split(":");
+
   const hour = Number(hourText);
   const minute = Number(minuteText);
 
-  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(minute)
+  ) {
     return value;
   }
 
@@ -253,7 +290,9 @@ const formatTime = (value?: string | null) => {
   });
 };
 
-const formatSourceLabel = (source: DashboardData["healthStatus"]["source"]) => {
+const formatSourceLabel = (
+  source: DashboardData["healthStatus"]["source"]
+) => {
   if (source === "HEALTH_CONNECT") {
     return "Health Connect";
   }
@@ -269,7 +308,9 @@ const formatSourceLabel = (source: DashboardData["healthStatus"]["source"]) => {
   return "No source";
 };
 
-const formatRecordedAt = (value?: string | null) => {
+const formatRecordedAt = (
+  value?: string | null
+) => {
   if (!value) {
     return "No recent reading";
   }
@@ -280,13 +321,18 @@ const formatRecordedAt = (value?: string | null) => {
     return "Updated recently";
   }
 
-  return `Updated ${parsedDate.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  return `Updated ${parsedDate.toLocaleTimeString(
+    [],
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  )}`;
 };
 
-const formatDoctorNoteTime = (value?: string | null) => {
+const formatDoctorNoteTime = (
+  value?: string | null
+) => {
   if (!value) {
     return "Recently added";
   }
@@ -297,27 +343,34 @@ const formatDoctorNoteTime = (value?: string | null) => {
     return "Recently added";
   }
 
-  const timeText = parsedDate.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const timeText =
+    parsedDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   const today = new Date();
-  const isToday = parsedDate.toDateString() === today.toDateString();
+
+  const isToday =
+    parsedDate.toDateString() ===
+    today.toDateString();
 
   if (isToday) {
     return `Today · ${timeText}`;
   }
 
-  const dateText = parsedDate.toLocaleDateString([], {
-    day: "2-digit",
-    month: "short",
-  });
+  const dateText =
+    parsedDate.toLocaleDateString([], {
+      day: "2-digit",
+      month: "short",
+    });
 
   return `${dateText} · ${timeText}`;
 };
 
-const formatOrderStatus = (status?: string | null) => {
+const formatOrderStatus = (
+  status?: string | null
+) => {
   if (!status) {
     return "Preparing";
   }
@@ -325,12 +378,22 @@ const formatOrderStatus = (status?: string | null) => {
   return status
     .toLowerCase()
     .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => {
+      return (
+        part.charAt(0).toUpperCase() +
+        part.slice(1)
+      );
+    })
     .join(" ");
 };
 
-const displayMetric = (value?: number | null) => {
-  if (value === null || value === undefined) {
+const displayMetric = (
+  value?: number | null
+) => {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return "--";
   }
 
@@ -343,47 +406,99 @@ export const PatientDashboardScreen = ({
 }: PatientDashboardScreenProps) => {
   const insets = useSafeAreaInsets();
 
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [activeCallCount, setActiveCallCount] = useState(0);
-  const [actionLoadingReminderId, setActionLoadingReminderId] = useState<
-    string | null
-  >(null);
-  const [actionLoadingType, setActionLoadingType] =
-    useState<DashboardMedicineActionType | null>(null);
+  const [dashboard, setDashboard] =
+    useState<DashboardData | null>(null);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [isRefreshing, setIsRefreshing] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [activeCallCount, setActiveCallCount] =
+    useState(0);
+
+  const [
+    medicineUpdatesUnread,
+    setMedicineUpdatesUnread,
+  ] = useState(0);
+
+  const [
+    actionLoadingReminderId,
+    setActionLoadingReminderId,
+  ] = useState<string | null>(null);
+
+  const [
+    actionLoadingType,
+    setActionLoadingType,
+  ] =
+    useState<DashboardMedicineActionType | null>(
+      null
+    );
 
   const resetToLogin = useCallback(async () => {
     await tokenStorage.removeToken();
 
     const rootNavigation =
-      navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+      navigation.getParent<
+        NativeStackNavigationProp<RootStackParamList>
+      >();
 
     rootNavigation?.reset({
       index: 0,
-      routes: [{ name: "Login" }],
+      routes: [
+        {
+          name: "Login",
+        },
+      ],
     });
   }, [navigation]);
 
-  const loadActiveCallCount = useCallback(async () => {
-    try {
-      const result = await consultationsApi.listConsultations();
+  const loadActiveCallCount =
+    useCallback(async () => {
+      try {
+        const result =
+          await consultationsApi.listConsultations();
 
-      const count = result.filter(
-        (consultation) =>
-          consultation.status === "ACCEPTED" ||
-          consultation.status === "IN_PROGRESS"
-      ).length;
+        const count = result.filter(
+          (consultation) => {
+            return (
+              consultation.status === "ACCEPTED" ||
+              consultation.status === "IN_PROGRESS"
+            );
+          }
+        ).length;
 
-      setActiveCallCount(count);
-    } catch (error) {
-      setActiveCallCount(0);
-    }
-  }, []);
+        setActiveCallCount(count);
+      } catch {
+        setActiveCallCount(0);
+      }
+    }, []);
+
+  const loadMedicineUpdatesUnread =
+    useCallback(async () => {
+      try {
+        const result =
+          await patientMedicineReviewsApi.listReviews();
+
+        setMedicineUpdatesUnread(
+          result.summary?.unread || 0
+        );
+      } catch {
+        setMedicineUpdatesUnread(0);
+      }
+    }, []);
 
   const loadDashboard = useCallback(
-    async (mode: "initial" | "refresh" | "silent" = "initial") => {
+    async (
+      mode:
+        | "initial"
+        | "refresh"
+        | "silent" = "initial"
+    ) => {
       try {
         if (mode === "initial") {
           setIsLoading(true);
@@ -397,36 +512,46 @@ export const PatientDashboardScreen = ({
           setErrorMessage("");
         }
 
-        const token = await tokenStorage.getToken();
+        const token =
+          await tokenStorage.getToken();
 
         if (!token) {
           await resetToLogin();
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/patient/dashboard`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${API_BASE_URL}/patient/dashboard`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-        let result: DashboardApiResponse | any = {};
+        let result:
+          | DashboardApiResponse
+          | any = {};
 
         try {
           result = await response.json();
-        } catch (error) {
+        } catch {
           result = {};
         }
 
         if (!response.ok) {
-          throw new Error(getErrorMessage(result));
+          throw new Error(
+            getErrorMessage(result)
+          );
         }
 
         setDashboard(result.data);
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Unable to load dashboard.";
+          error instanceof Error
+            ? error.message
+            : "Unable to load dashboard.";
 
         if (mode !== "silent") {
           setErrorMessage(message);
@@ -444,31 +569,61 @@ export const PatientDashboardScreen = ({
     [resetToLogin]
   );
 
+  const refreshDashboard = useCallback(
+    async () => {
+      await Promise.all([
+        loadDashboard("refresh"),
+        loadActiveCallCount(),
+        loadMedicineUpdatesUnread(),
+      ]);
+    },
+    [
+      loadActiveCallCount,
+      loadDashboard,
+      loadMedicineUpdatesUnread,
+    ]
+  );
+
   useFocusEffect(
     useCallback(() => {
       void loadDashboard("initial");
       void loadActiveCallCount();
+      void loadMedicineUpdatesUnread();
 
       const intervalId = setInterval(() => {
         void loadDashboard("silent");
         void loadActiveCallCount();
+        void loadMedicineUpdatesUnread();
       }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
         clearInterval(intervalId);
       };
-    }, [loadActiveCallCount, loadDashboard])
+    }, [
+      loadActiveCallCount,
+      loadDashboard,
+      loadMedicineUpdatesUnread,
+    ])
   );
 
-  const removeMedicineFromDashboardCard = (reminderId: string) => {
+  const removeMedicineFromDashboardCard = (
+    reminderId: string
+  ) => {
     setDashboard((currentDashboard) => {
-      if (!currentDashboard?.nextMedicineGroup) {
+      if (
+        !currentDashboard?.nextMedicineGroup
+      ) {
         return currentDashboard;
       }
 
       const updatedMedicines =
         currentDashboard.nextMedicineGroup.medicines.filter(
-          (medicine) => medicine.reminderId !== reminderId
+          (medicine) => {
+            return (
+              medicine.reminderId !==
+              reminderId
+            );
+          }
         );
 
       if (updatedMedicines.length === 0) {
@@ -489,165 +644,268 @@ export const PatientDashboardScreen = ({
     });
   };
 
-  const markDashboardMedicineTaken = async (reminderId: string) => {
-    if (actionLoadingReminderId) {
-      return;
-    }
-
-    try {
-      setActionLoadingReminderId(reminderId);
-      setActionLoadingType("TAKEN");
-
-      const token = await tokenStorage.getToken();
-
-      if (!token) {
-        Alert.alert("Session expired", "Please login again.");
+  const markDashboardMedicineTaken =
+    async (reminderId: string) => {
+      if (actionLoadingReminderId) {
         return;
       }
-
-      const response = await fetch(
-        `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      let result: any = {};
 
       try {
-        result = await response.json();
-      } catch (error) {
-        result = {};
-      }
-
-      if (!response.ok) {
-        Alert.alert(
-          "Unable to update medicine",
-          result.message || "Please try again."
+        setActionLoadingReminderId(
+          reminderId
         );
-        return;
-      }
 
-      removeMedicineFromDashboardCard(reminderId);
-      await loadDashboard("silent");
-    } catch (error) {
-      Alert.alert("Network error", "Unable to connect to server.");
-    } finally {
-      setActionLoadingReminderId(null);
-      setActionLoadingType(null);
-    }
-  };
+        setActionLoadingType("TAKEN");
 
-  const snoozeDashboardMedicine = async (reminderId: string) => {
-    if (actionLoadingReminderId) {
-      return;
-    }
+        const token =
+          await tokenStorage.getToken();
 
-    try {
-      setActionLoadingReminderId(reminderId);
-      setActionLoadingType("SNOOZE");
+        if (!token) {
+          Alert.alert(
+            "Session expired",
+            "Please login again."
+          );
 
-      const token = await tokenStorage.getToken();
-
-      if (!token) {
-        Alert.alert("Session expired", "Please login again.");
-        return;
-      }
-
-      const snoozedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-
-      const response = await fetch(
-        `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            snoozedUntil,
-          }),
+          return;
         }
-      );
 
-      let result: any = {};
+        const response = await fetch(
+          `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        let result: any = {};
+
+        try {
+          result = await response.json();
+        } catch {
+          result = {};
+        }
+
+        if (!response.ok) {
+          Alert.alert(
+            "Unable to update medicine",
+            result.message ||
+              "Please try again."
+          );
+
+          return;
+        }
+
+        removeMedicineFromDashboardCard(
+          reminderId
+        );
+
+        await loadDashboard("silent");
+      } catch {
+        Alert.alert(
+          "Network error",
+          "Unable to connect to server."
+        );
+      } finally {
+        setActionLoadingReminderId(null);
+        setActionLoadingType(null);
+      }
+    };
+
+  const snoozeDashboardMedicine =
+    async (reminderId: string) => {
+      if (actionLoadingReminderId) {
+        return;
+      }
 
       try {
-        result = await response.json();
-      } catch (error) {
-        result = {};
-      }
-
-      if (!response.ok) {
-        Alert.alert(
-          "Unable to snooze medicine",
-          result.message || "Please try again."
+        setActionLoadingReminderId(
+          reminderId
         );
-        return;
-      }
 
-      removeMedicineFromDashboardCard(reminderId);
-      await loadDashboard("silent");
-    } catch (error) {
-      Alert.alert("Network error", "Unable to connect to server.");
-    } finally {
-      setActionLoadingReminderId(null);
-      setActionLoadingType(null);
-    }
-  };
+        setActionLoadingType("SNOOZE");
+
+        const token =
+          await tokenStorage.getToken();
+
+        if (!token) {
+          Alert.alert(
+            "Session expired",
+            "Please login again."
+          );
+
+          return;
+        }
+
+        const snoozedUntil = new Date(
+          Date.now() + 30 * 60 * 1000
+        ).toISOString();
+
+        const response = await fetch(
+          `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              snoozedUntil,
+            }),
+          }
+        );
+
+        let result: any = {};
+
+        try {
+          result = await response.json();
+        } catch {
+          result = {};
+        }
+
+        if (!response.ok) {
+          Alert.alert(
+            "Unable to snooze medicine",
+            result.message ||
+              "Please try again."
+          );
+
+          return;
+        }
+
+        removeMedicineFromDashboardCard(
+          reminderId
+        );
+
+        await loadDashboard("silent");
+      } catch {
+        Alert.alert(
+          "Network error",
+          "Unable to connect to server."
+        );
+      } finally {
+        setActionLoadingReminderId(null);
+        setActionLoadingType(null);
+      }
+    };
 
   const getRootNavigation = () => {
-    return navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+    return navigation.getParent<
+      NativeStackNavigationProp<RootStackParamList>
+    >();
   };
 
   const openAddMedicineScreen = () => {
-    const rootNavigation = getRootNavigation();
-
-    rootNavigation?.navigate("AddMedicine");
-  };
-
-  const openPatientProfileScreen = () => {
-    const rootNavigation = getRootNavigation();
+    const rootNavigation =
+      getRootNavigation();
 
     if (!rootNavigation) {
-      Alert.alert("Unable to open", "Profile screen is not available right now.");
+      Alert.alert(
+        "Unable to open",
+        "Add Medicine screen is not available right now."
+      );
+
       return;
     }
 
-    rootNavigation.navigate("PatientProfile", {
-      user: dashboard?.patient || route.params?.user,
-    });
+    rootNavigation.navigate("AddMedicine");
+  };
+
+  const openPatientProfileScreen = () => {
+    const rootNavigation =
+      getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Profile screen is not available right now."
+      );
+
+      return;
+    }
+
+    rootNavigation.navigate(
+      "PatientProfile",
+      {
+        user:
+          dashboard?.patient ||
+          route.params?.user,
+      }
+    );
   };
 
   const openScanMedicineScreen = () => {
-    const rootNavigation = getRootNavigation();
+    const rootNavigation =
+      getRootNavigation();
 
     if (!rootNavigation) {
       Alert.alert(
         "Unable to open",
         "Medicine scanner is not available right now."
       );
+
       return;
     }
 
-    rootNavigation.navigate("ScanMedicine");
+    rootNavigation.navigate(
+      "ScanMedicine"
+    );
   };
 
   const openEmergencyResponseScreen = () => {
-    const rootNavigation = getRootNavigation();
+    const rootNavigation =
+      getRootNavigation();
 
     if (!rootNavigation) {
       Alert.alert(
         "Unable to open",
         "Safety Response screen is not available right now."
       );
+
       return;
     }
 
-    rootNavigation.navigate("ManualSafetyResponse");
+    rootNavigation.navigate(
+      "ManualSafetyResponse"
+    );
+  };
+
+  const openActiveCallsScreen = () => {
+    const rootNavigation =
+      getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Active Calls screen is not available right now."
+      );
+
+      return;
+    }
+
+    rootNavigation.navigate(
+      "PatientActiveCalls"
+    );
+  };
+
+  const openMedicineUpdatesScreen = () => {
+    const rootNavigation =
+      getRootNavigation();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open",
+        "Medicine Updates screen is not available right now."
+      );
+
+      return;
+    }
+
+    rootNavigation.navigate(
+      "MedicineUpdates"
+    );
   };
 
   const openMedicinesScreen = () => {
@@ -658,94 +916,178 @@ export const PatientDashboardScreen = ({
     navigation.navigate("Vitals");
   };
 
-  const openActiveCallsScreen = () => {
-    const rootNavigation = getRootNavigation();
-
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Active Calls screen is not available right now."
-      );
-      return;
-    }
-
-    rootNavigation.navigate("PatientActiveCalls");
-  };
-
   const openOrdersScreen = () => {
-    navigation.navigate("PatientOrders");
+    navigation.navigate(
+      "PatientOrders"
+    );
   };
 
-  const showComingSoon = (featureName: string) => {
+  const showComingSoon = (
+    featureName: string
+  ) => {
     Alert.alert(
       "Coming soon",
       `${featureName} will be connected in the next patient module step.`
     );
   };
 
-  const fallbackName = route.params?.user?.fullName?.split(" ")[0] || "Patient";
-  const patientFirstName = dashboard?.patient.firstName || fallbackName;
-  const patientInitial = patientFirstName.charAt(0).toUpperCase();
+  const fallbackName =
+    route.params?.user?.fullName?.split(
+      " "
+    )[0] || "Patient";
 
-  const healthStatus = dashboard?.healthStatus;
-  const status = healthStatus?.status || "NO_DATA";
-  const statusTone = getStatusTone(status);
+  const patientFirstName =
+    dashboard?.patient.firstName ||
+    fallbackName;
 
-  const nextMedicineGroup = dashboard?.nextMedicineGroup || null;
-  const firstMedicine = nextMedicineGroup?.medicines[0];
+  const patientInitial =
+    patientFirstName
+      .charAt(0)
+      .toUpperCase();
+
+  const healthStatus =
+    dashboard?.healthStatus;
+
+  const status =
+    healthStatus?.status ||
+    "NO_DATA";
+
+  const statusTone =
+    getStatusTone(status);
+
+  const nextMedicineGroup =
+    dashboard?.nextMedicineGroup ||
+    null;
+
+  const firstMedicine =
+    nextMedicineGroup?.medicines[0];
 
   const isNextMedicineActionLoading =
-    firstMedicine?.reminderId === actionLoadingReminderId;
+    firstMedicine?.reminderId ===
+    actionLoadingReminderId;
 
   const isTakingNextMedicine =
-    isNextMedicineActionLoading && actionLoadingType === "TAKEN";
+    isNextMedicineActionLoading &&
+    actionLoadingType === "TAKEN";
 
   const isSnoozingNextMedicine =
-    isNextMedicineActionLoading && actionLoadingType === "SNOOZE";
+    isNextMedicineActionLoading &&
+    actionLoadingType === "SNOOZE";
 
-  const isMedicineActionDisabled = Boolean(actionLoadingReminderId);
+  const isMedicineActionDisabled =
+    Boolean(actionLoadingReminderId);
 
   const healthMeta = useMemo(() => {
-    return `${formatSourceLabel(healthStatus?.source || null)} · ${formatRecordedAt(
+    return `${formatSourceLabel(
+      healthStatus?.source || null
+    )} · ${formatRecordedAt(
       healthStatus?.recordedAt
     )}`;
-  }, [healthStatus?.recordedAt, healthStatus?.source]);
+  }, [
+    healthStatus?.recordedAt,
+    healthStatus?.source,
+  ]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top"]}
+    >
+      <StatusBar
+        backgroundColor={BACKGROUND}
+        barStyle="dark-content"
+      />
 
       <View style={styles.screen}>
         <View style={styles.topBar}>
-          <View style={styles.greetingBlock}>
-            <Text style={styles.helloText}>Hello {patientFirstName} 👋</Text>
-            <Text style={styles.subHelloText}>{getGreetingText()}</Text>
+          <View
+            style={
+              styles.greetingBlock
+            }
+          >
+            <Text
+              style={styles.helloText}
+            >
+              Hello {patientFirstName} 👋
+            </Text>
+
+            <Text
+              style={
+                styles.subHelloText
+              }
+            >
+              {getGreetingText()}
+            </Text>
           </View>
 
-          <View style={styles.topActions}>
+          <View
+            style={
+              styles.topActions
+            }
+          >
             <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => showComingSoon("Search")}
+              style={
+                styles.iconButton
+              }
+              activeOpacity={0.84}
+              onPress={() =>
+                showComingSoon(
+                  "Search"
+                )
+              }
             >
-              <Search size={22} color={TEXT} strokeWidth={2} />
+              <Search
+                size={22}
+                color={TEXT}
+                strokeWidth={2}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => showComingSoon("Notifications")}
+              style={
+                styles.iconButton
+              }
+              activeOpacity={0.84}
+              onPress={() =>
+                showComingSoon(
+                  "Notifications"
+                )
+              }
             >
-              <Bell size={22} color={TEXT} strokeWidth={2} />
-              <View style={styles.notificationDot} />
+              <Bell
+                size={22}
+                color={TEXT}
+                strokeWidth={2}
+              />
+
+              <View
+                style={
+                  styles.notificationDot
+                }
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.avatar}
-              onPress={openPatientProfileScreen}
+              activeOpacity={0.84}
+              onPress={
+                openPatientProfileScreen
+              }
             >
               {patientInitial ? (
-                <Text style={styles.avatarText}>{patientInitial}</Text>
+                <Text
+                  style={
+                    styles.avatarText
+                  }
+                >
+                  {patientInitial}
+                </Text>
               ) : (
-                <UserRound size={19} color={SURFACE} />
+                <UserRound
+                  size={19}
+                  color={SURFACE}
+                  strokeWidth={2.2}
+                />
               )}
             </TouchableOpacity>
           </View>
@@ -756,64 +1098,143 @@ export const PatientDashboardScreen = ({
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(34, insets.bottom + 112),
+              paddingBottom:
+                Math.max(
+                  34,
+                  insets.bottom +
+                    112
+                ),
             },
           ]}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={
+            false
+          }
           refreshControl={
             <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => {
-                void loadDashboard("refresh");
-                void loadActiveCallCount();
-              }}
+              refreshing={
+                isRefreshing
+              }
+              onRefresh={() =>
+                void refreshDashboard()
+              }
               tintColor={PRIMARY}
               colors={[PRIMARY]}
             />
           }
         >
           {isLoading ? (
-            <View style={styles.statePanel}>
-              <ActivityIndicator color={PRIMARY} />
-              <Text style={styles.stateTitle}>Loading your plan...</Text>
-              <Text style={styles.stateText}>
+            <View
+              style={
+                styles.statePanel
+              }
+            >
+              <ActivityIndicator
+                color={PRIMARY}
+              />
+
+              <Text
+                style={
+                  styles.stateTitle
+                }
+              >
+                Loading your plan...
+              </Text>
+
+              <Text
+                style={
+                  styles.stateText
+                }
+              >
                 Getting your medicines, vitals and care updates.
               </Text>
             </View>
           ) : null}
 
-          {!isLoading && errorMessage ? (
-            <View style={styles.statePanel}>
-              <View style={styles.errorIconCircle}>
-                <AlertCircle size={24} color={DANGER} strokeWidth={2} />
+          {!isLoading &&
+          errorMessage ? (
+            <View
+              style={
+                styles.statePanel
+              }
+            >
+              <View
+                style={
+                  styles.errorIconCircle
+                }
+              >
+                <AlertCircle
+                  size={24}
+                  color={DANGER}
+                  strokeWidth={2}
+                />
               </View>
 
-              <Text style={styles.errorTitle}>Dashboard unavailable</Text>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <Text
+                style={
+                  styles.errorTitle
+                }
+              >
+                Dashboard unavailable
+              </Text>
+
+              <Text
+                style={
+                  styles.errorText
+                }
+              >
+                {errorMessage}
+              </Text>
 
               <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => loadDashboard("initial")}
+                style={
+                  styles.retryButton
+                }
+                activeOpacity={0.84}
+                onPress={() =>
+                  void refreshDashboard()
+                }
               >
-                <RefreshCw size={17} color={SURFACE} strokeWidth={2.2} />
-                <Text style={styles.retryButtonText}>Try again</Text>
+                <RefreshCw
+                  size={17}
+                  color={SURFACE}
+                  strokeWidth={2.2}
+                />
+
+                <Text
+                  style={
+                    styles.retryButtonText
+                  }
+                >
+                  Try again
+                </Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
-          {!isLoading && !errorMessage ? (
+          {!isLoading &&
+          !errorMessage ? (
             <>
               <TouchableOpacity
-                style={styles.healthCard}
-                onPress={openVitalsScreen}
+                style={
+                  styles.healthCard
+                }
+                activeOpacity={0.9}
+                onPress={
+                  openVitalsScreen
+                }
               >
-                <View style={styles.healthCardTop}>
+                <View
+                  style={
+                    styles.healthCardTop
+                  }
+                >
                   <View>
                     <View
                       style={[
                         styles.statusBadge,
                         {
-                          backgroundColor: statusTone.background,
+                          backgroundColor:
+                            statusTone.background,
                         },
                       ]}
                     >
@@ -821,7 +1242,8 @@ export const PatientDashboardScreen = ({
                         style={[
                           styles.statusDot,
                           {
-                            backgroundColor: statusTone.dot,
+                            backgroundColor:
+                              statusTone.dot,
                           },
                         ]}
                       />
@@ -830,43 +1252,85 @@ export const PatientDashboardScreen = ({
                         style={[
                           styles.statusBadgeText,
                           {
-                            color: statusTone.text,
+                            color:
+                              statusTone.text,
                           },
                         ]}
                       >
-                        {healthStatus?.label || "No Data"}
+                        {healthStatus?.label ||
+                          "No Data"}
                       </Text>
                     </View>
 
-                    <Text style={styles.healthCardTitle}>{statusTone.label}</Text>
-                    <Text style={styles.healthCardMeta}>{healthMeta}</Text>
+                    <Text
+                      style={
+                        styles.healthCardTitle
+                      }
+                    >
+                      {statusTone.label}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.healthCardMeta
+                      }
+                    >
+                      {healthMeta}
+                    </Text>
                   </View>
 
-                  <View style={styles.healthIconBox}>
-                    <HeartPulse size={28} color={PRIMARY} strokeWidth={2.2} />
+                  <View
+                    style={
+                      styles.healthIconBox
+                    }
+                  >
+                    <HeartPulse
+                      size={28}
+                      color={PRIMARY}
+                      strokeWidth={2.2}
+                    />
                   </View>
                 </View>
 
-                <View style={styles.healthStatsRow}>
+                <View
+                  style={
+                    styles.healthStatsRow
+                  }
+                >
                   <HealthStat
                     label="Heart"
-                    value={displayMetric(healthStatus?.heartRate)}
+                    value={displayMetric(
+                      healthStatus?.heartRate
+                    )}
                     unit="bpm"
                   />
 
-                  <View style={styles.healthStatDivider} />
+                  <View
+                    style={
+                      styles.healthStatDivider
+                    }
+                  />
 
                   <HealthStat
                     label="SpO₂"
-                    value={displayMetric(healthStatus?.spo2)}
+                    value={displayMetric(
+                      healthStatus?.spo2
+                    )}
                     unit="%"
                   />
 
-                  <View style={styles.healthStatDivider} />
+                  <View
+                    style={
+                      styles.healthStatDivider
+                    }
+                  />
 
                   <HealthStat
                     label="BP"
-                    value={healthStatus?.bloodPressure || "--/--"}
+                    value={
+                      healthStatus?.bloodPressure ||
+                      "--/--"
+                    }
                     unit="mmHg"
                   />
                 </View>
@@ -874,25 +1338,78 @@ export const PatientDashboardScreen = ({
 
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryContent}
+                showsHorizontalScrollIndicator={
+                  false
+                }
+                contentContainerStyle={
+                  styles.categoryContent
+                }
               >
                 <CategoryShortcut
                   label="Scan"
-                  icon={<Camera size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
-                  onPress={openScanMedicineScreen}
+                  icon={
+                    <Camera
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  onPress={
+                    openScanMedicineScreen
+                  }
                 />
 
                 <CategoryShortcut
                   label="Add Med"
-                  icon={<Plus size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
-                  onPress={openAddMedicineScreen}
+                  icon={
+                    <Plus
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  onPress={
+                    openAddMedicineScreen
+                  }
                 />
 
                 <CategoryShortcut
                   label="Vitals"
-                  icon={<HeartPulse size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />}
-                  onPress={openVitalsScreen}
+                  icon={
+                    <HeartPulse
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  onPress={
+                    openVitalsScreen
+                  }
+                />
+
+                <CategoryShortcut
+                  label="Updates"
+                  icon={
+                    <FileCheck2
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  badgeCount={
+                    medicineUpdatesUnread
+                  }
+                  onPress={
+                    openMedicineUpdatesScreen
+                  }
                 />
 
                 <CategoryShortcut
@@ -900,55 +1417,132 @@ export const PatientDashboardScreen = ({
                   icon={
                     <Video
                       size={23}
-                      color={ON_PRIMARY_CONTAINER}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
                       strokeWidth={2}
                     />
                   }
-                  badgeCount={activeCallCount}
-                  onPress={openActiveCallsScreen}
+                  badgeCount={
+                    activeCallCount
+                  }
+                  onPress={
+                    openActiveCallsScreen
+                  }
                 />
 
                 <CategoryShortcut
                   label="Safety"
                   icon={
-                    <ShieldAlert size={23} color={ON_PRIMARY_CONTAINER} strokeWidth={2} />
+                    <ShieldAlert
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
                   }
-                  onPress={openEmergencyResponseScreen}
+                  onPress={
+                    openEmergencyResponseScreen
+                  }
                 />
               </ScrollView>
 
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>My plan</Text>
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Text
+                  style={
+                    styles.sectionTitle
+                  }
+                >
+                  My plan
+                </Text>
 
                 <TouchableOpacity
+                  activeOpacity={0.84}
                   hitSlop={8}
-                  onPress={openMedicinesScreen}
+                  onPress={
+                    openMedicinesScreen
+                  }
                 >
-                  <Text style={styles.sectionAction}>View meds</Text>
+                  <Text
+                    style={
+                      styles.sectionAction
+                    }
+                  >
+                    View meds
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.whitePanel}>
+              <View
+                style={
+                  styles.whitePanel
+                }
+              >
                 <MedicinePlanBlock
-                  nextMedicineGroup={nextMedicineGroup}
-                  firstMedicine={firstMedicine}
-                  isTakingNextMedicine={isTakingNextMedicine}
-                  isSnoozingNextMedicine={isSnoozingNextMedicine}
-                  isMedicineActionDisabled={isMedicineActionDisabled}
-                  onAddMedicine={openAddMedicineScreen}
-                  onOpenMedicines={openMedicinesScreen}
-                  onMarkTaken={markDashboardMedicineTaken}
-                  onSnooze={snoozeDashboardMedicine}
+                  nextMedicineGroup={
+                    nextMedicineGroup
+                  }
+                  firstMedicine={
+                    firstMedicine
+                  }
+                  isTakingNextMedicine={
+                    isTakingNextMedicine
+                  }
+                  isSnoozingNextMedicine={
+                    isSnoozingNextMedicine
+                  }
+                  isMedicineActionDisabled={
+                    isMedicineActionDisabled
+                  }
+                  onAddMedicine={
+                    openAddMedicineScreen
+                  }
+                  onOpenMedicines={
+                    openMedicinesScreen
+                  }
+                  onMarkTaken={
+                    markDashboardMedicineTaken
+                  }
+                  onSnooze={
+                    snoozeDashboardMedicine
+                  }
                 />
               </View>
 
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Latest doctor note</Text>
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Text
+                  style={
+                    styles.sectionTitle
+                  }
+                >
+                  Latest doctor note
+                </Text>
               </View>
 
-              <View style={styles.doctorNotePanel}>
-                <View style={styles.doctorNoteHeader}>
-                  <View style={styles.doctorNoteIconBox}>
+              <View
+                style={
+                  styles.doctorNotePanel
+                }
+              >
+                <View
+                  style={
+                    styles.doctorNoteHeader
+                  }
+                >
+                  <View
+                    style={
+                      styles.doctorNoteIconBox
+                    }
+                  >
                     <MessageSquareText
                       size={21}
                       color={PRIMARY}
@@ -956,17 +1550,31 @@ export const PatientDashboardScreen = ({
                     />
                   </View>
 
-                  <View style={styles.doctorNoteHeaderText}>
-                    <Text style={styles.doctorNoteTitle}>
+                  <View
+                    style={
+                      styles.doctorNoteHeaderText
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.doctorNoteTitle
+                      }
+                    >
                       {dashboard?.latestDoctorNote
                         ? "Note from your doctor"
                         : "No doctor note yet"}
                     </Text>
 
-                    <Text style={styles.doctorNoteDate}>
+                    <Text
+                      style={
+                        styles.doctorNoteDate
+                      }
+                    >
                       {dashboard?.latestDoctorNote
                         ? formatDoctorNoteTime(
-                            dashboard.latestDoctorNote.createdAt
+                            dashboard
+                              .latestDoctorNote
+                              .createdAt
                           )
                         : "A new note will automatically appear here after your doctor creates it."}
                     </Text>
@@ -974,31 +1582,57 @@ export const PatientDashboardScreen = ({
                 </View>
 
                 {dashboard?.latestDoctorNote ? (
-                  <Text style={styles.doctorNoteBody}>
-                    {dashboard.latestDoctorNote.note}
+                  <Text
+                    style={
+                      styles.doctorNoteBody
+                    }
+                  >
+                    {
+                      dashboard
+                        .latestDoctorNote
+                        .note
+                    }
                   </Text>
                 ) : null}
               </View>
 
               <MedicineOrderMiniBar
-                order={dashboard?.medicineOrder || null}
-                onPress={openOrdersScreen}
+                order={
+                  dashboard?.medicineOrder ||
+                  null
+                }
+                onPress={
+                  openOrdersScreen
+                }
               />
             </>
           ) : null}
         </ScrollView>
 
-        {!isLoading && !errorMessage ? (
+        {!isLoading &&
+        !errorMessage ? (
           <TouchableOpacity
             style={[
               styles.fab,
               {
-                bottom: Math.max(24, insets.bottom + 20),
+                bottom:
+                  Math.max(
+                    24,
+                    insets.bottom +
+                      20
+                  ),
               },
             ]}
-            onPress={openAddMedicineScreen}
+            activeOpacity={0.86}
+            onPress={
+              openAddMedicineScreen
+            }
           >
-            <Plus size={24} color={SURFACE} strokeWidth={2.4} />
+            <Plus
+              size={24}
+              color={SURFACE}
+              strokeWidth={2.4}
+            />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -1023,19 +1657,39 @@ const CategoryShortcut = ({
       activeOpacity={0.84}
       onPress={onPress}
     >
-      <View style={styles.categoryIconCircle}>
+      <View
+        style={
+          styles.categoryIconCircle
+        }
+      >
         {icon}
 
-        {badgeCount !== undefined && badgeCount > 0 ? (
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>
-              {badgeCount > 99 ? "99+" : badgeCount}
+        {badgeCount !== undefined &&
+        badgeCount > 0 ? (
+          <View
+            style={
+              styles.categoryBadge
+            }
+          >
+            <Text
+              style={
+                styles.categoryBadgeText
+              }
+            >
+              {badgeCount > 99
+                ? "99+"
+                : badgeCount}
             </Text>
           </View>
         ) : null}
       </View>
 
-      <Text style={styles.categoryLabel}>{label}</Text>
+      <Text
+        style={styles.categoryLabel}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -1050,11 +1704,37 @@ const HealthStat = ({
   unit: string;
 }) => {
   return (
-    <View style={styles.healthStat}>
-      <Text style={styles.healthStatLabel}>{label}</Text>
-      <View style={styles.healthStatValueRow}>
-        <Text style={styles.healthStatValue}>{value}</Text>
-        <Text style={styles.healthStatUnit}>{unit}</Text>
+    <View
+      style={styles.healthStat}
+    >
+      <Text
+        style={
+          styles.healthStatLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <View
+        style={
+          styles.healthStatValueRow
+        }
+      >
+        <Text
+          style={
+            styles.healthStatValue
+          }
+        >
+          {value}
+        </Text>
+
+        <Text
+          style={
+            styles.healthStatUnit
+          }
+        >
+          {unit}
+        </Text>
       </View>
     </View>
   );
@@ -1067,43 +1747,79 @@ const MedicineOrderMiniBar = ({
   order: DashboardData["medicineOrder"];
   onPress: () => void;
 }) => {
-  const steps = order?.steps || {
-    received: true,
-    preparing: true,
-    ready: false,
-  };
+  if (!order) {
+    return null;
+  }
 
-  const statusText = formatOrderStatus(order?.status || "PREPARING");
+  const steps = order.steps;
+
+  const statusText =
+    formatOrderStatus(
+      order.status
+    );
 
   return (
     <TouchableOpacity
-      style={styles.orderMiniCard}
+      style={
+        styles.orderMiniCard
+      }
+      activeOpacity={0.88}
       onPress={onPress}
     >
-      <View style={styles.orderMiniHeader}>
-        <Text style={styles.orderMiniTitle}>Medicine Order</Text>
+      <View
+        style={
+          styles.orderMiniHeader
+        }
+      >
+        <Text
+          style={
+            styles.orderMiniTitle
+          }
+        >
+          Medicine Order
+        </Text>
 
-        <View style={styles.orderStatusPill}>
-          <Text style={styles.orderStatusText}>{statusText}</Text>
+        <View
+          style={
+            styles.orderStatusPill
+          }
+        >
+          <Text
+            style={
+              styles.orderStatusText
+            }
+          >
+            {statusText}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.orderStepRow}>
+      <View
+        style={
+          styles.orderStepRow
+        }
+      >
         <OrderMiniStep
           label="Received"
-          active={Boolean(steps.received)}
+          active={Boolean(
+            steps.received
+          )}
           tone="success"
         />
 
         <OrderMiniStep
           label="Preparing"
-          active={Boolean(steps.preparing)}
+          active={Boolean(
+            steps.preparing
+          )}
           tone="warning"
         />
 
         <OrderMiniStep
           label="Ready"
-          active={Boolean(steps.ready)}
+          active={Boolean(
+            steps.ready
+          )}
           tone="success"
           isLast
         />
@@ -1120,30 +1836,56 @@ const OrderMiniStep = ({
 }: {
   label: string;
   active: boolean;
-  tone: "success" | "warning";
+  tone:
+    | "success"
+    | "warning";
   isLast?: boolean;
 }) => {
-  const activeColor = tone === "success" ? SUCCESS : WARNING;
-  const activeLineColor = tone === "success" ? "#B7E4D0" : "#F3CD97";
+  const activeColor =
+    tone === "success"
+      ? SUCCESS
+      : WARNING;
+
+  const activeLineColor =
+    tone === "success"
+      ? "#B7E4D0"
+      : "#F3CD97";
 
   return (
-    <View style={styles.orderStep}>
-      <View style={styles.orderStepTop}>
+    <View
+      style={styles.orderStep}
+    >
+      <View
+        style={
+          styles.orderStepTop
+        }
+      >
         <View
           style={[
             styles.orderStepCircle,
             active
               ? {
-                  backgroundColor: activeColor,
-                  borderColor: activeColor,
+                  backgroundColor:
+                    activeColor,
+                  borderColor:
+                    activeColor,
                 }
               : undefined,
           ]}
         >
-          {active && tone === "success" ? (
-            <CheckCircle2 size={11} color={SURFACE} strokeWidth={2.6} />
+          {active &&
+          tone === "success" ? (
+            <CheckCircle2
+              size={11}
+              color={SURFACE}
+              strokeWidth={2.6}
+            />
           ) : active ? (
-            <View style={styles.orderStepInnerDot} />
+            <View
+              style={
+                styles.orderStepInnerDot
+              }
+            />
           ) : null}
         </View>
 
@@ -1153,7 +1895,8 @@ const OrderMiniStep = ({
               styles.orderStepLine,
               active
                 ? {
-                    backgroundColor: activeLineColor,
+                    backgroundColor:
+                      activeLineColor,
                   }
                 : undefined,
             ]}
@@ -1166,7 +1909,10 @@ const OrderMiniStep = ({
           styles.orderStepLabel,
           active
             ? {
-                color: tone === "success" ? ON_SUCCESS_CONTAINER : ON_WARNING_CONTAINER,
+                color:
+                  tone === "success"
+                    ? ON_SUCCESS_CONTAINER
+                    : ON_WARNING_CONTAINER,
               }
             : undefined,
         ]}
@@ -1196,56 +1942,132 @@ const MedicinePlanBlock = ({
   isMedicineActionDisabled: boolean;
   onAddMedicine: () => void;
   onOpenMedicines: () => void;
-  onMarkTaken: (reminderId: string) => void;
-  onSnooze: (reminderId: string) => void;
+  onMarkTaken: (
+    reminderId: string
+  ) => void;
+  onSnooze: (
+    reminderId: string
+  ) => void;
 }) => {
-  if (!nextMedicineGroup || !firstMedicine) {
+  if (
+    !nextMedicineGroup ||
+    !firstMedicine
+  ) {
     return (
-      <View style={styles.emptyMedicineRow}>
-        <View style={[styles.rowIconBox, { backgroundColor: SUCCESS_CONTAINER }]}>
-          <Pill size={21} color={SUCCESS} strokeWidth={2.2} />
+      <View
+        style={
+          styles.emptyMedicineRow
+        }
+      >
+        <View
+          style={[
+            styles.rowIconBox,
+            {
+              backgroundColor:
+                SUCCESS_CONTAINER,
+            },
+          ]}
+        >
+          <Pill
+            size={21}
+            color={SUCCESS}
+            strokeWidth={2.2}
+          />
         </View>
 
-        <View style={styles.rowTextBlock}>
-          <Text style={styles.rowTitle}>No upcoming dose</Text>
-          <Text style={styles.rowSubtitle}>
+        <View
+          style={
+            styles.rowTextBlock
+          }
+        >
+          <Text
+            style={styles.rowTitle}
+          >
+            No upcoming dose
+          </Text>
+
+          <Text
+            style={
+              styles.rowSubtitle
+            }
+          >
             Add a medicine reminder to build your daily plan.
           </Text>
         </View>
 
         <TouchableOpacity
-          style={styles.smallPrimaryButton}
+          style={
+            styles.smallPrimaryButton
+          }
+          activeOpacity={0.84}
           onPress={onAddMedicine}
         >
-          <Text style={styles.smallPrimaryButtonText}>Add</Text>
+          <Text
+            style={
+              styles.smallPrimaryButtonText
+            }
+          >
+            Add
+          </Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const hasMultipleMedicines = nextMedicineGroup.count > 1;
+  const hasMultipleMedicines =
+    nextMedicineGroup.count > 1;
 
   return (
     <View>
       <TouchableOpacity
-        style={styles.medicineTopRow}
+        style={
+          styles.medicineTopRow
+        }
+        activeOpacity={0.84}
         onPress={onOpenMedicines}
       >
-        <View style={styles.timeBox}>
-          <Text style={styles.timeBoxText}>
-            {formatTime(nextMedicineGroup.scheduledFor)}
+        <View
+          style={styles.timeBox}
+        >
+          <Text
+            style={
+              styles.timeBoxText
+            }
+          >
+            {formatTime(
+              nextMedicineGroup.scheduledFor
+            )}
           </Text>
-          <Text style={styles.timeBoxLabel}>Due</Text>
+
+          <Text
+            style={
+              styles.timeBoxLabel
+            }
+          >
+            Due
+          </Text>
         </View>
 
-        <View style={styles.rowTextBlock}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
+        <View
+          style={
+            styles.rowTextBlock
+          }
+        >
+          <Text
+            style={styles.rowTitle}
+            numberOfLines={1}
+          >
             {hasMultipleMedicines
               ? `${nextMedicineGroup.count} medicines due`
               : firstMedicine.name}
           </Text>
 
-          <Text style={styles.rowSubtitle} numberOfLines={2}>
+          <Text
+            style={
+              styles.rowSubtitle
+            }
+            numberOfLines={2}
+          >
             {hasMultipleMedicines
               ? "Open schedule to manage all medicines at this time."
               : `${firstMedicine.dose}${
@@ -1257,55 +2079,141 @@ const MedicinePlanBlock = ({
         </View>
 
         {hasMultipleMedicines ? (
-          <ChevronRight size={20} color={MUTED} strokeWidth={2.2} />
+          <ChevronRight
+            size={20}
+            color={MUTED}
+            strokeWidth={2.2}
+          />
         ) : null}
       </TouchableOpacity>
 
       {hasMultipleMedicines ? (
-        <View style={styles.previewList}>
-          {nextMedicineGroup.medicines.slice(0, 3).map((medicine) => (
-            <View
-              key={`${medicine.medicineId}-${medicine.reminderId}`}
-              style={styles.previewRow}
-            >
-              <View style={styles.previewDot} />
-              <Text style={styles.previewName} numberOfLines={1}>
-                {medicine.name}
-              </Text>
-              <Text style={styles.previewDose} numberOfLines={1}>
-                {medicine.dose}
-              </Text>
-            </View>
-          ))}
+        <View
+          style={
+            styles.previewList
+          }
+        >
+          {nextMedicineGroup.medicines
+            .slice(0, 3)
+            .map((medicine) => (
+              <View
+                key={`${medicine.medicineId}-${medicine.reminderId}`}
+                style={
+                  styles.previewRow
+                }
+              >
+                <View
+                  style={
+                    styles.previewDot
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.previewName
+                  }
+                  numberOfLines={1}
+                >
+                  {medicine.name}
+                </Text>
+
+                <Text
+                  style={
+                    styles.previewDose
+                  }
+                  numberOfLines={1}
+                >
+                  {medicine.dose}
+                </Text>
+              </View>
+            ))}
         </View>
       ) : (
-        <View style={styles.medicineActions}>
+        <View
+          style={
+            styles.medicineActions
+          }
+        >
           <TouchableOpacity
             style={[
               styles.takenButton,
-              isTakingNextMedicine ? styles.disabledButton : undefined,
+              isTakingNextMedicine
+                ? styles.disabledButton
+                : undefined,
             ]}
-            disabled={isMedicineActionDisabled}
-            onPress={() => onMarkTaken(firstMedicine.reminderId)}
+            activeOpacity={0.84}
+            disabled={
+              isMedicineActionDisabled
+            }
+            onPress={() =>
+              onMarkTaken(
+                firstMedicine.reminderId
+              )
+            }
           >
-            <CheckCircle2 size={17} color={SURFACE} strokeWidth={2.2} />
-            <Text style={styles.takenButtonText}>
-              {isTakingNextMedicine ? "Saving..." : "Taken"}
-            </Text>
+            {isTakingNextMedicine ? (
+              <ActivityIndicator
+                size="small"
+                color={SURFACE}
+              />
+            ) : (
+              <>
+                <CheckCircle2
+                  size={17}
+                  color={SURFACE}
+                  strokeWidth={2.2}
+                />
+
+                <Text
+                  style={
+                    styles.takenButtonText
+                  }
+                >
+                  Taken
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.snoozeButton,
-              isSnoozingNextMedicine ? styles.disabledButton : undefined,
+              isSnoozingNextMedicine
+                ? styles.disabledButton
+                : undefined,
             ]}
-            disabled={isMedicineActionDisabled}
-            onPress={() => onSnooze(firstMedicine.reminderId)}
+            activeOpacity={0.84}
+            disabled={
+              isMedicineActionDisabled
+            }
+            onPress={() =>
+              onSnooze(
+                firstMedicine.reminderId
+              )
+            }
           >
-            <Clock3 size={17} color={PRIMARY} strokeWidth={2.2} />
-            <Text style={styles.snoozeButtonText}>
-              {isSnoozingNextMedicine ? "Snoozing..." : "Snooze"}
-            </Text>
+            {isSnoozingNextMedicine ? (
+              <ActivityIndicator
+                size="small"
+                color={PRIMARY}
+              />
+            ) : (
+              <>
+                <Clock3
+                  size={17}
+                  color={PRIMARY}
+                  strokeWidth={2.2}
+                />
+
+                <Text
+                  style={
+                    styles.snoozeButtonText
+                  }
+                >
+                  Snooze
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -1313,13 +2221,21 @@ const MedicinePlanBlock = ({
   );
 };
 
-
-const elevate = (level: number) => ({
+const elevate = (
+  level: number
+) => ({
   elevation: level,
-  shadowColor: "#1B1D2A",
-  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
-  shadowRadius: level * 1.6,
-  shadowOffset: { width: 0, height: level * 0.8 },
+  shadowColor: TEXT,
+  shadowOpacity:
+    Platform.OS === "android"
+      ? 0
+      : 0.08 + level * 0.01,
+  shadowRadius:
+    level * 1.6,
+  shadowOffset: {
+    width: 0,
+    height: level * 0.8,
+  },
 });
 
 const styles = StyleSheet.create({
@@ -1327,10 +2243,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   screen: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   topBar: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -1340,26 +2258,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: BACKGROUND,
   },
+
   greetingBlock: {
     flex: 1,
     paddingRight: 12,
   },
+
   helloText: {
     color: TEXT,
     fontSize: 20,
     fontWeight: "700",
-    letterSpacing: 0,
   },
+
   subHelloText: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "500",
     marginTop: 2,
   },
+
   topActions: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   iconButton: {
     width: 40,
     height: 40,
@@ -1369,6 +2291,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
     overflow: "hidden",
   },
+
   notificationDot: {
     position: "absolute",
     top: 8,
@@ -1380,6 +2303,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: BACKGROUND,
   },
+
   avatar: {
     width: 38,
     height: 38,
@@ -1390,18 +2314,22 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     overflow: "hidden",
   },
+
   avatarText: {
     color: SURFACE,
     fontSize: 15,
     fontWeight: "700",
   },
+
   scrollView: {
     flex: 1,
   },
+
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingTop: 6,
   },
+
   statePanel: {
     backgroundColor: SURFACE,
     borderRadius: 16,
@@ -1410,12 +2338,14 @@ const styles = StyleSheet.create({
     marginTop: 24,
     ...elevate(1),
   },
+
   stateTitle: {
     color: TEXT,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     marginTop: 12,
   },
+
   stateText: {
     color: MUTED,
     fontSize: 13,
@@ -1424,6 +2354,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 5,
   },
+
   errorIconCircle: {
     width: 52,
     height: 52,
@@ -1432,6 +2363,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   errorTitle: {
     color: ON_DANGER_CONTAINER,
     fontSize: 17,
@@ -1439,6 +2371,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 6,
   },
+
   errorText: {
     color: MUTED,
     fontSize: 14,
@@ -1447,9 +2380,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
+
   retryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 20,
+    borderRadius: 13,
     paddingHorizontal: 18,
     paddingVertical: 11,
     flexDirection: "row",
@@ -1457,24 +2391,137 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...elevate(1),
   },
+
   retryButtonText: {
     color: SURFACE,
     fontSize: 14,
     fontWeight: "700",
     marginLeft: 8,
   },
+
+  healthCard: {
+    backgroundColor: PRIMARY,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 18,
+    overflow: "hidden",
+    ...elevate(2),
+  },
+
+  healthCardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+
+  statusBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  healthCardTitle: {
+    color: SURFACE,
+    fontSize: 26,
+    fontWeight: "700",
+    marginTop: 14,
+  },
+
+  healthCardMeta: {
+    color: "#E4EAFF",
+    fontSize: 13,
+    fontWeight: "500",
+    marginTop: 6,
+  },
+
+  healthIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  healthStatsRow: {
+    flexDirection: "row",
+    backgroundColor:
+      "rgba(255,255,255,0.14)",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 18,
+    alignItems: "center",
+  },
+
+  healthStat: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+
+  healthStatDivider: {
+    width:
+      StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor:
+      "rgba(255,255,255,0.3)",
+  },
+
+  healthStatLabel: {
+    color: "#E4EAFF",
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+
+  healthStatValueRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+
+  healthStatValue: {
+    color: SURFACE,
+    fontSize: 17,
+    fontWeight: "700",
+    marginRight: 3,
+  },
+
+  healthStatUnit: {
+    color: "#E4EAFF",
+    fontSize: 9,
+    fontWeight: "600",
+    marginBottom: 3,
+  },
+
   categoryContent: {
     paddingBottom: 14,
     paddingTop: 4,
+    paddingRight: 10,
   },
+
   categoryItem: {
     alignItems: "center",
     marginRight: 14,
     width: 74,
     borderRadius: 16,
     paddingVertical: 4,
-    overflow: "hidden",
+    overflow: "visible",
   },
+
   categoryIconCircle: {
     width: 54,
     height: 54,
@@ -1484,6 +2531,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "visible",
   },
+
   categoryBadge: {
     position: "absolute",
     top: -6,
@@ -1498,109 +2546,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 5,
   },
+
   categoryBadgeText: {
     color: SURFACE,
     fontSize: 9,
     fontWeight: "700",
   },
+
   categoryLabel: {
     color: TEXT,
     fontSize: 11,
     fontWeight: "600",
     marginTop: 8,
     textAlign: "center",
+    lineHeight: 14,
   },
-  healthCard: {
-    backgroundColor: PRIMARY,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 18,
-    overflow: "hidden",
-    ...elevate(2),
-  },
-  healthCardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  statusBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 7,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  healthCardTitle: {
-    color: SURFACE,
-    fontSize: 26,
-    fontWeight: "700",
-    letterSpacing: 0,
-    marginTop: 14,
-  },
-  healthCardMeta: {
-    color: "#E4EAFF",
-    fontSize: 13,
-    fontWeight: "500",
-    marginTop: 6,
-  },
-  healthIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  healthStatsRow: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 18,
-    alignItems: "center",
-  },
-  healthStat: {
-    flex: 1,
-    paddingHorizontal: 6,
-  },
-  healthStatDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: "stretch",
-    backgroundColor: "rgba(255,255,255,0.3)",
-  },
-  healthStatLabel: {
-    color: "#E4EAFF",
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  healthStatValueRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  healthStatValue: {
-    color: SURFACE,
-    fontSize: 17,
-    fontWeight: "700",
-    marginRight: 3,
-  },
-  healthStatUnit: {
-    color: "#E4EAFF",
-    fontSize: 9,
-    fontWeight: "600",
-    marginBottom: 3,
-  },
+
   sectionHeader: {
     marginBottom: 10,
     marginTop: 2,
@@ -1608,17 +2569,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   sectionTitle: {
     color: TEXT,
     fontSize: 18,
     fontWeight: "700",
-    letterSpacing: 0,
   },
+
   sectionAction: {
     color: PRIMARY,
     fontSize: 13,
     fontWeight: "700",
   },
+
   whitePanel: {
     backgroundColor: SURFACE,
     borderRadius: 16,
@@ -1626,11 +2589,13 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     ...elevate(1),
   },
+
   emptyMedicineRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 4,
   },
+
   medicineTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1638,6 +2603,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
+
   rowIconBox: {
     width: 44,
     height: 44,
@@ -1646,6 +2612,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
+
   timeBox: {
     width: 64,
     height: 54,
@@ -1655,11 +2622,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
+
   timeBoxText: {
     color: ON_WARNING_CONTAINER,
     fontSize: 13,
     fontWeight: "700",
   },
+
   timeBoxLabel: {
     color: ON_WARNING_CONTAINER,
     fontSize: 10,
@@ -1667,21 +2636,25 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: "uppercase",
   },
+
   rowTextBlock: {
     flex: 1,
   },
+
   rowTitle: {
     color: TEXT,
     fontSize: 15,
     fontWeight: "700",
     marginBottom: 4,
   },
+
   rowSubtitle: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "500",
     lineHeight: 18,
   },
+
   smallPrimaryButton: {
     backgroundColor: PRIMARY,
     borderRadius: 10,
@@ -1690,15 +2663,18 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     overflow: "hidden",
   },
+
   smallPrimaryButtonText: {
     color: SURFACE,
     fontSize: 13,
     fontWeight: "700",
   },
+
   previewList: {
     paddingBottom: 4,
     paddingTop: 8,
   },
+
   previewRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1708,6 +2684,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     marginTop: 7,
   },
+
   previewDot: {
     width: 7,
     height: 7,
@@ -1715,27 +2692,31 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     marginRight: 8,
   },
+
   previewName: {
     flex: 1,
     color: TEXT,
     fontSize: 13,
     fontWeight: "700",
   },
+
   previewDose: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 8,
   },
+
   medicineActions: {
     flexDirection: "row",
     marginTop: 12,
   },
+
   takenButton: {
     flex: 1,
     backgroundColor: SUCCESS,
     borderRadius: 12,
-    paddingVertical: 12,
+    minHeight: 45,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -1743,31 +2724,36 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...elevate(1),
   },
+
   takenButtonText: {
     color: SURFACE,
     fontSize: 14,
     fontWeight: "700",
     marginLeft: 6,
   },
+
   snoozeButton: {
     flex: 1,
     backgroundColor: PRIMARY_CONTAINER,
     borderRadius: 12,
-    paddingVertical: 12,
+    minHeight: 45,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     overflow: "hidden",
   },
+
   snoozeButtonText: {
     color: ON_PRIMARY_CONTAINER,
     fontSize: 14,
     fontWeight: "700",
     marginLeft: 6,
   },
+
   disabledButton: {
     opacity: 0.55,
   },
+
   doctorNotePanel: {
     backgroundColor: SURFACE,
     borderRadius: 16,
@@ -1775,10 +2761,12 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     ...elevate(1),
   },
+
   doctorNoteHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   doctorNoteIconBox: {
     width: 44,
     height: 44,
@@ -1788,14 +2776,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
+
   doctorNoteHeaderText: {
     flex: 1,
   },
+
   doctorNoteTitle: {
     color: TEXT,
     fontSize: 15,
     fontWeight: "700",
   },
+
   doctorNoteDate: {
     color: MUTED,
     fontSize: 11,
@@ -1803,6 +2794,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 4,
   },
+
   doctorNoteBody: {
     color: TEXT,
     fontSize: 13,
@@ -1813,6 +2805,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginTop: 14,
   },
+
   orderMiniCard: {
     backgroundColor: SURFACE,
     borderRadius: 16,
@@ -1823,38 +2816,46 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...elevate(1),
   },
+
   orderMiniHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 16,
   },
+
   orderMiniTitle: {
     color: TEXT,
     fontSize: 13,
     fontWeight: "700",
   },
+
   orderStatusPill: {
     backgroundColor: WARNING_CONTAINER,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 4,
   },
+
   orderStatusText: {
     color: ON_WARNING_CONTAINER,
     fontSize: 9,
     fontWeight: "700",
   },
+
   orderStepRow: {
     flexDirection: "row",
   },
+
   orderStep: {
     flex: 1,
   },
+
   orderStepTop: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   orderStepCircle: {
     width: 22,
     height: 22,
@@ -1865,12 +2866,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   orderStepInnerDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: SURFACE,
   },
+
   orderStepLine: {
     flex: 1,
     height: 3,
@@ -1878,6 +2881,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginHorizontal: 5,
   },
+
   orderStepLabel: {
     color: MUTED,
     fontSize: 10,
@@ -1885,6 +2889,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     paddingRight: 6,
   },
+
   fab: {
     position: "absolute",
     right: 20,
@@ -1898,3 +2903,5 @@ const styles = StyleSheet.create({
     ...elevate(4),
   },
 });
+
+export default PatientDashboardScreen;

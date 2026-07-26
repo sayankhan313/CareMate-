@@ -5,12 +5,12 @@ import { authorizeRoles } from "../../middleware/role.middleware.js";
 
 import { consultationController } from "./consultation.controller.js";
 import { dashboardController } from "./dashboard.controller.js";
+import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
-import { safetyController } from "./safety.controller.js";
-import { vitalsController } from "./vitals.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { profileController } from "./profile.controller.js";
-import { doctorAssignmentController } from "./doctor-assignment.controller.js";
+import { safetyController } from "./safety.controller.js";
+import { vitalsController } from "./vitals.controller.js";
 
 const router = Router();
 
@@ -27,7 +27,6 @@ router.get(
   profileController.getProfile
 );
 
-
 router.get(
   "/doctors/specialties",
   doctorAssignmentController.listDoctorSpecialties
@@ -43,12 +42,10 @@ router.get(
   doctorAssignmentController.listAssignedDoctors
 );
 
-
 router.post(
   "/doctor-assignment",
   doctorAssignmentController.assignDoctor
 );
-
 
 router.post(
   "/doctor-assignments",
@@ -65,7 +62,6 @@ router.delete(
   doctorAssignmentController.removeDoctor
 );
 
-
 router.post(
   "/vitals/readings",
   vitalsController.createReading
@@ -80,8 +76,6 @@ router.get(
   "/vitals/history",
   vitalsController.getReadingHistory
 );
-
-
 
 router.post(
   "/safety-alerts",
@@ -103,12 +97,6 @@ router.post(
   safetyController.escalateSafetyAlert
 );
 
-/*
-|--------------------------------------------------------------------------
-| Consultations
-|--------------------------------------------------------------------------
-*/
-
 router.post(
   "/consultations/manual",
   consultationController.createManualConsultation
@@ -128,8 +116,6 @@ router.get(
   "/consultations/:consultationId/join",
   consultationController.getPatientJoinConfig
 );
-
-
 
 router.post(
   "/medicines",
@@ -156,9 +142,29 @@ router.patch(
   medicineController.updateMedicine
 );
 
-router.delete(
-  "/medicines/:medicineId",
-  medicineController.deleteMedicine
+router.post(
+  "/medicines/:medicineId/deletion-review",
+  medicineController.requestMedicineDeletion
+);
+
+router.get(
+  "/medicine-reviews",
+  medicineController.listMedicineReviews
+);
+
+router.post(
+  "/medicine-reviews/:requestId/seen",
+  medicineController.markMedicineReviewSeen
+);
+
+router.post(
+  "/medicine-reviews/:requestId/apply",
+  medicineController.applyApprovedMedicineReview
+);
+
+router.post(
+  "/medicine-reviews/:requestId/resubmit",
+  medicineController.resubmitMedicineReview
 );
 
 router.post(
@@ -170,8 +176,6 @@ router.post(
   "/medicine-reminders/:reminderId/snooze",
   medicineController.snoozeReminder
 );
-
-
 
 router.get(
   "/medicine-references/search",

@@ -36,6 +36,7 @@ import { ManualSafetyResponseScreen } from "../screens/patient/ManualSafetyRespo
 import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
 import { SelectDoctorScreen } from "../screens/patient/SelectDoctorScreen";
 import PatientActiveCallsScreen from "../screens/patient/PatientActiveCallsScreen";
+import MedicineUpdatesScreen from "../screens/patient/MedicineUpdatesScreen";
 
 import { DoctorPatientDetailScreen } from "../screens/doctor/DoctorPatientDetailScreen";
 import DoctorSelectPrescriptionPatientScreen from "../screens/doctor/DoctorSelectPrescriptionPatientScreen";
@@ -69,14 +70,17 @@ const navigationRef =
 const ConnectedDeviceStackScreen =
   ConnectedDeviceScreen as ComponentType<any>;
 
-const SelectDoctorStackScreen =
-  SelectDoctorScreen as ComponentType<any>;
-
 const AdminTabsLegacyScreen =
   AdminTabNavigator as ComponentType<any>;
 
+const SelectDoctorStackScreen =
+  SelectDoctorScreen as ComponentType<any>;
+
 const PatientActiveCallsStackScreen =
   PatientActiveCallsScreen as ComponentType<any>;
+
+const MedicineUpdatesStackScreen =
+  MedicineUpdatesScreen as ComponentType<any>;
 
 const DoctorPatientDetailStackScreen =
   DoctorPatientDetailScreen as ComponentType<any>;
@@ -162,9 +166,7 @@ export const AppNavigator = () => {
   return (
     <SafeAreaProvider>
       <HealthConnectDeviceProvider>
-        <NavigationContainer
-          ref={navigationRef}
-        >
+        <NavigationContainer ref={navigationRef}>
           <CriticalVitalWatcher />
 
           <Stack.Navigator
@@ -240,9 +242,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="DoctorPatientDetail"
-              component={
-                DoctorPatientDetailStackScreen
-              }
+              component={DoctorPatientDetailStackScreen}
             />
 
             <Stack.Screen
@@ -254,9 +254,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="DoctorPrescription"
-              component={
-                DoctorPrescriptionStackScreen
-              }
+              component={DoctorPrescriptionStackScreen}
             />
 
             <Stack.Screen
@@ -268,9 +266,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="DoctorAddNote"
-              component={
-                DoctorAddNoteStackScreen
-              }
+              component={DoctorAddNoteStackScreen}
             />
 
             <Stack.Screen
@@ -285,9 +281,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="AdminDashboard"
-              component={
-                AdminTabsLegacyScreen
-              }
+              component={AdminTabsLegacyScreen}
             />
 
             <Stack.Screen
@@ -306,9 +300,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="AdminRegisterWebView"
-              component={
-                AdminRegisterWebViewScreen
-              }
+              component={AdminRegisterWebViewScreen}
             />
 
             <Stack.Screen
@@ -317,10 +309,18 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen
+              name="SelectDoctor"
+              component={SelectDoctorStackScreen}
+            />
+
+            <Stack.Screen
               name="PatientActiveCalls"
-              component={
-                PatientActiveCallsStackScreen
-              }
+              component={PatientActiveCallsStackScreen}
+            />
+
+            <Stack.Screen
+              name="MedicineUpdates"
+              component={MedicineUpdatesStackScreen}
             />
 
             <Stack.Screen
@@ -334,17 +334,28 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen
+              name="ScanMedicine"
+              component={ScanMedicineScreen}
+            />
+
+            <Stack.Screen
+              name="ScanMedicineResult"
+              component={ScanMedicineResultScreen}
+            />
+
+            <Stack.Screen
+              name="PrescriptionScanResult"
+              component={PrescriptionScanResultScreen}
+            />
+
+            <Stack.Screen
               name="ConnectedDevice"
-              component={
-                ConnectedDeviceStackScreen
-              }
+              component={ConnectedDeviceStackScreen}
             />
 
             <Stack.Screen
               name="ManualSafetyResponse"
-              component={
-                ManualSafetyResponseScreen
-              }
+              component={ManualSafetyResponseScreen}
             />
 
             <Stack.Screen
@@ -354,42 +365,12 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="VideoConsultation"
-              component={
-                VideoConsultationScreen
-              }
+              component={VideoConsultationScreen}
             />
 
             <Stack.Screen
               name="ConsultationEnded"
-              component={
-                ConsultationEndedScreen
-              }
-            />
-
-            <Stack.Screen
-              name="ScanMedicine"
-              component={ScanMedicineScreen}
-            />
-
-            <Stack.Screen
-              name="ScanMedicineResult"
-              component={
-                ScanMedicineResultScreen
-              }
-            />
-
-            <Stack.Screen
-              name="PrescriptionScanResult"
-              component={
-                PrescriptionScanResultScreen
-              }
-            />
-
-            <Stack.Screen
-              name="SelectDoctor"
-              component={
-                SelectDoctorStackScreen
-              }
+              component={ConsultationEndedScreen}
             />
           </Stack.Navigator>
         </NavigationContainer>

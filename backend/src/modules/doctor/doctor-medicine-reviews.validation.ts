@@ -8,6 +8,16 @@ export const doctorMedicineReviewsQuerySchema =
         "PENDING",
         "APPROVED",
         "REJECTED",
+        "APPLIED",
+      ])
+      .optional()
+      .default("ALL"),
+
+    requestType: z
+      .enum([
+        "ALL",
+        "ADD",
+        "DELETE",
       ])
       .optional()
       .default("ALL"),
@@ -15,10 +25,10 @@ export const doctorMedicineReviewsQuerySchema =
 
 export const doctorMedicineReviewParamsSchema =
   z.object({
-    reminderId: z
+    requestId: z
       .string()
       .uuid(
-        "Valid medicine reminder ID is required"
+        "Valid medicine review request ID is required"
       ),
   });
 

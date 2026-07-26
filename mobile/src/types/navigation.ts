@@ -56,15 +56,20 @@ export type AdminTabParamList = {
     | undefined;
 };
 
+export type MedicineFrequency =
+  | "ONCE_DAILY"
+  | "TWICE_DAILY"
+  | "THREE_TIMES_DAILY"
+  | "FOUR_TIMES_DAILY"
+  | "AS_NEEDED"
+  | "CUSTOM";
+
 export type MedicineDraft = {
   name: string;
   dose: string;
   instructions?: string;
-  frequency:
-    | "ONCE_DAILY"
-    | "TWICE_DAILY"
-    | "THREE_TIMES_DAILY"
-    | "AS_NEEDED";
+  frequency: MedicineFrequency;
+  customFrequency?: string;
   timeOfDay: string;
   selectedTimes?: string[];
   startDate: string;
@@ -72,6 +77,15 @@ export type MedicineDraft = {
   prescriptionPattern?: string | null;
   sendToDoctorForReview: boolean;
 };
+
+export type AddMedicineMode =
+  | "CREATE"
+  | "EDIT_DRAFT"
+  | "RESUBMIT_REVIEW";
+
+export type ConfirmReminderMode =
+  | "CREATE"
+  | "RESUBMIT_REVIEW";
 
 export type ScanMedicineSource =
   | "DEMO"
@@ -175,15 +189,20 @@ export type RootStackParamList = {
 
   PatientActiveCalls: undefined;
 
+  MedicineUpdates: undefined;
+
   AddMedicine:
     | {
         medicineDraft?: MedicineDraft;
-        mode?: "CREATE" | "EDIT_DRAFT";
+        mode?: AddMedicineMode;
+        medicineReviewRequestId?: string;
       }
     | undefined;
 
   ConfirmReminder: {
     medicineDraft: MedicineDraft;
+    mode?: ConfirmReminderMode;
+    medicineReviewRequestId?: string;
   };
 
   ScanMedicine: undefined;

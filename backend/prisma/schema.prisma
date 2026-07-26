@@ -52,6 +52,18 @@ enum MedicineReviewStatus {
   REJECTED
 }
 
+enum MedicineReviewRequestType {
+  ADD
+  DELETE
+}
+
+enum MedicineReviewRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+}
+
 enum DoseLogStatus {
   PENDING
   TAKEN
@@ -154,6 +166,10 @@ model User {
 
   medicineReviewAssignments MedicineReminder[] @relation("MedicineReviewDoctor")
   medicineReviewDecisions   MedicineReminder[] @relation("MedicineReviewedByDoctor")
+
+  patientMedicineReviewRequests MedicineReviewRequest[] @relation("MedicineReviewPatient")
+  doctorMedicineReviewRequests  MedicineReviewRequest[] @relation("MedicineReviewAssignedDoctor")
+  doctorMedicineReviewDecisions MedicineReviewRequest[] @relation("MedicineReviewDecisionDoctor")
 
   patientPrescriptions      Prescription[] @relation("PatientPrescriptions")
   doctorPrescriptions       Prescription[] @relation("DoctorPrescriptions")
@@ -284,10 +300,11 @@ model Medicine {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
-  patient            User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  prescribedByDoctor User?              @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
+  patient            User                    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescribedByDoctor User?                   @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
   reminders          MedicineReminder[]
   prescriptionItem   PrescriptionItem?
+  reviewRequests     MedicineReviewRequest[]
 
   @@index([patientId])
   @@index([prescribedByDoctorId])
@@ -323,6 +340,34 @@ model MedicineReminder {
   @@index([reviewedByDoctorId])
   @@index([reviewStatus])
   @@index([sendToDoctorForReview])
+}
+
+model MedicineReviewRequest {
+  id                 String                      @id @default(uuid())
+  patientId          String
+  doctorId           String
+  reviewedByDoctorId String?
+  medicineId         String
+  requestType        MedicineReviewRequestType
+  status             MedicineReviewRequestStatus @default(PENDING)
+  patientReason      String?
+  doctorNote         String?
+  reviewedAt         DateTime?
+  patientSeenAt      DateTime?
+  appliedAt          DateTime?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  patient          User     @relation("MedicineReviewPatient", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor           User     @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: Restrict)
+  reviewedByDoctor User?    @relation("MedicineReviewDecisionDoctor", fields: [reviewedByDoctorId], references: [id], onDelete: SetNull)
+  medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, status])
+  @@index([doctorId, status])
+  @@index([medicineId, requestType, status])
+  @@index([reviewedByDoctorId])
+  @@index([createdAt])
 }
 
 model MedicineDoseLog {

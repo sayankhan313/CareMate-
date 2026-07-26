@@ -14,13 +14,18 @@ import type {
 } from "./doctor-medicine-reviews.validation.js";
 
 const reviewInclude = {
+  patient: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+  },
   medicine: {
     include: {
-      patient: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
+      reminders: {
+        orderBy: {
+          timeOfDay: "asc" as const,
         },
       },
     },
@@ -133,79 +138,98 @@ const ensureActiveAssignment = async (
 };
 
 const formatReview = (
-  reminder: any
+  request: any
 ): DoctorMedicineReviewResponse => {
+  const reminder =
+    request.medicine.reminders[0] ||
+    null;
+
   return {
-    id: reminder.id,
-    medicineId:
-      reminder.medicineId,
-    patientId:
-      reminder.medicine.patient.id,
-    reviewDoctorId:
-      reminder.reviewDoctorId,
+    id: request.id,
+    medicineId: request.medicineId,
+    patientId: request.patientId,
+    reviewDoctorId: request.doctorId,
     reviewedByDoctorId:
-      reminder.reviewedByDoctorId,
-    frequency: reminder.frequency,
+      request.reviewedByDoctorId,
+    requestType: request.requestType,
+    reviewStatus: request.status,
+    patientReason:
+      request.patientReason,
+    reviewNote: request.doctorNote,
+    reviewedAt: request.reviewedAt,
+    patientSeenAt:
+      request.patientSeenAt,
+    appliedAt: request.appliedAt,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+
+    frequency:
+      reminder?.frequency ||
+      "ONCE_DAILY",
+
     customFrequency:
-      reminder.customFrequency,
-    timeOfDay: reminder.timeOfDay,
-    startDate: reminder.startDate,
-    endDate: reminder.endDate,
-    reviewStatus:
-      reminder.reviewStatus,
-    reviewedAt: reminder.reviewedAt,
-    reviewNote: reminder.reviewNote,
-    createdAt: reminder.createdAt,
-    updatedAt: reminder.updatedAt,
-    patient: {
-      id: reminder.medicine.patient.id,
-      fullName:
-        reminder.medicine.patient
-          .fullName,
-      email:
-        reminder.medicine.patient.email,
-    },
-    medicine: {
-      id: reminder.medicine.id,
-      name: reminder.medicine.name,
-      dose: reminder.medicine.dose,
-      instructions:
-        reminder.medicine.instructions,
-      source: reminder.medicine.source,
-    },
-    reviewedByDoctor:
-      reminder.reviewedByDoctor ||
+      reminder?.customFrequency ||
       null,
+
+    timeOfDay:
+      reminder?.timeOfDay ||
+      "08:00",
+
+    startDate:
+      reminder?.startDate ||
+      null,
+
+    endDate:
+      reminder?.endDate ||
+      null,
+
+    patient: {
+      id: request.patient.id,
+      fullName:
+        request.patient.fullName,
+      email: request.patient.email,
+    },
+
+    medicine: {
+      id: request.medicine.id,
+      name: request.medicine.name,
+      dose: request.medicine.dose,
+      instructions:
+        request.medicine.instructions,
+      source:
+        request.medicine.source,
+      isActive:
+        request.medicine.isActive,
+    },
+
+    reviewedByDoctor:
+      request.reviewedByDoctor ||
+      null,
+
     canApprove:
-      reminder.reviewStatus ===
-      "PENDING",
+      request.status === "PENDING",
+
     canReject:
-      reminder.reviewStatus ===
-      "PENDING",
+      request.status === "PENDING",
   };
 };
 
 const getReviewForDoctor = async (
   doctorId: string,
-  reminderId: string
+  requestId: string
 ) => {
   await ensureApprovedDoctor(doctorId);
 
-  const reminder =
-    await prisma.medicineReminder.findFirst({
+  const request =
+    await prisma.medicineReviewRequest.findFirst({
       where: {
-        id: reminderId,
-        reviewDoctorId: doctorId,
-        sendToDoctorForReview: true,
-        isActive: true,
-        medicine: {
-          isActive: true,
-        },
+        id: requestId,
+        doctorId,
       },
       include: reviewInclude,
     });
 
-  if (!reminder) {
+  if (!request) {
     throw new AppError(
       "Medicine review not found",
       404
@@ -214,161 +238,208 @@ const getReviewForDoctor = async (
 
   await ensureActiveAssignment(
     doctorId,
-    reminder.medicine.patient.id
+    request.patientId
   );
 
-  return reminder;
+  return request;
 };
 
-export const doctorMedicineReviewsService =
-  {
-    async listReviews(
-      doctorId: string,
-      query: DoctorMedicineReviewsQueryInput
-    ): Promise<DoctorMedicineReviewsResponse> {
-      await ensureApprovedDoctor(
+export const doctorMedicineReviewsService = {
+  async listReviews(
+    doctorId: string,
+    query: DoctorMedicineReviewsQueryInput
+  ): Promise<DoctorMedicineReviewsResponse> {
+    await ensureApprovedDoctor(doctorId);
+
+    const assignedPatientIds =
+      await getAssignedPatientIds(
         doctorId
       );
 
-      const assignedPatientIds =
-        await getAssignedPatientIds(
-          doctorId
-        );
-
-      if (
-        assignedPatientIds.length === 0
-      ) {
-        return {
-          summary: {
-            total: 0,
-            pending: 0,
-            approved: 0,
-            rejected: 0,
-          },
-          reviews: [],
-        };
-      }
-
-      const baseWhere = {
-        reviewDoctorId: doctorId,
-        sendToDoctorForReview: true,
-        isActive: true,
-        medicine: {
-          patientId: {
-            in: assignedPatientIds,
-          },
-          isActive: true,
+    if (
+      assignedPatientIds.length === 0
+    ) {
+      return {
+        summary: {
+          total: 0,
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          applied: 0,
+          additions: 0,
+          deletions: 0,
         },
-      } as const;
+        reviews: [],
+      };
+    }
 
-      const [
-        reviews,
+    const baseWhere = {
+      doctorId,
+      patientId: {
+        in: assignedPatientIds,
+      },
+    } as const;
+
+    const filteredWhere = {
+      ...baseWhere,
+
+      ...(query.status !== "ALL"
+        ? {
+            status: query.status,
+          }
+        : {}),
+
+      ...(query.requestType !== "ALL"
+        ? {
+            requestType:
+              query.requestType,
+          }
+        : {}),
+    };
+
+    const [
+      reviews,
+      total,
+      pending,
+      approved,
+      rejected,
+      applied,
+      additions,
+      deletions,
+    ] = await Promise.all([
+      prisma.medicineReviewRequest.findMany({
+        where: filteredWhere,
+        include: reviewInclude,
+        orderBy: {
+          updatedAt: "desc",
+        },
+        take: 100,
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: baseWhere,
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          status: "PENDING",
+        },
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          status: "APPROVED",
+        },
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          status: "REJECTED",
+        },
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          status: "APPLIED",
+        },
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          requestType: "ADD",
+        },
+      }),
+
+      prisma.medicineReviewRequest.count({
+        where: {
+          ...baseWhere,
+          requestType: "DELETE",
+        },
+      }),
+    ]);
+
+    return {
+      summary: {
         total,
         pending,
         approved,
         rejected,
-      ] = await Promise.all([
-        prisma.medicineReminder.findMany({
-          where: {
-            ...baseWhere,
-            ...(query.status !== "ALL"
-              ? {
-                  reviewStatus:
-                    query.status,
-                }
-              : {}),
-          },
-          include: reviewInclude,
-          orderBy: {
-            updatedAt: "desc",
-          },
-          take: 100,
-        }),
+        applied,
+        additions,
+        deletions,
+      },
+      reviews:
+        reviews.map(formatReview),
+    };
+  },
 
-        prisma.medicineReminder.count({
-          where: baseWhere,
-        }),
+  async getReviewDetail(
+    doctorId: string,
+    requestId: string
+  ): Promise<DoctorMedicineReviewDetailResponse> {
+    const request =
+      await getReviewForDoctor(
+        doctorId,
+        requestId
+      );
 
-        prisma.medicineReminder.count({
-          where: {
-            ...baseWhere,
-            reviewStatus: "PENDING",
-          },
-        }),
+    return {
+      review:
+        formatReview(request),
+    };
+  },
 
-        prisma.medicineReminder.count({
-          where: {
-            ...baseWhere,
-            reviewStatus: "APPROVED",
-          },
-        }),
+  async approveReview(
+    doctorId: string,
+    requestId: string,
+    input: ApproveMedicineReviewInput
+  ): Promise<DoctorMedicineReviewActionResponse> {
+    const doctor =
+      await ensureApprovedDoctor(
+        doctorId
+      );
 
-        prisma.medicineReminder.count({
-          where: {
-            ...baseWhere,
-            reviewStatus: "REJECTED",
-          },
-        }),
-      ]);
+    const request =
+      await getReviewForDoctor(
+        doctorId,
+        requestId
+      );
 
-      return {
-        summary: {
-          total,
-          pending,
-          approved,
-          rejected,
+    if (request.status !== "PENDING") {
+      throw new AppError(
+        "Only pending medicine reviews can be approved",
+        400
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.medicineReviewRequest.update({
+        where: {
+          id: request.id,
         },
-        reviews:
-          reviews.map(formatReview),
-      };
-    },
-
-    async getReviewDetail(
-      doctorId: string,
-      reminderId: string
-    ): Promise<DoctorMedicineReviewDetailResponse> {
-      const reminder =
-        await getReviewForDoctor(
-          doctorId,
-          reminderId
-        );
-
-      return {
-        review:
-          formatReview(reminder),
-      };
-    },
-
-    async approveReview(
-      doctorId: string,
-      reminderId: string,
-      input: ApproveMedicineReviewInput
-    ): Promise<DoctorMedicineReviewActionResponse> {
-      const doctor =
-        await ensureApprovedDoctor(
-          doctorId
-        );
-
-      const reminder =
-        await getReviewForDoctor(
-          doctorId,
-          reminderId
-        );
+        data: {
+          status: "APPROVED",
+          reviewedByDoctorId:
+            doctor.id,
+          reviewedAt: new Date(),
+          doctorNote:
+            input.note?.trim() ||
+            null,
+        },
+      });
 
       if (
-        reminder.reviewStatus !==
-        "PENDING"
+        request.requestType === "ADD"
       ) {
-        throw new AppError(
-          "Only pending medicine reviews can be approved",
-          400
-        );
-      }
-
-      const updatedReminder =
-        await prisma.medicineReminder.update({
+        await tx.medicineReminder.updateMany({
           where: {
-            id: reminder.id,
+            medicineId:
+              request.medicineId,
           },
           data: {
             reviewStatus: "APPROVED",
@@ -379,49 +450,96 @@ export const doctorMedicineReviewsService =
               input.note?.trim() ||
               null,
           },
-          include: reviewInclude,
         });
-
-      return {
-        review:
-          formatReview(
-            updatedReminder
-          ),
-      };
-    },
-
-    async rejectReview(
-      doctorId: string,
-      reminderId: string,
-      input: RejectMedicineReviewInput
-    ): Promise<DoctorMedicineReviewActionResponse> {
-      const doctor =
-        await ensureApprovedDoctor(
-          doctorId
-        );
-
-      const reminder =
-        await getReviewForDoctor(
-          doctorId,
-          reminderId
-        );
-
-      if (
-        reminder.reviewStatus !==
-        "PENDING"
-      ) {
-        throw new AppError(
-          "Only pending medicine reviews can be rejected",
-          400
-        );
       }
 
-      const updatedReminder =
-        await prisma.medicineReminder.update({
+      if (
+        request.requestType ===
+        "DELETE"
+      ) {
+        await tx.medicine.update({
           where: {
-            id: reminder.id,
+            id: request.medicineId,
           },
           data: {
+            isActive: false,
+          },
+        });
+
+        await tx.medicineReminder.updateMany({
+          where: {
+            medicineId:
+              request.medicineId,
+          },
+          data: {
+            isActive: false,
+          },
+        });
+      }
+    });
+
+    const updatedRequest =
+      await getReviewForDoctor(
+        doctorId,
+        requestId
+      );
+
+    return {
+      review:
+        formatReview(
+          updatedRequest
+        ),
+    };
+  },
+
+  async rejectReview(
+    doctorId: string,
+    requestId: string,
+    input: RejectMedicineReviewInput
+  ): Promise<DoctorMedicineReviewActionResponse> {
+    const doctor =
+      await ensureApprovedDoctor(
+        doctorId
+      );
+
+    const request =
+      await getReviewForDoctor(
+        doctorId,
+        requestId
+      );
+
+    if (request.status !== "PENDING") {
+      throw new AppError(
+        "Only pending medicine reviews can be rejected",
+        400
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.medicineReviewRequest.update({
+        where: {
+          id: request.id,
+        },
+        data: {
+          status: "REJECTED",
+          reviewedByDoctorId:
+            doctor.id,
+          reviewedAt: new Date(),
+          doctorNote:
+            input.note.trim(),
+        },
+      });
+
+      if (
+        request.requestType === "ADD"
+      ) {
+        await tx.medicineReminder.updateMany({
+          where: {
+            medicineId:
+              request.medicineId,
+          },
+          data: {
+            isActive: false,
             reviewStatus: "REJECTED",
             reviewedByDoctorId:
               doctor.id,
@@ -429,14 +547,30 @@ export const doctorMedicineReviewsService =
             reviewNote:
               input.note.trim(),
           },
-          include: reviewInclude,
         });
 
-      return {
-        review:
-          formatReview(
-            updatedReminder
-          ),
-      };
-    },
-  };
+        await tx.medicine.update({
+          where: {
+            id: request.medicineId,
+          },
+          data: {
+            isActive: false,
+          },
+        });
+      }
+    });
+
+    const updatedRequest =
+      await getReviewForDoctor(
+        doctorId,
+        requestId
+      );
+
+    return {
+      review:
+        formatReview(
+          updatedRequest
+        ),
+    };
+  },
+};
