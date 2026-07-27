@@ -4,6 +4,12 @@ export type PublicRegisterRole =
   | "CAREGIVER"
   | "PHARMACY";
 
+export type PatientGender =
+  | "MALE"
+  | "FEMALE"
+  | "OTHER"
+  | "PREFER_NOT_TO_SAY";
+
 export type RegisterInput = {
   fullName: string;
   email: string;
@@ -12,6 +18,7 @@ export type RegisterInput = {
 
   phoneNumber?: string;
   dateOfBirth?: string;
+  gender?: PatientGender;
   medicalConditions?: string;
   emergencyContact?: string;
 };

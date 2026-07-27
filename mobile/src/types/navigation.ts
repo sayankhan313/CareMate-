@@ -1,36 +1,103 @@
-export type User = {
-  id: string;
-  fullName: string;
-  email: string;
-  role: string;
-  accountStatus: string;
-  isEmailVerified: boolean;
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
+import type { VitalReading } from "./vitals";
+import type { MeetingConfig } from "../services/safetyApi";
+
+export type PatientTabParamList = {
+  Home: { user?: any } | undefined;
+  Medicines: undefined;
+  Vitals: undefined;
+  Consultations: undefined;
+  PatientOrders: undefined;
 };
+
+export type MedicineDraft = {
+  name: string;
+  dose: string;
+  instructions?: string;
+  frequency: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY" | "AS_NEEDED";
+  timeOfDay: string;
+  selectedTimes?: string[];
+  startDate: string;
+  endDate?: string;
+  prescriptionPattern?: string | null;
+  sendToDoctorForReview: boolean;
+};
+
+export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 
 export type RootStackParamList = {
   Splash: undefined;
-
   Welcome: undefined;
-
   Login: undefined;
-
   RoleSelection: undefined;
-
   PatientSignup: undefined;
 
   EmailVerification: {
-    email: string;
+    email?: string;
   };
 
-  ForgotPassword: {
-    email: string;
+  ForgotPassword: undefined;
+
+  PatientTabs:
+    | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+    | undefined;
+
+  PatientProfile:
+  | {
+    user?: any;
+  }
+  | undefined;
+  AddMedicine:
+  | {
+      medicineDraft?: MedicineDraft;
+      mode?: "CREATE" | "EDIT_DRAFT";
+    }
+  | undefined;
+
+  ConfirmReminder: {
+    medicineDraft: MedicineDraft;
   };
 
-  ResetPassword: {
-    resetLink?: string;
+  ScanMedicine: undefined;
+
+ ScanMedicineResult: {
+  detectedText: string;
+  ocrConfidence?: number;
+  source?: ScanMedicineSource;
+  scannedImageUri?: string;
+};
+
+PrescriptionScanResult: {
+  detectedText: string;
+  ocrConfidence?: number;
+  source?: ScanMedicineSource;
+};
+
+  ConnectedDevice: undefined;
+  ManualSafetyResponse: undefined;
+
+ SafetyResponse: {
+  vitalReading: VitalReading;
+  triggerSource?: string;
+  manualCriticalInfo?: {
+    title: string;
+    value: string;
+    reason: string;
+  };
+};
+
+  VideoConsultation: {
+    consultationId: string;
+    consultationType?: "EMERGENCY" | "MANUAL";
+    patientMeeting?: MeetingConfig;
+    doctorMeeting?: MeetingConfig;
+    patientMeetingUrl?: string;
+    doctorMeetingUrl?: string;
   };
 
-  PatientDashboard: {
-    user: User;
+  ConsultationEnded: {
+    consultationId: string;
+    consultationType?: "EMERGENCY" | "MANUAL";
   };
 };

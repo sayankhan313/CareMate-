@@ -23,25 +23,118 @@ enum AccountStatus {
   DISABLED
 }
 
+enum MedicineSource {
+  MANUAL
+  SCANNER
+  DOCTOR_PRESCRIBED
+}
+
+enum MedicineFrequency {
+  ONCE_DAILY
+  TWICE_DAILY
+  THREE_TIMES_DAILY
+  FOUR_TIMES_DAILY
+  AS_NEEDED
+  CUSTOM
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum MedicineReviewStatus {
+  NOT_REQUESTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DoseLogStatus {
+  PENDING
+  TAKEN
+  MISSED
+  SNOOZED
+}
+
+enum VitalStatus {
+  STABLE
+  WARNING
+  CRITICAL
+}
+
+enum VitalSource {
+  HEALTH_CONNECT
+  SIMULATED
+  MANUAL
+}
+
+enum MedicineOrderStatus {
+  RECEIVED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum SafetyAlertStatus {
+  ACTIVE
+  CANCELLED
+  ESCALATED
+  RESOLVED
+}
+
+enum ConsultationType {
+  EMERGENCY
+  MANUAL
+}
+
+enum ConsultationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MedicineSafetyLevel {
+  STANDARD
+  DOCTOR_REVIEW_RECOMMENDED
+}
+
 model User {
-  id                              String        @id @default(uuid())
-  fullName                        String
-  email                           String        @unique
-  passwordHash                    String
-  role                            UserRole
-  accountStatus                   AccountStatus @default(ACTIVE)
-  isEmailVerified                 Boolean       @default(false)
+  id              String        @id @default(uuid())
+  fullName        String
+  email           String        @unique
+  passwordHash    String
+  role            UserRole
+  accountStatus   AccountStatus @default(ACTIVE)
+  isEmailVerified Boolean       @default(false)
 
   emailVerificationToken          String?
   emailVerificationTokenExpiresAt DateTime?
 
-  passwordResetToken              String?
-  passwordResetTokenExpiresAt     DateTime?
+  passwordResetToken          String?
+  passwordResetTokenExpiresAt DateTime?
 
-  patientProfile                  PatientProfile?
+  patientProfile   PatientProfile?
+  medicines        Medicine[]
+  medicineDoseLogs MedicineDoseLog[]
+  vitalReadings    PatientVitalReading[]
+  doctorNotes      PatientDoctorNote[]
+  medicineOrders   MedicineOrder[]
 
-  createdAt                       DateTime      @default(now())
-  updatedAt                       DateTime      @updatedAt
+  patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
+  doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
+
+  patientConsultations Consultation[] @relation("PatientConsultations")
+  doctorConsultations  Consultation[] @relation("DoctorConsultations")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PatientProfile {
@@ -49,10 +142,218 @@ model PatientProfile {
   userId            String   @unique
   phoneNumber       String
   dateOfBirth       DateTime
+  gender            Gender?
   medicalConditions String?
   emergencyContact  String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Medicine {
+  id           String         @id @default(uuid())
+  patientId    String
+  name         String
+  dose         String
+  instructions String?
+  source       MedicineSource @default(MANUAL)
+  isActive     Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient   User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  reminders MedicineReminder[]
+
+  @@index([patientId])
+}
+
+model MedicineReminder {
+  id                    String               @id @default(uuid())
+  medicineId            String
+  frequency             MedicineFrequency    @default(ONCE_DAILY)
+  customFrequency       String?
+  timeOfDay             String
+  startDate             DateTime
+  endDate               DateTime?
+  sendToDoctorForReview Boolean              @default(false)
+  reviewStatus          MedicineReviewStatus @default(NOT_REQUESTED)
+  isActive              Boolean              @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  medicine Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  doseLogs MedicineDoseLog[]
+
+  @@index([medicineId])
+}
+
+model MedicineDoseLog {
+  id           String        @id @default(uuid())
+  reminderId   String
+  patientId    String
+  scheduledFor DateTime
+  status       DoseLogStatus @default(PENDING)
+  takenAt      DateTime?
+  snoozedUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reminder MedicineReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  patient  User             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([reminderId, scheduledFor])
+  @@index([patientId])
+  @@index([scheduledFor])
+}
+
+model PatientVitalReading {
+  id           String      @id @default(uuid())
+  patientId    String
+  heartRate    Int?
+  spo2         Int?
+  bpSystolic   Int?
+  bpDiastolic  Int?
+  glucose      Float?
+  temperature  Float?
+  status       VitalStatus
+  source       VitalSource
+  deviceSource String?
+  recordedAt   DateTime    @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient      User          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  safetyAlerts SafetyAlert[]
+
+  @@index([patientId])
+  @@index([recordedAt])
+  @@index([status])
+}
+
+model PatientDoctorNote {
+  id        String @id @default(uuid())
+  patientId String
+  note      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([createdAt])
+}
+
+model MedicineOrder {
+  id        String              @id @default(uuid())
+  patientId String
+  status    MedicineOrderStatus @default(RECEIVED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([status])
+}
+
+model SafetyAlert {
+  id             String            @id @default(uuid())
+  patientId      String
+  doctorId       String?
+  vitalReadingId String?
+  status         SafetyAlertStatus @default(ACTIVE)
+
+  reason      String
+  timerEndsAt DateTime
+
+  cancelledAt DateTime?
+  escalatedAt DateTime?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient      User                 @relation("PatientSafetyAlerts", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       User?                @relation("DoctorSafetyAlerts", fields: [doctorId], references: [id], onDelete: SetNull)
+  vitalReading PatientVitalReading? @relation(fields: [vitalReadingId], references: [id], onDelete: SetNull)
+  consultation Consultation?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([vitalReadingId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Consultation {
+  id            String  @id @default(uuid())
+  patientId     String
+  doctorId      String?
+  safetyAlertId String? @unique
+
+  type   ConsultationType
+  status ConsultationStatus @default(PENDING)
+
+  reason        String
+  preferredAt   DateTime?
+  notes         String?
+  doctorName    String?
+  rejectionNote String?
+
+  jaasRoomName String
+
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient     User         @relation("PatientConsultations", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      User?        @relation("DoctorConsultations", fields: [doctorId], references: [id], onDelete: SetNull)
+  safetyAlert SafetyAlert? @relation(fields: [safetyAlertId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model MedicineReference {
+  id                  String              @id @default(uuid())
+  slug                String              @unique
+  brandName           String
+  genericName         String
+  aliases             String[]
+  commonStrengths     String[]
+  form                String
+  category            String
+  usedFor             String
+  commonSideEffects   String[]
+  defaultInstructions String
+  defaultFrequency    MedicineFrequency   @default(ONCE_DAILY)
+  defaultTimeOfDay    String              @default("08:00")
+  safetyLevel         MedicineSafetyLevel @default(STANDARD)
+  safetyNote          String
+
+  imageUrl     String?
+  imageAltText String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandName])
+  @@index([genericName])
+  @@index([isActive])
 }

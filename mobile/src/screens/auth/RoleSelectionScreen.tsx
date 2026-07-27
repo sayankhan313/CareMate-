@@ -107,7 +107,7 @@ export const RoleSelectionScreen = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.container}

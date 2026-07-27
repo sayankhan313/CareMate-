@@ -138,3 +138,10 @@ mobile/coverage/
 !.yarn/sdks/
 !.yarn/versions/
 
+// keys 
+backend/.env
+backend/keys/
+.env
+keys/
+*.pk
+*.pub
