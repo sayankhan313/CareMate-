@@ -132,6 +132,33 @@ enum PrescriptionSource {
   SCANNED
 }
 
+enum PatientReportCategory {
+  BLOOD_TEST
+  SCAN_XRAY
+  PRESCRIPTION
+  DISCHARGE_SUMMARY
+  MEDICAL_LETTER
+  OTHER_MEDICAL_REPORT
+}
+
+enum PatientReportStatus {
+  PENDING_REVIEW
+  PARTIALLY_REVIEWED
+  REVIEWED
+}
+
+enum PatientReportReviewStatus {
+  PENDING
+  REVIEWED
+}
+
+enum PatientReportContentSafetyStatus {
+  NOT_SCANNED
+  CLEAR
+  REVIEW_REQUIRED
+  BLOCKED
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -174,6 +201,9 @@ model User {
   patientPrescriptions      Prescription[] @relation("PatientPrescriptions")
   doctorPrescriptions       Prescription[] @relation("DoctorPrescriptions")
   doctorPrescribedMedicines Medicine[]     @relation("DoctorPrescribedMedicines")
+
+  patientReports      PatientReport[]       @relation("PatientReports")
+  doctorReportReviews PatientReportReview[] @relation("DoctorReportReviews")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -286,6 +316,61 @@ model PrescriptionItem {
   @@index([prescriptionId])
   @@index([medicineId])
   @@index([startDate])
+}
+
+model PatientReport {
+  id          String                @id @default(uuid())
+  patientId   String
+  title       String
+  category    PatientReportCategory
+  description String?
+  reportDate  DateTime?
+  status      PatientReportStatus   @default(PENDING_REVIEW)
+
+  originalFileName String
+  storedFileName   String @unique
+  mimeType         String
+  fileSize         Int
+  fileHash         String
+
+  contentSafetyStatus    PatientReportContentSafetyStatus @default(NOT_SCANNED)
+  contentSafetyMessage   String?
+  contentSafetyCheckedAt DateTime?
+
+  isSampleDataConfirmed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User                  @relation("PatientReports", fields: [patientId], references: [id], onDelete: Cascade)
+  reviews PatientReportReview[]
+
+  @@unique([patientId, fileHash])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([category])
+  @@index([contentSafetyStatus])
+}
+
+model PatientReportReview {
+  id            String                    @id @default(uuid())
+  reportId      String
+  doctorId      String
+  status        PatientReportReviewStatus @default(PENDING)
+  reviewNote    String?
+  reviewedAt    DateTime?
+  patientSeenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  report PatientReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  doctor User          @relation("DoctorReportReviews", fields: [doctorId], references: [id], onDelete: Restrict)
+
+  @@unique([reportId, doctorId])
+  @@index([doctorId, status])
+  @@index([reportId, status])
+  @@index([reviewedAt])
 }
 
 model Medicine {

@@ -10,51 +10,34 @@ import { doctorMedicineReviewsController } from "./doctor-medicine-reviews.contr
 import { doctorNotesController } from "./doctor-notes.controller.js";
 import { doctorPatientsController } from "./doctor-patients.controller.js";
 import { doctorPrescriptionsController } from "./doctor-prescriptions.controller.js";
+import { doctorReportsController } from "./doctor-reports.controller.js";
 
 const router = Router();
 
 router.use(authMiddleware);
 router.use(authorizeRoles("DOCTOR"));
 
-router.get(
-  "/dashboard",
-  doctorController.getDashboard
-);
+router.get("/dashboard", doctorController.getDashboard);
 
-router.get(
-  "/alerts",
-  doctorAlertsController.listAlerts
-);
+router.get("/alerts", doctorAlertsController.listAlerts);
+router.get("/alerts/:alertId", doctorAlertsController.getAlertDetail);
+router.post("/alerts/:alertId/resolve", doctorAlertsController.resolveAlert);
 
-router.get(
-  "/alerts/:alertId",
-  doctorAlertsController.getAlertDetail
-);
-
-router.post(
-  "/alerts/:alertId/resolve",
-  doctorAlertsController.resolveAlert
-);
-
-router.get(
-  "/medicine-reviews",
-  doctorMedicineReviewsController.listReviews
-);
-
+router.get("/medicine-reviews", doctorMedicineReviewsController.listReviews);
 router.get(
   "/medicine-reviews/:requestId",
   doctorMedicineReviewsController.getReviewDetail
 );
-
 router.post(
   "/medicine-reviews/:requestId/approve",
   doctorMedicineReviewsController.approveReview
 );
-
 router.post(
   "/medicine-reviews/:requestId/reject",
   doctorMedicineReviewsController.rejectReview
 );
+
+router.get("/reports", doctorReportsController.listReportQueue);
 
 router.post(
   "/prescription-scan/parse",
@@ -63,9 +46,7 @@ router.post(
 
 router.post(
   "/patients/:patientId/prescriptions",
-  prescriptionImageUpload.single(
-    "prescriptionImage"
-  ),
+  prescriptionImageUpload.single("prescriptionImage"),
   doctorPrescriptionsController.createPrescription
 );
 
@@ -79,10 +60,7 @@ router.get(
   doctorPrescriptionsController.getPrescriptionDetail
 );
 
-router.get(
-  "/consultations",
-  doctorConsultationsController.listConsultations
-);
+router.get("/consultations", doctorConsultationsController.listConsultations);
 
 router.get(
   "/consultations/:consultationId",
@@ -109,9 +87,26 @@ router.get(
   doctorConsultationsController.getDoctorJoinConfig
 );
 
+router.get("/patients", doctorPatientsController.listAssignedPatients);
+
 router.get(
-  "/patients",
-  doctorPatientsController.listAssignedPatients
+  "/patients/:patientId/reports",
+  doctorReportsController.listPatientReports
+);
+
+router.get(
+  "/patients/:patientId/reports/:reportId/file",
+  doctorReportsController.getReportFile
+);
+
+router.get(
+  "/patients/:patientId/reports/:reportId",
+  doctorReportsController.getReportDetail
+);
+
+router.post(
+  "/patients/:patientId/reports/:reportId/review",
+  doctorReportsController.reviewReport
 );
 
 router.get(

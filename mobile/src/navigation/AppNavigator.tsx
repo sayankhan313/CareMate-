@@ -1,8 +1,4 @@
-import React, {
-  useEffect,
-  useRef,
-  type ComponentType,
-} from "react";
+import React, { useEffect, useRef, type ComponentType } from "react";
 import {
   createNavigationContainerRef,
   NavigationContainer,
@@ -37,22 +33,27 @@ import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
 import { SelectDoctorScreen } from "../screens/patient/SelectDoctorScreen";
 import PatientActiveCallsScreen from "../screens/patient/PatientActiveCallsScreen";
 import MedicineUpdatesScreen from "../screens/patient/MedicineUpdatesScreen";
+import PatientReportsScreen from "../screens/patient/PatientReportsScreen";
+import PatientUploadReportScreen from "../screens/patient/PatientUploadReportScreen";
 
 import { DoctorPatientDetailScreen } from "../screens/doctor/DoctorPatientDetailScreen";
 import DoctorSelectPrescriptionPatientScreen from "../screens/doctor/DoctorSelectPrescriptionPatientScreen";
 import DoctorPrescriptionScreen from "../screens/doctor/DoctorPrescriptionScreen";
 import DoctorSelectNotePatientScreen from "../screens/doctor/DoctorSelectNotePatientScreen";
 import DoctorAddNoteScreen from "../screens/doctor/DoctorAddNoteScreen";
-
-import { PatientTabNavigator } from "./PatientTabNavigator";
-import { DoctorTabNavigator } from "./DoctorTabNavigator";
-import { AdminTabNavigator } from "./AdminTabNavigator";
+import DoctorPatientReportsScreen from "../screens/doctor/DoctorPatientReportsScreen";
+import DoctorReportReviewsScreen from "../screens/doctor/DoctorReportReviewScreen";
+import DoctorReportReviewScreen from "../screens/doctor/DoctorReportReviewScreen";
 
 import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
 import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
 import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
 
 import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
+
+import { PatientTabNavigator } from "./PatientTabNavigator";
+import { DoctorTabNavigator } from "./DoctorTabNavigator";
+import { AdminTabNavigator } from "./AdminTabNavigator";
 
 import type { RootStackParamList } from "../types/navigation";
 
@@ -61,58 +62,45 @@ import {
   useHealthConnectDevice,
 } from "../context/HealthConnectDeviceContext";
 
-const Stack =
-  createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-const navigationRef =
-  createNavigationContainerRef<RootStackParamList>();
-
-const ConnectedDeviceStackScreen =
-  ConnectedDeviceScreen as ComponentType<any>;
-
-const AdminTabsLegacyScreen =
-  AdminTabNavigator as ComponentType<any>;
-
-const SelectDoctorStackScreen =
-  SelectDoctorScreen as ComponentType<any>;
-
+const ConnectedDeviceStackScreen = ConnectedDeviceScreen as ComponentType<any>;
+const AdminTabsLegacyScreen = AdminTabNavigator as ComponentType<any>;
+const SelectDoctorStackScreen = SelectDoctorScreen as ComponentType<any>;
 const PatientActiveCallsStackScreen =
   PatientActiveCallsScreen as ComponentType<any>;
-
-const MedicineUpdatesStackScreen =
-  MedicineUpdatesScreen as ComponentType<any>;
+const MedicineUpdatesStackScreen = MedicineUpdatesScreen as ComponentType<any>;
+const PatientReportsStackScreen = PatientReportsScreen as ComponentType<any>;
+const PatientUploadReportStackScreen =
+  PatientUploadReportScreen as ComponentType<any>;
 
 const DoctorPatientDetailStackScreen =
   DoctorPatientDetailScreen as ComponentType<any>;
-
+const DoctorPatientReportsStackScreen =
+  DoctorPatientReportsScreen as ComponentType<any>;
+const DoctorReportReviewsStackScreen =
+  DoctorReportReviewsScreen as ComponentType<any>;
+const DoctorReportReviewStackScreen =
+  DoctorReportReviewScreen as ComponentType<any>;
 const DoctorSelectPrescriptionPatientStackScreen =
   DoctorSelectPrescriptionPatientScreen as ComponentType<any>;
-
 const DoctorPrescriptionStackScreen =
   DoctorPrescriptionScreen as ComponentType<any>;
-
 const DoctorSelectNotePatientStackScreen =
   DoctorSelectNotePatientScreen as ComponentType<any>;
-
-const DoctorAddNoteStackScreen =
-  DoctorAddNoteScreen as ComponentType<any>;
+const DoctorAddNoteStackScreen = DoctorAddNoteScreen as ComponentType<any>;
 
 const CriticalVitalWatcher = () => {
-  const { lastSyncedReading } =
-    useHealthConnectDevice();
-
-  const lastHandledReadingIdRef =
-    useRef<string | null>(null);
+  const { lastSyncedReading } = useHealthConnectDevice();
+  const lastHandledReadingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!lastSyncedReading) {
       return;
     }
 
-    if (
-      lastSyncedReading.status !==
-      "CRITICAL"
-    ) {
+    if (lastSyncedReading.status !== "CRITICAL") {
       return;
     }
 
@@ -120,10 +108,7 @@ const CriticalVitalWatcher = () => {
       return;
     }
 
-    if (
-      lastHandledReadingIdRef.current ===
-      lastSyncedReading.id
-    ) {
+    if (lastHandledReadingIdRef.current === lastSyncedReading.id) {
       return;
     }
 
@@ -131,32 +116,22 @@ const CriticalVitalWatcher = () => {
       return;
     }
 
-    const currentRoute =
-      navigationRef.getCurrentRoute();
+    const currentRoute = navigationRef.getCurrentRoute();
 
     if (
-      currentRoute?.name ===
-        "SafetyResponse" ||
-      currentRoute?.name ===
-        "VideoConsultation" ||
-      currentRoute?.name ===
-        "ConsultationEnded"
+      currentRoute?.name === "SafetyResponse" ||
+      currentRoute?.name === "VideoConsultation" ||
+      currentRoute?.name === "ConsultationEnded"
     ) {
       return;
     }
 
-    lastHandledReadingIdRef.current =
-      lastSyncedReading.id;
+    lastHandledReadingIdRef.current = lastSyncedReading.id;
 
-    navigationRef.navigate(
-      "SafetyResponse",
-      {
-        vitalReading:
-          lastSyncedReading,
-        triggerSource:
-          "Health Connect Auto Sync",
-      }
-    );
+    navigationRef.navigate("SafetyResponse", {
+      vitalReading: lastSyncedReading,
+      triggerSource: "Health Connect Auto Sync",
+    });
   }, [lastSyncedReading]);
 
   return null;
@@ -175,40 +150,13 @@ export const AppNavigator = () => {
               headerShown: false,
             }}
           >
-            <Stack.Screen
-              name="Splash"
-              component={SplashScreen}
-            />
-
-            <Stack.Screen
-              name="Welcome"
-              component={WelcomeScreen}
-            />
-
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-            />
-
-            <Stack.Screen
-              name="RoleSelection"
-              component={RoleSelectionScreen}
-            />
-
-            <Stack.Screen
-              name="PatientSignup"
-              component={PatientSignupScreen}
-            />
-
-            <Stack.Screen
-              name="DoctorSignup"
-              component={DoctorSignupScreen}
-            />
-
-            <Stack.Screen
-              name="PharmacySignup"
-              component={PharmacySignupScreen}
-            />
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
+            <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
+            <Stack.Screen name="PharmacySignup" component={PharmacySignupScreen} />
 
             <Stack.Screen
               name="PharmacyPendingApproval"
@@ -230,15 +178,8 @@ export const AppNavigator = () => {
               component={ForgotPasswordScreen}
             />
 
-            <Stack.Screen
-              name="PatientTabs"
-              component={PatientTabNavigator}
-            />
-
-            <Stack.Screen
-              name="DoctorTabs"
-              component={DoctorTabNavigator}
-            />
+            <Stack.Screen name="PatientTabs" component={PatientTabNavigator} />
+            <Stack.Screen name="DoctorTabs" component={DoctorTabNavigator} />
 
             <Stack.Screen
               name="DoctorPatientDetail"
@@ -246,10 +187,23 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen
+              name="DoctorPatientReports"
+              component={DoctorPatientReportsStackScreen}
+            />
+
+            <Stack.Screen
+              name="DoctorReportReviews"
+              component={DoctorReportReviewsStackScreen}
+            />
+
+            <Stack.Screen
+              name="DoctorReportReview"
+              component={DoctorReportReviewStackScreen}
+            />
+
+            <Stack.Screen
               name="DoctorSelectPrescriptionPatient"
-              component={
-                DoctorSelectPrescriptionPatientStackScreen
-              }
+              component={DoctorSelectPrescriptionPatientStackScreen}
             />
 
             <Stack.Screen
@@ -259,9 +213,7 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="DoctorSelectNotePatient"
-              component={
-                DoctorSelectNotePatientStackScreen
-              }
+              component={DoctorSelectNotePatientStackScreen}
             />
 
             <Stack.Screen
@@ -269,10 +221,7 @@ export const AppNavigator = () => {
               component={DoctorAddNoteStackScreen}
             />
 
-            <Stack.Screen
-              name="AdminTabs"
-              component={AdminTabNavigator}
-            />
+            <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
 
             <Stack.Screen
               name="PharmacyDashboard"
@@ -286,16 +235,12 @@ export const AppNavigator = () => {
 
             <Stack.Screen
               name="AdminDoctorVerificationDetail"
-              component={
-                AdminDoctorVerificationDetailScreen
-              }
+              component={AdminDoctorVerificationDetailScreen}
             />
 
             <Stack.Screen
               name="AdminPharmacyVerificationDetail"
-              component={
-                AdminPharmacyVerificationDetailScreen
-              }
+              component={AdminPharmacyVerificationDetailScreen}
             />
 
             <Stack.Screen
@@ -324,19 +269,23 @@ export const AppNavigator = () => {
             />
 
             <Stack.Screen
-              name="AddMedicine"
-              component={AddMedicineScreen}
+              name="PatientReports"
+              component={PatientReportsStackScreen}
             />
+
+            <Stack.Screen
+              name="PatientUploadReport"
+              component={PatientUploadReportStackScreen}
+            />
+
+            <Stack.Screen name="AddMedicine" component={AddMedicineScreen} />
 
             <Stack.Screen
               name="ConfirmReminder"
               component={ConfirmReminderScreen}
             />
 
-            <Stack.Screen
-              name="ScanMedicine"
-              component={ScanMedicineScreen}
-            />
+            <Stack.Screen name="ScanMedicine" component={ScanMedicineScreen} />
 
             <Stack.Screen
               name="ScanMedicineResult"

@@ -130,10 +130,10 @@ const formatConsultation = (
     updatedAt: consultation.updatedAt,
     patient: consultation.patient
       ? {
-          id: consultation.patient.id,
-          fullName: consultation.patient.fullName,
-          email: consultation.patient.email,
-        }
+        id: consultation.patient.id,
+        fullName: consultation.patient.fullName,
+        email: consultation.patient.email,
+      }
       : null,
     canJoinCall: canJoinConsultation(
       consultation.status
@@ -216,13 +216,13 @@ export const doctorConsultationsService = {
           doctorId,
           ...(query.status !== "ALL"
             ? {
-                status: query.status,
-              }
+              status: query.status,
+            }
             : {}),
           ...(query.type !== "ALL"
             ? {
-                type: query.type,
-              }
+              type: query.type,
+            }
             : {}),
         },
         include: consultationInclude,
@@ -290,8 +290,8 @@ export const doctorConsultationsService = {
           doctorName: doctor.fullName,
           ...(cleanedNotes
             ? {
-                notes: cleanedNotes,
-              }
+              notes: cleanedNotes,
+            }
             : {}),
         },
         include: consultationInclude,
@@ -345,8 +345,8 @@ export const doctorConsultationsService = {
             cleanedNotes || null,
           ...(cleanedNotes
             ? {
-                notes: cleanedNotes,
-              }
+              notes: cleanedNotes,
+            }
             : {}),
         },
         include: consultationInclude,
@@ -395,20 +395,20 @@ export const doctorConsultationsService = {
             consultation.status === "COMPLETED"
               ? consultation
               : await transaction.consultation.update({
-                  where: {
-                    id: consultation.id,
-                  },
-                  data: {
-                    status: "COMPLETED",
-                    completedAt,
-                    ...(cleanedNotes
-                      ? {
-                          notes: cleanedNotes,
-                        }
-                      : {}),
-                  },
-                  include: consultationInclude,
-                });
+                where: {
+                  id: consultation.id,
+                },
+                data: {
+                  status: "COMPLETED",
+                  completedAt,
+                  ...(cleanedNotes
+                    ? {
+                      notes: cleanedNotes,
+                    }
+                    : {}),
+                },
+                include: consultationInclude,
+              });
 
           if (
             consultation.type === "EMERGENCY" &&
@@ -486,17 +486,17 @@ export const doctorConsultationsService = {
     const updatedConsultation =
       consultation.status === "ACCEPTED"
         ? await prisma.consultation.update({
-            where: {
-              id: consultation.id,
-            },
-            data: {
-              status: "IN_PROGRESS",
-              startedAt:
-                consultation.startedAt ||
-                new Date(),
-            },
-            include: consultationInclude,
-          })
+          where: {
+            id: consultation.id,
+          },
+          data: {
+            status: "IN_PROGRESS",
+            startedAt:
+              consultation.startedAt ||
+              new Date(),
+          },
+          include: consultationInclude,
+        })
         : consultation;
 
     return {

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Clock3,
   Droplets,
+  FileText,
   Gauge,
   HeartPulse,
   Mail,
@@ -432,6 +433,13 @@ export const DoctorPatientDetailScreen = ({
     });
   };
 
+  const openPatientReports = () => {
+    navigation.navigate("DoctorPatientReports", {
+      patientId,
+      patientName,
+    });
+  };
+
   const openNoteModal = () => {
     setNoteText("");
     setIsNoteModalVisible(true);
@@ -727,6 +735,37 @@ export const DoctorPatientDetailScreen = ({
                   <Text style={styles.prescriptionActionText}>
                     Add medicines manually or scan a prescription for this
                     patient.
+                  </Text>
+                </View>
+
+                <ChevronRight
+                  size={20}
+                  color={DOCTOR_PRIMARY}
+                  strokeWidth={2.7}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.prescriptionAction}
+                activeOpacity={0.86}
+                onPress={openPatientReports}
+              >
+                <View style={styles.prescriptionActionIcon}>
+                  <FileText
+                    size={24}
+                    color={DOCTOR_PRIMARY}
+                    strokeWidth={2.7}
+                  />
+                </View>
+
+                <View style={styles.prescriptionActionTextBlock}>
+                  <Text style={styles.prescriptionActionTitle}>
+                    Medical Reports
+                  </Text>
+
+                  <Text style={styles.prescriptionActionText}>
+                    View protected patient reports, open uploaded files and add
+                    clinical review notes.
                   </Text>
                 </View>
 

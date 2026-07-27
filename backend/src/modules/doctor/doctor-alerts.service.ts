@@ -151,39 +151,39 @@ const formatAlert = (
     updatedAt: alert.updatedAt,
     patient: alert.patient
       ? {
-          id: alert.patient.id,
-          fullName: alert.patient.fullName,
-          email: alert.patient.email,
-        }
+        id: alert.patient.id,
+        fullName: alert.patient.fullName,
+        email: alert.patient.email,
+      }
       : null,
     vitalReading: alert.vitalReading
       ? {
-          id: alert.vitalReading.id,
-          heartRate: alert.vitalReading.heartRate,
-          spo2: alert.vitalReading.spo2,
-          bpSystolic: alert.vitalReading.bpSystolic,
-          bpDiastolic: alert.vitalReading.bpDiastolic,
-          glucose: alert.vitalReading.glucose,
-          temperature: alert.vitalReading.temperature,
-          status: alert.vitalReading.status,
-          source: alert.vitalReading.source,
-          deviceSource: alert.vitalReading.deviceSource,
-          recordedAt: alert.vitalReading.recordedAt,
-        }
+        id: alert.vitalReading.id,
+        heartRate: alert.vitalReading.heartRate,
+        spo2: alert.vitalReading.spo2,
+        bpSystolic: alert.vitalReading.bpSystolic,
+        bpDiastolic: alert.vitalReading.bpDiastolic,
+        glucose: alert.vitalReading.glucose,
+        temperature: alert.vitalReading.temperature,
+        status: alert.vitalReading.status,
+        source: alert.vitalReading.source,
+        deviceSource: alert.vitalReading.deviceSource,
+        recordedAt: alert.vitalReading.recordedAt,
+      }
       : null,
     consultation: consultation
       ? {
-          id: consultation.id,
-          type: consultation.type,
-          status: consultation.status,
-          reason: consultation.reason,
-          acceptedAt: consultation.acceptedAt,
-          rejectedAt: consultation.rejectedAt,
-          startedAt: consultation.startedAt,
-          completedAt: consultation.completedAt,
-          cancelledAt: consultation.cancelledAt,
-          createdAt: consultation.createdAt,
-        }
+        id: consultation.id,
+        type: consultation.type,
+        status: consultation.status,
+        reason: consultation.reason,
+        acceptedAt: consultation.acceptedAt,
+        rejectedAt: consultation.rejectedAt,
+        startedAt: consultation.startedAt,
+        completedAt: consultation.completedAt,
+        cancelledAt: consultation.cancelledAt,
+        createdAt: consultation.createdAt,
+      }
       : null,
     canAcceptConsultation:
       alert.status === "ESCALATED" &&
@@ -248,8 +248,8 @@ export const doctorAlertsService = {
         },
         ...(query.status !== "ALL"
           ? {
-              status: query.status,
-            }
+            status: query.status,
+          }
           : {}),
       },
       include: alertInclude,

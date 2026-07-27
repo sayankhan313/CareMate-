@@ -36,7 +36,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  FileCheck2,
+  FilePenLine,
+  FileText,
   HeartPulse,
   MessageSquareText,
   Pill,
@@ -51,16 +52,21 @@ import {
 import { API_BASE_URL } from "../../constants/api";
 import { consultationsApi } from "../../services/consultationsApi";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
+import { patientReportsApi } from "../../services/patientReportsApi";
 import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
   RootStackParamList,
 } from "../../types/navigation";
 
-type PatientDashboardScreenProps = CompositeScreenProps<
-  BottomTabScreenProps<PatientTabParamList, "Home">,
-  NativeStackScreenProps<RootStackParamList>
->;
+type PatientDashboardScreenProps =
+  CompositeScreenProps<
+    BottomTabScreenProps<
+      PatientTabParamList,
+      "Home"
+    >,
+    NativeStackScreenProps<RootStackParamList>
+  >;
 
 type DashboardStatus =
   | "STABLE"
@@ -117,16 +123,20 @@ type DashboardData = {
     bpDiastolic: number | null;
     glucose: number | null;
     temperature: number | null;
+
     source:
       | "HEALTH_CONNECT"
       | "SIMULATED"
       | "MANUAL"
       | null;
+
     deviceSource: string | null;
     recordedAt: string | null;
   };
 
-  nextMedicineGroup: NextMedicineGroup | null;
+  nextMedicineGroup:
+    | NextMedicineGroup
+    | null;
 
   latestDoctorNote: {
     id: string;
@@ -137,11 +147,13 @@ type DashboardData = {
   medicineOrder: {
     id: string;
     status: string;
+
     steps: {
       received: boolean;
       preparing: boolean;
       ready: boolean;
     };
+
     updatedAt: string;
   } | null;
 };
@@ -177,19 +189,27 @@ const ON_DANGER_CONTAINER = "#8C1D24";
 
 const DASHBOARD_AUTO_REFRESH_MS = 30_000;
 
-const getErrorMessage = (result: any) => {
-  if (typeof result?.message === "string") {
+const getErrorMessage = (
+  result: any
+) => {
+  if (
+    typeof result?.message === "string"
+  ) {
     return result.message;
   }
 
-  if (Array.isArray(result?.message)) {
+  if (
+    Array.isArray(result?.message)
+  ) {
     return (
       result.message[0]?.message ||
       "Unable to load dashboard."
     );
   }
 
-  if (Array.isArray(result?.errors)) {
+  if (
+    Array.isArray(result?.errors)
+  ) {
     return (
       result.errors[0]?.message ||
       "Unable to load dashboard."
@@ -200,7 +220,8 @@ const getErrorMessage = (result: any) => {
 };
 
 const getGreetingText = () => {
-  const currentHour = new Date().getHours();
+  const currentHour =
+    new Date().getHours();
 
   if (currentHour < 12) {
     return "Good morning";
@@ -218,8 +239,10 @@ const getStatusTone = (
 ) => {
   if (status === "STABLE") {
     return {
-      background: SUCCESS_CONTAINER,
-      text: ON_SUCCESS_CONTAINER,
+      background:
+        SUCCESS_CONTAINER,
+      text:
+        ON_SUCCESS_CONTAINER,
       dot: SUCCESS,
       label: "On track",
     };
@@ -227,8 +250,10 @@ const getStatusTone = (
 
   if (status === "WARNING") {
     return {
-      background: WARNING_CONTAINER,
-      text: ON_WARNING_CONTAINER,
+      background:
+        WARNING_CONTAINER,
+      text:
+        ON_WARNING_CONTAINER,
       dot: WARNING,
       label: "Needs attention",
     };
@@ -236,16 +261,20 @@ const getStatusTone = (
 
   if (status === "CRITICAL") {
     return {
-      background: DANGER_CONTAINER,
-      text: ON_DANGER_CONTAINER,
+      background:
+        DANGER_CONTAINER,
+      text:
+        ON_DANGER_CONTAINER,
       dot: DANGER,
       label: "Critical",
     };
   }
 
   return {
-    background: PRIMARY_CONTAINER,
-    text: ON_PRIMARY_CONTAINER,
+    background:
+      PRIMARY_CONTAINER,
+    text:
+      ON_PRIMARY_CONTAINER,
     dot: PRIMARY,
     label: "No data",
   };
@@ -258,20 +287,35 @@ const formatTime = (
     return "Not scheduled";
   }
 
-  const parsedDate = new Date(value);
+  const parsedDate =
+    new Date(value);
 
-  if (!Number.isNaN(parsedDate.getTime())) {
-    return parsedDate.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  if (
+    !Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
+    return parsedDate.toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
   }
 
-  const [hourText, minuteText] =
-    value.split(":");
+  const [
+    hourText,
+    minuteText,
+  ] = value.split(":");
 
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
+  const hour = Number(
+    hourText
+  );
+
+  const minute = Number(
+    minuteText
+  );
 
   if (
     Number.isNaN(hour) ||
@@ -282,26 +326,41 @@ const formatTime = (
 
   const date = new Date();
 
-  date.setHours(hour, minute, 0, 0);
+  date.setHours(
+    hour,
+    minute,
+    0,
+    0
+  );
 
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleTimeString(
+    [],
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
 };
 
 const formatSourceLabel = (
-  source: DashboardData["healthStatus"]["source"]
+  source:
+    DashboardData["healthStatus"]["source"]
 ) => {
-  if (source === "HEALTH_CONNECT") {
+  if (
+    source === "HEALTH_CONNECT"
+  ) {
     return "Health Connect";
   }
 
-  if (source === "SIMULATED") {
+  if (
+    source === "SIMULATED"
+  ) {
     return "Simulator";
   }
 
-  if (source === "MANUAL") {
+  if (
+    source === "MANUAL"
+  ) {
     return "Manual entry";
   }
 
@@ -315,9 +374,14 @@ const formatRecordedAt = (
     return "No recent reading";
   }
 
-  const parsedDate = new Date(value);
+  const parsedDate =
+    new Date(value);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (
+    Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
     return "Updated recently";
   }
 
@@ -337,17 +401,25 @@ const formatDoctorNoteTime = (
     return "Recently added";
   }
 
-  const parsedDate = new Date(value);
+  const parsedDate =
+    new Date(value);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (
+    Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
     return "Recently added";
   }
 
   const timeText =
-    parsedDate.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    parsedDate.toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
 
   const today = new Date();
 
@@ -360,10 +432,13 @@ const formatDoctorNoteTime = (
   }
 
   const dateText =
-    parsedDate.toLocaleDateString([], {
-      day: "2-digit",
-      month: "short",
-    });
+    parsedDate.toLocaleDateString(
+      [],
+      {
+        day: "2-digit",
+        month: "short",
+      }
+    );
 
   return `${dateText} · ${timeText}`;
 };
@@ -380,7 +455,9 @@ const formatOrderStatus = (
     .split("_")
     .map((part) => {
       return (
-        part.charAt(0).toUpperCase() +
+        part
+          .charAt(0)
+          .toUpperCase() +
         part.slice(1)
       );
     })
@@ -404,32 +481,53 @@ export const PatientDashboardScreen = ({
   navigation,
   route,
 }: PatientDashboardScreenProps) => {
-  const insets = useSafeAreaInsets();
-
-  const [dashboard, setDashboard] =
-    useState<DashboardData | null>(null);
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [isRefreshing, setIsRefreshing] =
-    useState(false);
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
-
-  const [activeCallCount, setActiveCallCount] =
-    useState(0);
+  const insets =
+    useSafeAreaInsets();
 
   const [
-    medicineUpdatesUnread,
-    setMedicineUpdatesUnread,
+    dashboard,
+    setDashboard,
+  ] =
+    useState<DashboardData | null>(
+      null
+    );
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    isRefreshing,
+    setIsRefreshing,
+  ] = useState(false);
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    activeCallCount,
+    setActiveCallCount,
+  ] = useState(0);
+
+  const [
+    medicineReviewUnreadCount,
+    setMedicineReviewUnreadCount,
+  ] = useState(0);
+
+  const [
+    reportUnreadCount,
+    setReportUnreadCount,
   ] = useState(0);
 
   const [
     actionLoadingReminderId,
     setActionLoadingReminderId,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     actionLoadingType,
@@ -439,23 +537,24 @@ export const PatientDashboardScreen = ({
       null
     );
 
-  const resetToLogin = useCallback(async () => {
-    await tokenStorage.removeToken();
+  const resetToLogin =
+    useCallback(async () => {
+      await tokenStorage.removeToken();
 
-    const rootNavigation =
-      navigation.getParent<
-        NativeStackNavigationProp<RootStackParamList>
-      >();
+      const rootNavigation =
+        navigation.getParent<
+          NativeStackNavigationProp<RootStackParamList>
+        >();
 
-    rootNavigation?.reset({
-      index: 0,
-      routes: [
-        {
-          name: "Login",
-        },
-      ],
-    });
-  }, [navigation]);
+      rootNavigation?.reset({
+        index: 0,
+        routes: [
+          {
+            name: "Login",
+          },
+        ],
+      });
+    }, [navigation]);
 
   const loadActiveCallCount =
     useCallback(async () => {
@@ -463,190 +562,261 @@ export const PatientDashboardScreen = ({
         const result =
           await consultationsApi.listConsultations();
 
-        const count = result.filter(
-          (consultation) => {
-            return (
-              consultation.status === "ACCEPTED" ||
-              consultation.status === "IN_PROGRESS"
-            );
-          }
-        ).length;
+        const count =
+          result.filter(
+            (consultation) => {
+              return (
+                consultation.status ===
+                  "ACCEPTED" ||
+                consultation.status ===
+                  "IN_PROGRESS"
+              );
+            }
+          ).length;
 
-        setActiveCallCount(count);
+        setActiveCallCount(
+          count
+        );
       } catch {
         setActiveCallCount(0);
       }
     }, []);
 
-  const loadMedicineUpdatesUnread =
+  const loadMedicineReviewUnreadCount =
     useCallback(async () => {
       try {
         const result =
           await patientMedicineReviewsApi.listReviews();
 
-        setMedicineUpdatesUnread(
-          result.summary?.unread || 0
+        setMedicineReviewUnreadCount(
+          result.summary?.unread ||
+            0
         );
       } catch {
-        setMedicineUpdatesUnread(0);
+        setMedicineReviewUnreadCount(
+          0
+        );
       }
     }, []);
 
-  const loadDashboard = useCallback(
-    async (
-      mode:
-        | "initial"
-        | "refresh"
-        | "silent" = "initial"
-    ) => {
+  const loadReportUnreadCount =
+    useCallback(async () => {
       try {
-        if (mode === "initial") {
-          setIsLoading(true);
-        }
+        const result =
+          await patientReportsApi.listReports();
 
-        if (mode === "refresh") {
-          setIsRefreshing(true);
-        }
-
-        if (mode !== "silent") {
-          setErrorMessage("");
-        }
-
-        const token =
-          await tokenStorage.getToken();
-
-        if (!token) {
-          await resetToLogin();
-          return;
-        }
-
-        const response = await fetch(
-          `${API_BASE_URL}/patient/dashboard`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        setReportUnreadCount(
+          result.summary
+            ?.unreadReviews || 0
         );
-
-        let result:
-          | DashboardApiResponse
-          | any = {};
-
-        try {
-          result = await response.json();
-        } catch {
-          result = {};
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            getErrorMessage(result)
-          );
-        }
-
-        setDashboard(result.data);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to load dashboard.";
-
-        if (mode !== "silent") {
-          setErrorMessage(message);
-        }
-      } finally {
-        if (mode === "initial") {
-          setIsLoading(false);
-        }
-
-        if (mode === "refresh") {
-          setIsRefreshing(false);
-        }
+      } catch {
+        setReportUnreadCount(0);
       }
-    },
-    [resetToLogin]
-  );
+    }, []);
 
-  const refreshDashboard = useCallback(
-    async () => {
-      await Promise.all([
-        loadDashboard("refresh"),
-        loadActiveCallCount(),
-        loadMedicineUpdatesUnread(),
-      ]);
-    },
-    [
-      loadActiveCallCount,
-      loadDashboard,
-      loadMedicineUpdatesUnread,
-    ]
-  );
+  const loadDashboard =
+    useCallback(
+      async (
+        mode:
+          | "initial"
+          | "refresh"
+          | "silent" = "initial"
+      ) => {
+        try {
+          if (
+            mode === "initial"
+          ) {
+            setIsLoading(true);
+          }
+
+          if (
+            mode === "refresh"
+          ) {
+            setIsRefreshing(
+              true
+            );
+          }
+
+          if (
+            mode !== "silent"
+          ) {
+            setErrorMessage("");
+          }
+
+          const token =
+            await tokenStorage.getToken();
+
+          if (!token) {
+            await resetToLogin();
+            return;
+          }
+
+          const response =
+            await fetch(
+              `${API_BASE_URL}/patient/dashboard`,
+              {
+                method: "GET",
+
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          let result:
+            | DashboardApiResponse
+            | any = {};
+
+          try {
+            result =
+              await response.json();
+          } catch {
+            result = {};
+          }
+
+          if (!response.ok) {
+            throw new Error(
+              getErrorMessage(
+                result
+              )
+            );
+          }
+
+          setDashboard(
+            result.data
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Unable to load dashboard.";
+
+          if (
+            mode !== "silent"
+          ) {
+            setErrorMessage(
+              message
+            );
+          }
+        } finally {
+          if (
+            mode === "initial"
+          ) {
+            setIsLoading(
+              false
+            );
+          }
+
+          if (
+            mode === "refresh"
+          ) {
+            setIsRefreshing(
+              false
+            );
+          }
+        }
+      },
+      [resetToLogin]
+    );
 
   useFocusEffect(
     useCallback(() => {
-      void loadDashboard("initial");
-      void loadActiveCallCount();
-      void loadMedicineUpdatesUnread();
+      void loadDashboard(
+        "initial"
+      );
 
-      const intervalId = setInterval(() => {
-        void loadDashboard("silent");
-        void loadActiveCallCount();
-        void loadMedicineUpdatesUnread();
-      }, DASHBOARD_AUTO_REFRESH_MS);
+      void loadActiveCallCount();
+
+      void loadMedicineReviewUnreadCount();
+
+      void loadReportUnreadCount();
+
+      const intervalId =
+        setInterval(() => {
+          void loadDashboard(
+            "silent"
+          );
+
+          void loadActiveCallCount();
+
+          void loadMedicineReviewUnreadCount();
+
+          void loadReportUnreadCount();
+        }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
-        clearInterval(intervalId);
+        clearInterval(
+          intervalId
+        );
       };
     }, [
       loadActiveCallCount,
       loadDashboard,
-      loadMedicineUpdatesUnread,
+      loadMedicineReviewUnreadCount,
+      loadReportUnreadCount,
     ])
   );
 
   const removeMedicineFromDashboardCard = (
     reminderId: string
   ) => {
-    setDashboard((currentDashboard) => {
-      if (
-        !currentDashboard?.nextMedicineGroup
-      ) {
-        return currentDashboard;
-      }
+    setDashboard(
+      (
+        currentDashboard
+      ) => {
+        if (
+          !currentDashboard
+            ?.nextMedicineGroup
+        ) {
+          return currentDashboard;
+        }
 
-      const updatedMedicines =
-        currentDashboard.nextMedicineGroup.medicines.filter(
-          (medicine) => {
-            return (
-              medicine.reminderId !==
-              reminderId
-            );
-          }
-        );
+        const updatedMedicines =
+          currentDashboard.nextMedicineGroup.medicines.filter(
+            (medicine) => {
+              return (
+                medicine.reminderId !==
+                reminderId
+              );
+            }
+          );
 
-      if (updatedMedicines.length === 0) {
+        if (
+          updatedMedicines.length ===
+          0
+        ) {
+          return {
+            ...currentDashboard,
+            nextMedicineGroup:
+              null,
+          };
+        }
+
         return {
           ...currentDashboard,
-          nextMedicineGroup: null,
+
+          nextMedicineGroup: {
+            ...currentDashboard.nextMedicineGroup,
+
+            count:
+              updatedMedicines.length,
+
+            medicines:
+              updatedMedicines,
+          },
         };
       }
-
-      return {
-        ...currentDashboard,
-        nextMedicineGroup: {
-          ...currentDashboard.nextMedicineGroup,
-          count: updatedMedicines.length,
-          medicines: updatedMedicines,
-        },
-      };
-    });
+    );
   };
 
   const markDashboardMedicineTaken =
-    async (reminderId: string) => {
-      if (actionLoadingReminderId) {
+    async (
+      reminderId: string
+    ) => {
+      if (
+        actionLoadingReminderId
+      ) {
         return;
       }
 
@@ -655,7 +825,9 @@ export const PatientDashboardScreen = ({
           reminderId
         );
 
-        setActionLoadingType("TAKEN");
+        setActionLoadingType(
+          "TAKEN"
+        );
 
         const token =
           await tokenStorage.getToken();
@@ -669,20 +841,24 @@ export const PatientDashboardScreen = ({
           return;
         }
 
-        const response = await fetch(
-          `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response =
+          await fetch(
+            `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
+            {
+              method: "POST",
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
         let result: any = {};
 
         try {
-          result = await response.json();
+          result =
+            await response.json();
         } catch {
           result = {};
         }
@@ -701,21 +877,32 @@ export const PatientDashboardScreen = ({
           reminderId
         );
 
-        await loadDashboard("silent");
+        await loadDashboard(
+          "silent"
+        );
       } catch {
         Alert.alert(
           "Network error",
           "Unable to connect to server."
         );
       } finally {
-        setActionLoadingReminderId(null);
-        setActionLoadingType(null);
+        setActionLoadingReminderId(
+          null
+        );
+
+        setActionLoadingType(
+          null
+        );
       }
     };
 
   const snoozeDashboardMedicine =
-    async (reminderId: string) => {
-      if (actionLoadingReminderId) {
+    async (
+      reminderId: string
+    ) => {
+      if (
+        actionLoadingReminderId
+      ) {
         return;
       }
 
@@ -724,7 +911,9 @@ export const PatientDashboardScreen = ({
           reminderId
         );
 
-        setActionLoadingType("SNOOZE");
+        setActionLoadingType(
+          "SNOOZE"
+        );
 
         const token =
           await tokenStorage.getToken();
@@ -738,29 +927,39 @@ export const PatientDashboardScreen = ({
           return;
         }
 
-        const snoozedUntil = new Date(
-          Date.now() + 30 * 60 * 1000
-        ).toISOString();
+        const snoozedUntil =
+          new Date(
+            Date.now() +
+              30 *
+                60 *
+                1000
+          ).toISOString();
 
-        const response = await fetch(
-          `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              snoozedUntil,
-            }),
-          }
-        );
+        const response =
+          await fetch(
+            `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+
+                Authorization:
+                  `Bearer ${token}`,
+              },
+
+              body: JSON.stringify({
+                snoozedUntil,
+              }),
+            }
+          );
 
         let result: any = {};
 
         try {
-          result = await response.json();
+          result =
+            await response.json();
         } catch {
           result = {};
         }
@@ -779,148 +978,181 @@ export const PatientDashboardScreen = ({
           reminderId
         );
 
-        await loadDashboard("silent");
+        await loadDashboard(
+          "silent"
+        );
       } catch {
         Alert.alert(
           "Network error",
           "Unable to connect to server."
         );
       } finally {
-        setActionLoadingReminderId(null);
-        setActionLoadingType(null);
+        setActionLoadingReminderId(
+          null
+        );
+
+        setActionLoadingType(
+          null
+        );
       }
     };
 
-  const getRootNavigation = () => {
-    return navigation.getParent<
-      NativeStackNavigationProp<RootStackParamList>
-    >();
-  };
+  const getRootNavigation =
+    () => {
+      return navigation.getParent<
+        NativeStackNavigationProp<RootStackParamList>
+      >();
+    };
 
-  const openAddMedicineScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
+  const openAddMedicineScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
 
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Add Medicine screen is not available right now."
+      rootNavigation?.navigate(
+        "AddMedicine"
       );
+    };
 
-      return;
-    }
+  const openPatientProfileScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
 
-    rootNavigation.navigate("AddMedicine");
-  };
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Profile screen is not available right now."
+        );
 
-  const openPatientProfileScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
-
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Profile screen is not available right now."
-      );
-
-      return;
-    }
-
-    rootNavigation.navigate(
-      "PatientProfile",
-      {
-        user:
-          dashboard?.patient ||
-          route.params?.user,
+        return;
       }
-    );
-  };
 
-  const openScanMedicineScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
-
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Medicine scanner is not available right now."
+      rootNavigation.navigate(
+        "PatientProfile",
+        {
+          user:
+            dashboard?.patient ||
+            route.params?.user,
+        }
       );
+    };
 
-      return;
-    }
+  const openScanMedicineScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
 
-    rootNavigation.navigate(
-      "ScanMedicine"
-    );
-  };
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Medicine scanner is not available right now."
+        );
 
-  const openEmergencyResponseScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
+        return;
+      }
 
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Safety Response screen is not available right now."
+      rootNavigation.navigate(
+        "ScanMedicine"
       );
+    };
 
-      return;
-    }
+  const openEmergencyResponseScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
 
-    rootNavigation.navigate(
-      "ManualSafetyResponse"
-    );
-  };
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Safety Response screen is not available right now."
+        );
 
-  const openActiveCallsScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
+        return;
+      }
 
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Active Calls screen is not available right now."
+      rootNavigation.navigate(
+        "ManualSafetyResponse"
       );
+    };
 
-      return;
-    }
-
-    rootNavigation.navigate(
-      "PatientActiveCalls"
-    );
-  };
-
-  const openMedicineUpdatesScreen = () => {
-    const rootNavigation =
-      getRootNavigation();
-
-    if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open",
-        "Medicine Updates screen is not available right now."
+  const openMedicinesScreen =
+    () => {
+      navigation.navigate(
+        "Medicines"
       );
+    };
 
-      return;
-    }
+  const openVitalsScreen =
+    () => {
+      navigation.navigate(
+        "Vitals"
+      );
+    };
 
-    rootNavigation.navigate(
-      "MedicineUpdates"
-    );
-  };
+  const openActiveCallsScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
 
-  const openMedicinesScreen = () => {
-    navigation.navigate("Medicines");
-  };
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Active Calls screen is not available right now."
+        );
 
-  const openVitalsScreen = () => {
-    navigation.navigate("Vitals");
-  };
+        return;
+      }
 
-  const openOrdersScreen = () => {
-    navigation.navigate(
-      "PatientOrders"
-    );
-  };
+      rootNavigation.navigate(
+        "PatientActiveCalls"
+      );
+    };
+
+  const openMedicineUpdatesScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
+
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Medicine Updates screen is not available right now."
+        );
+
+        return;
+      }
+
+      rootNavigation.navigate(
+        "MedicineUpdates"
+      );
+    };
+
+  const openPatientReportsScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
+
+      if (!rootNavigation) {
+        Alert.alert(
+          "Unable to open",
+          "Medical Reports screen is not available right now."
+        );
+
+        return;
+      }
+
+      rootNavigation.navigate(
+        "PatientReports"
+      );
+    };
+
+  const openOrdersScreen =
+    () => {
+      navigation.navigate(
+        "PatientOrders"
+      );
+    };
 
   const showComingSoon = (
     featureName: string
@@ -937,7 +1169,8 @@ export const PatientDashboardScreen = ({
     )[0] || "Patient";
 
   const patientFirstName =
-    dashboard?.patient.firstName ||
+    dashboard?.patient
+      .firstName ||
     fallbackName;
 
   const patientInitial =
@@ -960,7 +1193,8 @@ export const PatientDashboardScreen = ({
     null;
 
   const firstMedicine =
-    nextMedicineGroup?.medicines[0];
+    nextMedicineGroup
+      ?.medicines[0];
 
   const isNextMedicineActionLoading =
     firstMedicine?.reminderId ===
@@ -968,25 +1202,33 @@ export const PatientDashboardScreen = ({
 
   const isTakingNextMedicine =
     isNextMedicineActionLoading &&
-    actionLoadingType === "TAKEN";
+    actionLoadingType ===
+      "TAKEN";
 
   const isSnoozingNextMedicine =
     isNextMedicineActionLoading &&
-    actionLoadingType === "SNOOZE";
+    actionLoadingType ===
+      "SNOOZE";
 
   const isMedicineActionDisabled =
-    Boolean(actionLoadingReminderId);
+    Boolean(
+      actionLoadingReminderId
+    );
 
-  const healthMeta = useMemo(() => {
-    return `${formatSourceLabel(
-      healthStatus?.source || null
-    )} · ${formatRecordedAt(
-      healthStatus?.recordedAt
-    )}`;
-  }, [
-    healthStatus?.recordedAt,
-    healthStatus?.source,
-  ]);
+  const healthMeta = useMemo(
+    () => {
+      return `${formatSourceLabel(
+        healthStatus?.source ||
+          null
+      )} · ${formatRecordedAt(
+        healthStatus?.recordedAt
+      )}`;
+    },
+    [
+      healthStatus?.recordedAt,
+      healthStatus?.source,
+    ]
+  );
 
   return (
     <SafeAreaView
@@ -994,7 +1236,9 @@ export const PatientDashboardScreen = ({
       edges={["top"]}
     >
       <StatusBar
-        backgroundColor={BACKGROUND}
+        backgroundColor={
+          BACKGROUND
+        }
         barStyle="dark-content"
       />
 
@@ -1006,7 +1250,9 @@ export const PatientDashboardScreen = ({
             }
           >
             <Text
-              style={styles.helloText}
+              style={
+                styles.helloText
+              }
             >
               Hello {patientFirstName} 👋
             </Text>
@@ -1086,7 +1332,6 @@ export const PatientDashboardScreen = ({
                 <UserRound
                   size={19}
                   color={SURFACE}
-                  strokeWidth={2.2}
                 />
               )}
             </TouchableOpacity>
@@ -1114,9 +1359,17 @@ export const PatientDashboardScreen = ({
               refreshing={
                 isRefreshing
               }
-              onRefresh={() =>
-                void refreshDashboard()
-              }
+              onRefresh={() => {
+                void loadDashboard(
+                  "refresh"
+                );
+
+                void loadActiveCallCount();
+
+                void loadMedicineReviewUnreadCount();
+
+                void loadReportUnreadCount();
+              }}
               tintColor={PRIMARY}
               colors={[PRIMARY]}
             />
@@ -1191,7 +1444,9 @@ export const PatientDashboardScreen = ({
                 }
                 activeOpacity={0.84}
                 onPress={() =>
-                  void refreshDashboard()
+                  void loadDashboard(
+                    "initial"
+                  )
                 }
               >
                 <RefreshCw
@@ -1218,7 +1473,7 @@ export const PatientDashboardScreen = ({
                 style={
                   styles.healthCard
                 }
-                activeOpacity={0.9}
+                activeOpacity={0.86}
                 onPress={
                   openVitalsScreen
                 }
@@ -1267,7 +1522,9 @@ export const PatientDashboardScreen = ({
                         styles.healthCardTitle
                       }
                     >
-                      {statusTone.label}
+                      {
+                        statusTone.label
+                      }
                     </Text>
 
                     <Text
@@ -1394,25 +1651,6 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Updates"
-                  icon={
-                    <FileCheck2
-                      size={23}
-                      color={
-                        ON_PRIMARY_CONTAINER
-                      }
-                      strokeWidth={2}
-                    />
-                  }
-                  badgeCount={
-                    medicineUpdatesUnread
-                  }
-                  onPress={
-                    openMedicineUpdatesScreen
-                  }
-                />
-
-                <CategoryShortcut
                   label="Active Calls"
                   icon={
                     <Video
@@ -1428,6 +1666,44 @@ export const PatientDashboardScreen = ({
                   }
                   onPress={
                     openActiveCallsScreen
+                  }
+                />
+
+                <CategoryShortcut
+                  label="Updates"
+                  icon={
+                    <FilePenLine
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  badgeCount={
+                    medicineReviewUnreadCount
+                  }
+                  onPress={
+                    openMedicineUpdatesScreen
+                  }
+                />
+
+                <CategoryShortcut
+                  label="Reports"
+                  icon={
+                    <FileText
+                      size={23}
+                      color={
+                        ON_PRIMARY_CONTAINER
+                      }
+                      strokeWidth={2}
+                    />
+                  }
+                  badgeCount={
+                    reportUnreadCount
+                  }
+                  onPress={
+                    openPatientReportsScreen
                   }
                 />
 
@@ -1572,9 +1848,7 @@ export const PatientDashboardScreen = ({
                     >
                       {dashboard?.latestDoctorNote
                         ? formatDoctorNoteTime(
-                            dashboard
-                              .latestDoctorNote
-                              .createdAt
+                            dashboard.latestDoctorNote.createdAt
                           )
                         : "A new note will automatically appear here after your doctor creates it."}
                     </Text>
@@ -1615,12 +1889,11 @@ export const PatientDashboardScreen = ({
             style={[
               styles.fab,
               {
-                bottom:
-                  Math.max(
-                    24,
-                    insets.bottom +
-                      20
-                  ),
+                bottom: Math.max(
+                  24,
+                  insets.bottom +
+                    20
+                ),
               },
             ]}
             activeOpacity={0.86}
@@ -1664,7 +1937,8 @@ const CategoryShortcut = ({
       >
         {icon}
 
-        {badgeCount !== undefined &&
+        {badgeCount !==
+          undefined &&
         badgeCount > 0 ? (
           <View
             style={
@@ -1685,8 +1959,9 @@ const CategoryShortcut = ({
       </View>
 
       <Text
-        style={styles.categoryLabel}
-        numberOfLines={2}
+        style={
+          styles.categoryLabel
+        }
       >
         {label}
       </Text>
@@ -1744,18 +2019,21 @@ const MedicineOrderMiniBar = ({
   order,
   onPress,
 }: {
-  order: DashboardData["medicineOrder"];
+  order:
+    DashboardData["medicineOrder"];
   onPress: () => void;
 }) => {
-  if (!order) {
-    return null;
-  }
-
-  const steps = order.steps;
+  const steps =
+    order?.steps || {
+      received: true,
+      preparing: true,
+      ready: false,
+    };
 
   const statusText =
     formatOrderStatus(
-      order.status
+      order?.status ||
+        "PREPARING"
     );
 
   return (
@@ -1763,7 +2041,7 @@ const MedicineOrderMiniBar = ({
       style={
         styles.orderMiniCard
       }
-      activeOpacity={0.88}
+      activeOpacity={0.84}
       onPress={onPress}
     >
       <View
@@ -1910,7 +2188,8 @@ const OrderMiniStep = ({
           active
             ? {
                 color:
-                  tone === "success"
+                  tone ===
+                  "success"
                     ? ON_SUCCESS_CONTAINER
                     : ON_WARNING_CONTAINER,
               }
@@ -1935,16 +2214,23 @@ const MedicinePlanBlock = ({
   onMarkTaken,
   onSnooze,
 }: {
-  nextMedicineGroup: NextMedicineGroup | null;
-  firstMedicine?: DashboardMedicine;
+  nextMedicineGroup:
+    | NextMedicineGroup
+    | null;
+
+  firstMedicine?:
+    DashboardMedicine;
+
   isTakingNextMedicine: boolean;
   isSnoozingNextMedicine: boolean;
   isMedicineActionDisabled: boolean;
   onAddMedicine: () => void;
   onOpenMedicines: () => void;
+
   onMarkTaken: (
     reminderId: string
   ) => void;
+
   onSnooze: (
     reminderId: string
   ) => void;
@@ -2000,7 +2286,9 @@ const MedicinePlanBlock = ({
             styles.smallPrimaryButton
           }
           activeOpacity={0.84}
-          onPress={onAddMedicine}
+          onPress={
+            onAddMedicine
+          }
         >
           <Text
             style={
@@ -2015,7 +2303,8 @@ const MedicinePlanBlock = ({
   }
 
   const hasMultipleMedicines =
-    nextMedicineGroup.count > 1;
+    nextMedicineGroup.count >
+    1;
 
   return (
     <View>
@@ -2024,7 +2313,9 @@ const MedicinePlanBlock = ({
           styles.medicineTopRow
         }
         activeOpacity={0.84}
-        onPress={onOpenMedicines}
+        onPress={
+          onOpenMedicines
+        }
       >
         <View
           style={styles.timeBox}
@@ -2095,38 +2386,48 @@ const MedicinePlanBlock = ({
         >
           {nextMedicineGroup.medicines
             .slice(0, 3)
-            .map((medicine) => (
-              <View
-                key={`${medicine.medicineId}-${medicine.reminderId}`}
-                style={
-                  styles.previewRow
-                }
-              >
+            .map(
+              (medicine) => (
                 <View
+                  key={`${medicine.medicineId}-${medicine.reminderId}`}
                   style={
-                    styles.previewDot
+                    styles.previewRow
                   }
-                />
-
-                <Text
-                  style={
-                    styles.previewName
-                  }
-                  numberOfLines={1}
                 >
-                  {medicine.name}
-                </Text>
+                  <View
+                    style={
+                      styles.previewDot
+                    }
+                  />
 
-                <Text
-                  style={
-                    styles.previewDose
-                  }
-                  numberOfLines={1}
-                >
-                  {medicine.dose}
-                </Text>
-              </View>
-            ))}
+                  <Text
+                    style={
+                      styles.previewName
+                    }
+                    numberOfLines={
+                      1
+                    }
+                  >
+                    {
+                      medicine.name
+                    }
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.previewDose
+                    }
+                    numberOfLines={
+                      1
+                    }
+                  >
+                    {
+                      medicine.dose
+                    }
+                  </Text>
+                </View>
+              )
+            )}
         </View>
       ) : (
         <View
@@ -2151,28 +2452,21 @@ const MedicinePlanBlock = ({
               )
             }
           >
-            {isTakingNextMedicine ? (
-              <ActivityIndicator
-                size="small"
-                color={SURFACE}
-              />
-            ) : (
-              <>
-                <CheckCircle2
-                  size={17}
-                  color={SURFACE}
-                  strokeWidth={2.2}
-                />
+            <CheckCircle2
+              size={17}
+              color={SURFACE}
+              strokeWidth={2.2}
+            />
 
-                <Text
-                  style={
-                    styles.takenButtonText
-                  }
-                >
-                  Taken
-                </Text>
-              </>
-            )}
+            <Text
+              style={
+                styles.takenButtonText
+              }
+            >
+              {isTakingNextMedicine
+                ? "Saving..."
+                : "Taken"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -2192,28 +2486,21 @@ const MedicinePlanBlock = ({
               )
             }
           >
-            {isSnoozingNextMedicine ? (
-              <ActivityIndicator
-                size="small"
-                color={PRIMARY}
-              />
-            ) : (
-              <>
-                <Clock3
-                  size={17}
-                  color={PRIMARY}
-                  strokeWidth={2.2}
-                />
+            <Clock3
+              size={17}
+              color={PRIMARY}
+              strokeWidth={2.2}
+            />
 
-                <Text
-                  style={
-                    styles.snoozeButtonText
-                  }
-                >
-                  Snooze
-                </Text>
-              </>
-            )}
+            <Text
+              style={
+                styles.snoozeButtonText
+              }
+            >
+              {isSnoozingNextMedicine
+                ? "Snoozing..."
+                : "Snooze"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -2225,16 +2512,21 @@ const elevate = (
   level: number
 ) => ({
   elevation: level,
-  shadowColor: TEXT,
+  shadowColor: "#1B1D2A",
+
   shadowOpacity:
     Platform.OS === "android"
       ? 0
-      : 0.08 + level * 0.01,
+      : 0.08 +
+        level * 0.01,
+
   shadowRadius:
     level * 1.6,
+
   shadowOffset: {
     width: 0,
-    height: level * 0.8,
+    height:
+      level * 0.8,
   },
 });
 
@@ -2253,10 +2545,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 12,
+
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: BACKGROUND,
+    justifyContent:
+      "space-between",
+
+    backgroundColor:
+      BACKGROUND,
   },
 
   greetingBlock: {
@@ -2268,6 +2564,7 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 20,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   subHelloText: {
@@ -2285,7 +2582,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 4,
@@ -2301,13 +2598,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: DANGER,
     borderWidth: 1.5,
-    borderColor: BACKGROUND,
+    borderColor:
+      BACKGROUND,
   },
 
   avatar: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: 13,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
@@ -2327,7 +2625,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 6,
+    paddingTop: 4,
   },
 
   statePanel: {
@@ -2341,7 +2639,7 @@ const styles = StyleSheet.create({
 
   stateTitle: {
     color: TEXT,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     marginTop: 12,
   },
@@ -2359,13 +2657,15 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: DANGER_CONTAINER,
+    backgroundColor:
+      DANGER_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
   },
 
   errorTitle: {
-    color: ON_DANGER_CONTAINER,
+    color:
+      ON_DANGER_CONTAINER,
     fontSize: 17,
     fontWeight: "700",
     marginTop: 12,
@@ -2399,6 +2699,61 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
+  categoryContent: {
+    paddingBottom: 14,
+    paddingTop: 4,
+  },
+
+  categoryItem: {
+    alignItems: "center",
+    marginRight: 14,
+    width: 74,
+    borderRadius: 16,
+    paddingVertical: 4,
+    overflow: "visible",
+  },
+
+  categoryIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor:
+      PRIMARY_CONTAINER,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  categoryBadge: {
+    position: "absolute",
+    top: -6,
+    right: -7,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 8,
+    backgroundColor: DANGER,
+    borderWidth: 2,
+    borderColor:
+      BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+
+  categoryBadgeText: {
+    color: SURFACE,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  categoryLabel: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 8,
+    textAlign: "center",
+  },
+
   healthCard: {
     backgroundColor: PRIMARY,
     borderRadius: 18,
@@ -2410,8 +2765,10 @@ const styles = StyleSheet.create({
 
   healthCardTop: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
+    alignItems:
+      "flex-start",
+    justifyContent:
+      "space-between",
   },
 
   statusBadge: {
@@ -2439,6 +2796,7 @@ const styles = StyleSheet.create({
     color: SURFACE,
     fontSize: 26,
     fontWeight: "700",
+    letterSpacing: 0,
     marginTop: 14,
   },
 
@@ -2507,73 +2865,20 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
 
-  categoryContent: {
-    paddingBottom: 14,
-    paddingTop: 4,
-    paddingRight: 10,
-  },
-
-  categoryItem: {
-    alignItems: "center",
-    marginRight: 14,
-    width: 74,
-    borderRadius: 16,
-    paddingVertical: 4,
-    overflow: "visible",
-  },
-
-  categoryIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: PRIMARY_CONTAINER,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "visible",
-  },
-
-  categoryBadge: {
-    position: "absolute",
-    top: -6,
-    right: -7,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: DANGER,
-    borderWidth: 2,
-    borderColor: BACKGROUND,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-
-  categoryBadgeText: {
-    color: SURFACE,
-    fontSize: 9,
-    fontWeight: "700",
-  },
-
-  categoryLabel: {
-    color: TEXT,
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 8,
-    textAlign: "center",
-    lineHeight: 14,
-  },
-
   sectionHeader: {
     marginBottom: 10,
     marginTop: 2,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
   },
 
   sectionTitle: {
     color: TEXT,
     fontSize: 18,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   sectionAction: {
@@ -2617,20 +2922,23 @@ const styles = StyleSheet.create({
     width: 64,
     height: 54,
     borderRadius: 13,
-    backgroundColor: WARNING_CONTAINER,
+    backgroundColor:
+      WARNING_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
 
   timeBoxText: {
-    color: ON_WARNING_CONTAINER,
+    color:
+      ON_WARNING_CONTAINER,
     fontSize: 13,
     fontWeight: "700",
   },
 
   timeBoxLabel: {
-    color: ON_WARNING_CONTAINER,
+    color:
+      ON_WARNING_CONTAINER,
     fontSize: 10,
     fontWeight: "600",
     marginTop: 2,
@@ -2678,7 +2986,8 @@ const styles = StyleSheet.create({
   previewRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: SOFT_PANEL,
+    backgroundColor:
+      SOFT_PANEL,
     borderRadius: 11,
     paddingHorizontal: 11,
     paddingVertical: 9,
@@ -2716,7 +3025,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: SUCCESS,
     borderRadius: 12,
-    minHeight: 45,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -2734,9 +3043,10 @@ const styles = StyleSheet.create({
 
   snoozeButton: {
     flex: 1,
-    backgroundColor: PRIMARY_CONTAINER,
+    backgroundColor:
+      PRIMARY_CONTAINER,
     borderRadius: 12,
-    minHeight: 45,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -2744,7 +3054,8 @@ const styles = StyleSheet.create({
   },
 
   snoozeButtonText: {
-    color: ON_PRIMARY_CONTAINER,
+    color:
+      ON_PRIMARY_CONTAINER,
     fontSize: 14,
     fontWeight: "700",
     marginLeft: 6,
@@ -2771,7 +3082,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: PRIMARY_CONTAINER,
+    backgroundColor:
+      PRIMARY_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -2800,7 +3112,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     lineHeight: 20,
-    backgroundColor: SOFT_PANEL,
+    backgroundColor:
+      SOFT_PANEL,
     borderRadius: 12,
     padding: 13,
     marginTop: 14,
@@ -2820,7 +3133,8 @@ const styles = StyleSheet.create({
   orderMiniHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     marginBottom: 16,
   },
 
@@ -2831,14 +3145,16 @@ const styles = StyleSheet.create({
   },
 
   orderStatusPill: {
-    backgroundColor: WARNING_CONTAINER,
+    backgroundColor:
+      WARNING_CONTAINER,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 4,
   },
 
   orderStatusText: {
-    color: ON_WARNING_CONTAINER,
+    color:
+      ON_WARNING_CONTAINER,
     fontSize: 9,
     fontWeight: "700",
   },
@@ -2860,9 +3176,11 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: SURFACE_VARIANT,
+    backgroundColor:
+      SURFACE_VARIANT,
     borderWidth: 1,
-    borderColor: SURFACE_VARIANT,
+    borderColor:
+      SURFACE_VARIANT,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2877,7 +3195,8 @@ const styles = StyleSheet.create({
   orderStepLine: {
     flex: 1,
     height: 3,
-    backgroundColor: SURFACE_VARIANT,
+    backgroundColor:
+      SURFACE_VARIANT,
     borderRadius: 2,
     marginHorizontal: 5,
   },
@@ -2895,7 +3214,7 @@ const styles = StyleSheet.create({
     right: 20,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 18,
     backgroundColor: PRIMARY,
     alignItems: "center",
     justifyContent: "center",
@@ -2903,5 +3222,3 @@ const styles = StyleSheet.create({
     ...elevate(4),
   },
 });
-
-export default PatientDashboardScreen;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { uploadSinglePatientReport } from "../../middleware/report-upload.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
 
 import { consultationController } from "./consultation.controller.js";
@@ -9,13 +10,21 @@ import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { profileController } from "./profile.controller.js";
+import { reportController } from "./report.controller.js";
 import { safetyController } from "./safety.controller.js";
 import { vitalsController } from "./vitals.controller.js";
 
 const router = Router();
 
-router.use(authMiddleware);
-router.use(authorizeRoles("PATIENT"));
+router.use(
+  authMiddleware
+);
+
+router.use(
+  authorizeRoles(
+    "PATIENT"
+  )
+);
 
 router.get(
   "/dashboard",
@@ -60,6 +69,32 @@ router.patch(
 router.delete(
   "/doctor-assignments/:doctorId",
   doctorAssignmentController.removeDoctor
+);
+
+router.post(
+  "/reports",
+  uploadSinglePatientReport,
+  reportController.createReport
+);
+
+router.get(
+  "/reports",
+  reportController.listReports
+);
+
+router.get(
+  "/reports/:reportId/file",
+  reportController.getReportFile
+);
+
+router.post(
+  "/reports/:reportId/seen",
+  reportController.markReportReviewsSeen
+);
+
+router.get(
+  "/reports/:reportId",
+  reportController.getReportDetail
 );
 
 router.post(

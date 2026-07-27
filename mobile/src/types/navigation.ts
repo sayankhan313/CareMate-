@@ -26,9 +26,7 @@ export type AdminAccountStatus =
   | "REJECTED"
   | "DISABLED";
 
-export type AdminUserStatusFilter =
-  | AdminAccountStatus
-  | "ALL";
+export type AdminUserStatusFilter = AdminAccountStatus | "ALL";
 
 export type AdminTabParamList = {
   Dashboard:
@@ -56,20 +54,15 @@ export type AdminTabParamList = {
     | undefined;
 };
 
-export type MedicineFrequency =
-  | "ONCE_DAILY"
-  | "TWICE_DAILY"
-  | "THREE_TIMES_DAILY"
-  | "FOUR_TIMES_DAILY"
-  | "AS_NEEDED"
-  | "CUSTOM";
-
 export type MedicineDraft = {
   name: string;
   dose: string;
   instructions?: string;
-  frequency: MedicineFrequency;
-  customFrequency?: string;
+  frequency:
+    | "ONCE_DAILY"
+    | "TWICE_DAILY"
+    | "THREE_TIMES_DAILY"
+    | "AS_NEEDED";
   timeOfDay: string;
   selectedTimes?: string[];
   startDate: string;
@@ -78,31 +71,13 @@ export type MedicineDraft = {
   sendToDoctorForReview: boolean;
 };
 
-export type AddMedicineMode =
-  | "CREATE"
-  | "EDIT_DRAFT"
-  | "RESUBMIT_REVIEW";
+export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 
-export type ConfirmReminderMode =
-  | "CREATE"
-  | "RESUBMIT_REVIEW";
+export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
 
-export type ScanMedicineSource =
-  | "DEMO"
-  | "CAMERA"
-  | "GALLERY";
+export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
 
-export type ConsultationParticipantRole =
-  | "PATIENT"
-  | "DOCTOR";
-
-export type ConsultationEndedBy =
-  | "PATIENT"
-  | "DOCTOR";
-
-export type ConsultationCompletionStatus =
-  | "COMPLETED"
-  | "LEFT";
+export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -191,18 +166,20 @@ export type RootStackParamList = {
 
   MedicineUpdates: undefined;
 
+  PatientReports: undefined;
+
+  PatientUploadReport: undefined;
+
   AddMedicine:
     | {
         medicineDraft?: MedicineDraft;
-        mode?: AddMedicineMode;
+        mode?: "CREATE" | "EDIT_DRAFT" | "RESUBMIT_REVIEW";
         medicineReviewRequestId?: string;
       }
     | undefined;
 
   ConfirmReminder: {
     medicineDraft: MedicineDraft;
-    mode?: ConfirmReminderMode;
-    medicineReviewRequestId?: string;
   };
 
   ScanMedicine: undefined;
@@ -236,9 +213,7 @@ export type RootStackParamList = {
 
   VideoConsultation: {
     consultationId: string;
-    consultationType?:
-      | "EMERGENCY"
-      | "MANUAL";
+    consultationType?: "EMERGENCY" | "MANUAL";
     patientMeeting?: MeetingConfig;
     doctorMeeting?: MeetingConfig;
     patientMeetingUrl?: string;
@@ -247,9 +222,7 @@ export type RootStackParamList = {
 
   ConsultationEnded: {
     consultationId: string;
-    consultationType?:
-      | "EMERGENCY"
-      | "MANUAL";
+    consultationType?: "EMERGENCY" | "MANUAL";
     participantRole?: ConsultationParticipantRole;
     endedBy?: ConsultationEndedBy;
     completionStatus?: ConsultationCompletionStatus;
@@ -258,6 +231,19 @@ export type RootStackParamList = {
   DoctorPatientDetail: {
     patientId: string;
     patientName?: string;
+  };
+
+  DoctorPatientReports: {
+    patientId: string;
+    patientName: string;
+  };
+
+  DoctorReportReviews: undefined;
+
+  DoctorReportReview: {
+    patientId: string;
+    patientName: string;
+    reportId: string;
   };
 
   DoctorSelectPrescriptionPatient: undefined;
