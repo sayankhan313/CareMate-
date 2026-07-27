@@ -81,17 +81,11 @@ export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
 
 export type RootStackParamList = {
   Splash: undefined;
-
   Welcome: undefined;
-
   Login: undefined;
-
   RoleSelection: undefined;
-
   PatientSignup: undefined;
-
   DoctorSignup: undefined;
-
   PharmacySignup: undefined;
 
   EmailVerification: {
@@ -148,6 +142,12 @@ export type RootStackParamList = {
     pharmacyId: string;
   };
 
+  AdminAuditLogs: undefined;
+
+  AdminAuditLogDetail: {
+    auditLogId: string;
+  };
+
   AdminRegisterWebView: {
     title: string;
     url: string;
@@ -161,13 +161,9 @@ export type RootStackParamList = {
     | undefined;
 
   SelectDoctor: undefined;
-
   PatientActiveCalls: undefined;
-
   MedicineUpdates: undefined;
-
   PatientReports: undefined;
-
   PatientUploadReport: undefined;
 
   AddMedicine:
@@ -198,7 +194,6 @@ export type RootStackParamList = {
   };
 
   ConnectedDevice: undefined;
-
   ManualSafetyResponse: undefined;
 
   SafetyResponse: {

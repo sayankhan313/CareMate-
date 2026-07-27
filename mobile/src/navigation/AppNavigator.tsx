@@ -47,6 +47,8 @@ import DoctorReportReviewScreen from "../screens/doctor/DoctorReportReviewScreen
 
 import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
 import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
+import { AdminAuditLogsScreen } from "../screens/admin/AdminAuditLogsScreen";
+import { AdminAuditLogDetailScreen } from "../screens/admin/AdminAuditLogDetailScreen";
 import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
 
 import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
@@ -90,6 +92,11 @@ const DoctorPrescriptionStackScreen =
 const DoctorSelectNotePatientStackScreen =
   DoctorSelectNotePatientScreen as ComponentType<any>;
 const DoctorAddNoteStackScreen = DoctorAddNoteScreen as ComponentType<any>;
+
+const AdminAuditLogsStackScreen =
+  AdminAuditLogsScreen as ComponentType<any>;
+const AdminAuditLogDetailStackScreen =
+  AdminAuditLogDetailScreen as ComponentType<any>;
 
 const CriticalVitalWatcher = () => {
   const { lastSyncedReading } = useHealthConnectDevice();
@@ -156,7 +163,10 @@ export const AppNavigator = () => {
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
             <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
-            <Stack.Screen name="PharmacySignup" component={PharmacySignupScreen} />
+            <Stack.Screen
+              name="PharmacySignup"
+              component={PharmacySignupScreen}
+            />
 
             <Stack.Screen
               name="PharmacyPendingApproval"
@@ -241,6 +251,16 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="AdminPharmacyVerificationDetail"
               component={AdminPharmacyVerificationDetailScreen}
+            />
+
+            <Stack.Screen
+              name="AdminAuditLogs"
+              component={AdminAuditLogsStackScreen}
+            />
+
+            <Stack.Screen
+              name="AdminAuditLogDetail"
+              component={AdminAuditLogDetailStackScreen}
             />
 
             <Stack.Screen

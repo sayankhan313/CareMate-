@@ -21,6 +21,9 @@ export type AdminUserRole =
   | "PHARMACY"
   | "ADMIN";
 
+export type AdminAuditActorRole = AdminUserRole | "SYSTEM";
+export type AdminAuditOutcome = "SUCCESS" | "FAILURE";
+
 export type AdminUser = {
   id: string;
   fullName: string;
@@ -165,6 +168,68 @@ export type PharmacyVerificationDecisionResult = {
   decision: VerificationDecision;
 };
 
+export type AdminAuditUserSummary = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: AdminUserRole;
+};
+
+export type AdminAuditLog = {
+  id: string;
+  actorId: string | null;
+  actorRole: AdminAuditActorRole;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  patientId: string | null;
+  outcome: AdminAuditOutcome;
+  description: string;
+  metadata: Record<string, unknown> | null;
+  requestMethod: string | null;
+  requestPath: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  actor: AdminAuditUserSummary | null;
+  patient: AdminAuditUserSummary | null;
+};
+
+export type AdminAuditPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
+export type AdminAuditLogFilters = {
+  actorRole?: AdminAuditActorRole;
+  action?: string;
+  outcome?: AdminAuditOutcome;
+  entityType?: string;
+  fromDate?: string;
+  toDate?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type AdminAuditLogsResult = {
+  items: AdminAuditLog[];
+  pagination: AdminAuditPagination;
+  filters: {
+    actorRole: AdminAuditActorRole | null;
+    action: string | null;
+    outcome: AdminAuditOutcome | null;
+    entityType: string | null;
+    fromDate: string | null;
+    toDate: string | null;
+    search: string | null;
+  };
+};
+
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") {
     return result.message;
@@ -194,6 +259,43 @@ const getAuthHeaders = async () => {
   };
 };
 
+const buildAuditQuery = (filters: AdminAuditLogFilters) => {
+  const query: string[] = [];
+
+  if (filters.actorRole) {
+    query.push(`actorRole=${encodeURIComponent(filters.actorRole)}`);
+  }
+
+  if (filters.action) {
+    query.push(`action=${encodeURIComponent(filters.action)}`);
+  }
+
+  if (filters.outcome) {
+    query.push(`outcome=${encodeURIComponent(filters.outcome)}`);
+  }
+
+  if (filters.entityType) {
+    query.push(`entityType=${encodeURIComponent(filters.entityType)}`);
+  }
+
+  if (filters.fromDate) {
+    query.push(`fromDate=${encodeURIComponent(filters.fromDate)}`);
+  }
+
+  if (filters.toDate) {
+    query.push(`toDate=${encodeURIComponent(filters.toDate)}`);
+  }
+
+  if (filters.search) {
+    query.push(`search=${encodeURIComponent(filters.search)}`);
+  }
+
+  query.push(`page=${filters.page || 1}`);
+  query.push(`limit=${filters.limit || 20}`);
+
+  return query.join("&");
+};
+
 export const getBackendOrigin = () => {
   return API_BASE_URL.replace(/\/api\/v1\/?$/, "");
 };
@@ -220,14 +322,49 @@ export const adminApi = {
       headers: await getAuthHeaders(),
     });
 
-    const result: ApiResponse<AdminDashboardData> | any =
-      await response.json();
+    const result: ApiResponse<AdminDashboardData> | any = await response.json();
 
     if (!response.ok) {
       throw new Error(getErrorMessage(result));
     }
 
     return result.data as AdminDashboardData;
+  },
+
+  async listAuditLogs(filters: AdminAuditLogFilters = {}) {
+    const query = buildAuditQuery(filters);
+
+    const response = await fetch(`${API_BASE_URL}/admin/audit-logs?${query}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+
+    const result: ApiResponse<AdminAuditLogsResult> | any =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(getErrorMessage(result));
+    }
+
+    return result.data as AdminAuditLogsResult;
+  },
+
+  async getAuditLogDetail(auditLogId: string) {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit-logs/${auditLogId}`,
+      {
+        method: "GET",
+        headers: await getAuthHeaders(),
+      }
+    );
+
+    const result: ApiResponse<AdminAuditLog> | any = await response.json();
+
+    if (!response.ok) {
+      throw new Error(getErrorMessage(result));
+    }
+
+    return result.data as AdminAuditLog;
   },
 
   async listUsers() {
@@ -246,11 +383,14 @@ export const adminApi = {
   },
 
   async suspendUser(userId: string) {
-    const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/suspend`, {
-      method: "PATCH",
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({}),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/admin/users/${userId}/suspend`,
+      {
+        method: "PATCH",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({}),
+      }
+    );
 
     const result: ApiResponse<UserSuspendResult> | any = await response.json();
 
@@ -310,9 +450,7 @@ export const adminApi = {
       {
         method: "PATCH",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({
-          notes,
-        }),
+        body: JSON.stringify({ notes }),
       }
     );
 
@@ -335,9 +473,7 @@ export const adminApi = {
       {
         method: "PATCH",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({
-          notes,
-        }),
+        body: JSON.stringify({ notes }),
       }
     );
 
@@ -400,9 +536,7 @@ export const adminApi = {
       {
         method: "PATCH",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({
-          notes,
-        }),
+        body: JSON.stringify({ notes }),
       }
     );
 
@@ -425,9 +559,7 @@ export const adminApi = {
       {
         method: "PATCH",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({
-          notes,
-        }),
+        body: JSON.stringify({ notes }),
       }
     );
 
