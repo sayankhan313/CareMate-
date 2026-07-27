@@ -7,6 +7,24 @@ import type { CreateSafetyAlertInput } from "./safety.types.js";
 
 const SAFETY_RESPONSE_TIMER_SECONDS = 30;
 
+const safetyAlertInclude = {
+  doctor: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      doctorProfile: {
+        select: {
+          specialization: true,
+          clinicName: true,
+        },
+      },
+    },
+  },
+  vitalReading: true,
+  consultation: true,
+} as const;
+
 const formatSafetyAlert = (alert: any) => {
   return {
     id: alert.id,
@@ -21,21 +39,47 @@ const formatSafetyAlert = (alert: any) => {
     resolvedAt: alert.resolvedAt,
     createdAt: alert.createdAt,
     updatedAt: alert.updatedAt,
+    doctor: alert.doctor || null,
     vitalReading: alert.vitalReading || null,
     consultation: alert.consultation || null,
   };
 };
 
-const getSafetyAlertForPatient = async (patientId: string, alertId: string) => {
+const getActivePrimaryDoctor = async (patientId: string) => {
+  const assignment =
+    await prisma.patientDoctorAssignment.findFirst({
+      where: {
+        patientId,
+        status: "ACTIVE",
+        assignmentType: "PRIMARY",
+        doctor: {
+          is: {
+            role: "DOCTOR",
+            isEmailVerified: true,
+            accountStatus: {
+              in: ["ACTIVE", "APPROVED"],
+            },
+          },
+        },
+      },
+      include: {
+        doctor: true,
+      },
+    });
+
+  return assignment?.doctor || null;
+};
+
+const getSafetyAlertForPatient = async (
+  patientId: string,
+  alertId: string
+) => {
   const alert = await prisma.safetyAlert.findFirst({
     where: {
       id: alertId,
       patientId,
     },
-    include: {
-      vitalReading: true,
-      consultation: true,
-    },
+    include: safetyAlertInclude,
   });
 
   if (!alert) {
@@ -46,34 +90,57 @@ const getSafetyAlertForPatient = async (patientId: string, alertId: string) => {
 };
 
 export const safetyService = {
-  async createSafetyAlert(patientId: string, data: CreateSafetyAlertInput) {
-    const existingActiveAlert = await prisma.safetyAlert.findFirst({
-      where: {
-        patientId,
-        status: "ACTIVE",
-      },
-      include: {
-        vitalReading: true,
-        consultation: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+  async createSafetyAlert(
+    patientId: string,
+    data: CreateSafetyAlertInput
+  ) {
+    const primaryDoctor =
+      await getActivePrimaryDoctor(patientId);
+
+    const existingActiveAlert =
+      await prisma.safetyAlert.findFirst({
+        where: {
+          patientId,
+          status: "ACTIVE",
+        },
+        include: safetyAlertInclude,
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     if (existingActiveAlert) {
+      if (
+        existingActiveAlert.doctorId !==
+        (primaryDoctor?.id || null)
+      ) {
+        const updatedExistingAlert =
+          await prisma.safetyAlert.update({
+            where: {
+              id: existingActiveAlert.id,
+            },
+            data: {
+              doctorId: primaryDoctor?.id || null,
+            },
+            include: safetyAlertInclude,
+          });
+
+        return formatSafetyAlert(updatedExistingAlert);
+      }
+
       return formatSafetyAlert(existingActiveAlert);
     }
 
     let vitalReading = null;
 
     if (data.vitalReadingId) {
-      vitalReading = await prisma.patientVitalReading.findFirst({
-        where: {
-          id: data.vitalReadingId,
-          patientId,
-        },
-      });
+      vitalReading =
+        await prisma.patientVitalReading.findFirst({
+          where: {
+            id: data.vitalReadingId,
+            patientId,
+          },
+        });
 
       if (!vitalReading) {
         throw new AppError("Vital reading not found.", 404);
@@ -88,12 +155,14 @@ export const safetyService = {
     }
 
     const timerEndsAt = new Date(
-      Date.now() + SAFETY_RESPONSE_TIMER_SECONDS * 1000
+      Date.now() +
+        SAFETY_RESPONSE_TIMER_SECONDS * 1000
     );
 
     const alert = await prisma.safetyAlert.create({
       data: {
         patientId,
+        doctorId: primaryDoctor?.id || null,
         vitalReadingId: vitalReading?.id || null,
         status: "ACTIVE",
         reason:
@@ -101,10 +170,7 @@ export const safetyService = {
           "Critical vital reading detected. Safety response timer started.",
         timerEndsAt,
       },
-      include: {
-        vitalReading: true,
-        consultation: true,
-      },
+      include: safetyAlertInclude,
     });
 
     return formatSafetyAlert(alert);
@@ -116,10 +182,7 @@ export const safetyService = {
         patientId,
         status: "ACTIVE",
       },
-      include: {
-        vitalReading: true,
-        consultation: true,
-      },
+      include: safetyAlertInclude,
       orderBy: {
         createdAt: "desc",
       },
@@ -132,62 +195,89 @@ export const safetyService = {
     return formatSafetyAlert(alert);
   },
 
-  async cancelSafetyAlert(patientId: string, alertId: string) {
-    const alert = await getSafetyAlertForPatient(patientId, alertId);
+  async cancelSafetyAlert(
+    patientId: string,
+    alertId: string
+  ) {
+    const alert = await getSafetyAlertForPatient(
+      patientId,
+      alertId
+    );
 
     if (alert.status !== "ACTIVE") {
-      throw new AppError("Only active safety alerts can be cancelled.", 400);
+      throw new AppError(
+        "Only active safety alerts can be cancelled.",
+        400
+      );
     }
 
-    const updatedAlert = await prisma.safetyAlert.update({
-      where: {
-        id: alert.id,
-      },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-      },
-      include: {
-        vitalReading: true,
-        consultation: true,
-      },
-    });
+    const updatedAlert =
+      await prisma.safetyAlert.update({
+        where: {
+          id: alert.id,
+        },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+        },
+        include: safetyAlertInclude,
+      });
 
     return formatSafetyAlert(updatedAlert);
   },
 
-  async escalateSafetyAlert(patientId: string, alertId: string) {
-    const alert = await getSafetyAlertForPatient(patientId, alertId);
+  async escalateSafetyAlert(
+    patientId: string,
+    alertId: string
+  ) {
+    const alert = await getSafetyAlertForPatient(
+      patientId,
+      alertId
+    );
 
     if (alert.status === "CANCELLED") {
-      throw new AppError("Cancelled safety alerts cannot be escalated.", 400);
+      throw new AppError(
+        "Cancelled safety alerts cannot be escalated.",
+        400
+      );
     }
 
     if (alert.status === "RESOLVED") {
-      throw new AppError("Resolved safety alerts cannot be escalated.", 400);
+      throw new AppError(
+        "Resolved safety alerts cannot be escalated.",
+        400
+      );
+    }
+
+    const primaryDoctor =
+      await getActivePrimaryDoctor(patientId);
+
+    if (!primaryDoctor) {
+      throw new AppError(
+        "No active primary doctor is assigned. Please assign a primary doctor before escalation.",
+        400
+      );
     }
 
     const updatedAlert =
-      alert.status === "ESCALATED"
-        ? alert
-        : await prisma.safetyAlert.update({
-            where: {
-              id: alert.id,
-            },
-            data: {
-              status: "ESCALATED",
-              escalatedAt: new Date(),
-            },
-            include: {
-              vitalReading: true,
-              consultation: true,
-            },
-          });
+      await prisma.safetyAlert.update({
+        where: {
+          id: alert.id,
+        },
+        data: {
+          doctorId: primaryDoctor.id,
+          status: "ESCALATED",
+          escalatedAt:
+            alert.escalatedAt || new Date(),
+        },
+        include: safetyAlertInclude,
+      });
 
     const consultationResult =
       await consultationService.createEmergencyConsultationFromAlert(
         patientId,
-        updatedAlert.id
+        updatedAlert.id,
+        primaryDoctor.id
       );
 
     return {

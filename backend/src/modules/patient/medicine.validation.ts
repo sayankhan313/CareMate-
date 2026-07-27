@@ -26,86 +26,177 @@ const timeOfDaySchema = z
 const dateSchema = z
   .string()
   .trim()
-  .regex(/^\d{2}\/\d{2}\/\d{4}$/, "Date must be in DD/MM/YYYY format.");
+  .regex(
+    /^\d{2}\/\d{2}\/\d{4}$/,
+    "Date must be in DD/MM/YYYY format."
+  );
 
-export const createMedicineSchema = z
+const reviewMedicineFieldsSchema = z
   .object({
     name: z
       .string()
       .trim()
-      .min(2, "Medicine name must be at least 2 characters."),
+      .min(
+        2,
+        "Medicine name must be at least 2 characters."
+      ),
 
-    dose: z.string().trim().min(1, "Dose is required."),
+    dose: z
+      .string()
+      .trim()
+      .min(1, "Dose is required."),
 
-    instructions: z.string().trim().optional(),
-
-    source: medicineSourceSchema.optional().default("MANUAL"),
+    instructions: z
+      .string()
+      .trim()
+      .optional(),
 
     frequency: medicineFrequencySchema,
 
-    customFrequency: z.string().trim().optional(),
+    customFrequency: z
+      .string()
+      .trim()
+      .optional(),
 
     timeOfDay: timeOfDaySchema,
 
     startDate: dateSchema,
 
     endDate: dateSchema.optional(),
-
-    sendToDoctorForReview: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
-    if (data.frequency === "CUSTOM" && !data.customFrequency) {
+    if (
+      data.frequency === "CUSTOM" &&
+      !data.customFrequency
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["customFrequency"],
-        message: "Custom frequency is required when frequency is CUSTOM.",
+        message:
+          "Custom frequency is required when frequency is CUSTOM.",
       });
     }
+  });
+
+export const createMedicineSchema =
+  reviewMedicineFieldsSchema.extend({
+    source:
+      medicineSourceSchema
+        .optional()
+        .default("MANUAL"),
+
+    sendToDoctorForReview: z
+      .boolean()
+      .optional()
+      .default(false),
   });
 
 export const updateMedicineSchema = z
   .object({
-    name: z.string().trim().min(2).optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2)
+      .optional(),
 
-    dose: z.string().trim().min(1).optional(),
+    dose: z
+      .string()
+      .trim()
+      .min(1)
+      .optional(),
 
-    instructions: z.string().trim().optional(),
+    instructions: z
+      .string()
+      .trim()
+      .optional(),
 
-    isActive: z.boolean().optional(),
+    isActive: z
+      .boolean()
+      .optional(),
 
-    frequency: medicineFrequencySchema.optional(),
+    frequency:
+      medicineFrequencySchema.optional(),
 
-    customFrequency: z.string().trim().optional(),
+    customFrequency: z
+      .string()
+      .trim()
+      .optional(),
 
-    timeOfDay: timeOfDaySchema.optional(),
+    timeOfDay:
+      timeOfDaySchema.optional(),
 
-    startDate: dateSchema.optional(),
+    startDate:
+      dateSchema.optional(),
 
-    endDate: dateSchema.optional(),
+    endDate:
+      dateSchema.optional(),
 
-    sendToDoctorForReview: z.boolean().optional(),
+    sendToDoctorForReview: z
+      .boolean()
+      .optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.frequency === "CUSTOM" && !data.customFrequency) {
+    if (
+      data.frequency === "CUSTOM" &&
+      !data.customFrequency
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["customFrequency"],
-        message: "Custom frequency is required when frequency is CUSTOM.",
+        message:
+          "Custom frequency is required when frequency is CUSTOM.",
       });
     }
   });
 
-export const medicineIdParamsSchema = z.object({
-  medicineId: z.string().uuid("Invalid medicine id."),
-});
+export const resubmitMedicineReviewSchema =
+  reviewMedicineFieldsSchema;
 
-export const reminderIdParamsSchema = z.object({
-  reminderId: z.string().uuid("Invalid reminder id."),
-});
+export const requestMedicineDeletionSchema =
+  z.object({
+    reason: z
+      .string()
+      .trim()
+      .min(
+        3,
+        "Please provide a clear deletion reason."
+      )
+      .max(
+        500,
+        "Deletion reason cannot exceed 500 characters."
+      ),
+  });
 
-export const snoozeMedicineSchema = z.object({
-  snoozedUntil: z
-    .string()
-    .trim()
-    .min(1, "Snoozed until date/time is required."),
-});
+export const medicineIdParamsSchema =
+  z.object({
+    medicineId: z
+      .string()
+      .uuid("Invalid medicine id."),
+  });
+
+export const reminderIdParamsSchema =
+  z.object({
+    reminderId: z
+      .string()
+      .uuid("Invalid reminder id."),
+  });
+
+export const medicineReviewRequestIdParamsSchema =
+  z.object({
+    requestId: z
+      .string()
+      .uuid(
+        "Invalid medicine review request id."
+      ),
+  });
+
+export const snoozeMedicineSchema =
+  z.object({
+    snoozedUntil: z
+      .string()
+      .trim()
+      .min(
+        1,
+        "Snoozed until date/time is required."
+      ),
+  });

@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 
-import { adminService } from "./admin.service.js";
 import { AppError } from "../../utils/AppError.js";
+import { auditService } from "../audit/audit.service.js";
+import { getAuditRequestContext } from "../audit/audit-request.util.js";
+import { adminService } from "./admin.service.js";
+
+type UnknownRecord = Record<string, unknown>;
 
 const getAuthenticatedAdminId = (req: Request) => {
   if (!req.user) {
@@ -18,7 +22,7 @@ const getParamAsString = (req: Request, paramName: string) => {
     throw new AppError(`Invalid ${paramName}`, 400);
   }
 
-  return value;
+  return value.trim();
 };
 
 const getRequestNotes = (req: Request) => {
@@ -30,7 +34,45 @@ const getRequestNotes = (req: Request) => {
 };
 
 const getStatusQuery = (req: Request) => {
-  return typeof req.query.status === "string" ? req.query.status : undefined;
+  return typeof req.query.status === "string"
+    ? req.query.status
+    : undefined;
+};
+
+const getRecord = (value: unknown): UnknownRecord | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as UnknownRecord;
+};
+
+const getStringValue = (value: unknown) => {
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : null;
+};
+
+const getUserAuditData = (result: unknown) => {
+  const resultRecord = getRecord(result);
+
+  const userRecord =
+    getRecord(resultRecord?.user) ||
+    getRecord(resultRecord?.doctor) ||
+    getRecord(resultRecord?.pharmacy) ||
+    resultRecord;
+
+  return {
+    role:
+      getStringValue(userRecord?.role) ||
+      getStringValue(resultRecord?.role),
+    accountStatus:
+      getStringValue(userRecord?.accountStatus) ||
+      getStringValue(resultRecord?.accountStatus),
+    verificationStatus:
+      getStringValue(userRecord?.verificationStatus) ||
+      getStringValue(resultRecord?.verificationStatus),
+  };
 };
 
 export const adminController = {
@@ -102,6 +144,25 @@ export const adminController = {
         notes: getRequestNotes(req),
       });
 
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "DOCTOR_ACCOUNT_APPROVED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description:
+          "Administrator approved a doctor account verification.",
+        metadata: {
+          targetRole: auditData.role || "DOCTOR",
+          accountStatus: auditData.accountStatus,
+          verificationStatus: auditData.verificationStatus,
+        },
+        requestContext: getAuditRequestContext(req),
+      });
+
       return res.status(200).json({
         success: true,
         message: "Doctor account approved successfully",
@@ -124,6 +185,25 @@ export const adminController = {
       const result = await adminService.rejectDoctorVerification(userId, {
         adminId,
         notes: getRequestNotes(req),
+      });
+
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "DOCTOR_ACCOUNT_REJECTED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description:
+          "Administrator rejected a doctor account verification.",
+        metadata: {
+          targetRole: auditData.role || "DOCTOR",
+          accountStatus: auditData.accountStatus,
+          verificationStatus: auditData.verificationStatus,
+        },
+        requestContext: getAuditRequestContext(req),
       });
 
       return res.status(200).json({
@@ -190,6 +270,25 @@ export const adminController = {
         notes: getRequestNotes(req),
       });
 
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "PHARMACY_ACCOUNT_APPROVED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description:
+          "Administrator approved a pharmacy account verification.",
+        metadata: {
+          targetRole: auditData.role || "PHARMACY",
+          accountStatus: auditData.accountStatus,
+          verificationStatus: auditData.verificationStatus,
+        },
+        requestContext: getAuditRequestContext(req),
+      });
+
       return res.status(200).json({
         success: true,
         message: "Pharmacy account approved successfully",
@@ -212,6 +311,25 @@ export const adminController = {
       const result = await adminService.rejectPharmacyVerification(userId, {
         adminId,
         notes: getRequestNotes(req),
+      });
+
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "PHARMACY_ACCOUNT_REJECTED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description:
+          "Administrator rejected a pharmacy account verification.",
+        metadata: {
+          targetRole: auditData.role || "PHARMACY",
+          accountStatus: auditData.accountStatus,
+          verificationStatus: auditData.verificationStatus,
+        },
+        requestContext: getAuditRequestContext(req),
       });
 
       return res.status(200).json({
@@ -244,6 +362,23 @@ export const adminController = {
       const userId = getParamAsString(req, "userId");
 
       const result = await adminService.suspendUser(userId, adminId);
+
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "USER_ACCOUNT_SUSPENDED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description: "Administrator suspended a user account.",
+        metadata: {
+          targetRole: auditData.role,
+          accountStatus: auditData.accountStatus,
+        },
+        requestContext: getAuditRequestContext(req),
+      });
 
       return res.status(200).json({
         success: true,

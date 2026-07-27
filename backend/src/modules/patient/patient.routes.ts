@@ -1,36 +1,131 @@
 import { Router } from "express";
 
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { uploadSinglePatientReport } from "../../middleware/report-upload.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
 
 import { consultationController } from "./consultation.controller.js";
 import { dashboardController } from "./dashboard.controller.js";
+import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
-import { safetyController } from "./safety.controller.js";
-import { vitalsController } from "./vitals.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { profileController } from "./profile.controller.js";
+import { reportController } from "./report.controller.js";
+import { safetyController } from "./safety.controller.js";
+import { vitalsController } from "./vitals.controller.js";
 
 const router = Router();
 
-router.use(authMiddleware);
-router.use(authorizeRoles("PATIENT"));
+router.use(
+  authMiddleware
+);
 
-router.get("/dashboard", dashboardController.getDashboard);
+router.use(
+  authorizeRoles(
+    "PATIENT"
+  )
+);
 
-router.get("/profile", profileController.getProfile);
+router.get(
+  "/dashboard",
+  dashboardController.getDashboard
+);
 
-router.post("/vitals/readings", vitalsController.createReading);
+router.get(
+  "/profile",
+  profileController.getProfile
+);
 
-router.get("/vitals/latest", vitalsController.getLatestReading);
+router.get(
+  "/doctors/specialties",
+  doctorAssignmentController.listDoctorSpecialties
+);
 
-router.get("/vitals/history", vitalsController.getReadingHistory);
+router.get(
+  "/doctors",
+  doctorAssignmentController.listApprovedDoctors
+);
 
-router.post("/safety-alerts", safetyController.createSafetyAlert);
+router.get(
+  "/doctor-assignments",
+  doctorAssignmentController.listAssignedDoctors
+);
 
-router.get("/safety-alerts/active", safetyController.getActiveSafetyAlert);
+router.post(
+  "/doctor-assignment",
+  doctorAssignmentController.assignDoctor
+);
 
-router.post("/safety-alerts/:alertId/cancel", safetyController.cancelSafetyAlert);
+router.post(
+  "/doctor-assignments",
+  doctorAssignmentController.assignDoctor
+);
+
+router.patch(
+  "/doctor-assignments/:doctorId/primary",
+  doctorAssignmentController.setPrimaryDoctor
+);
+
+router.delete(
+  "/doctor-assignments/:doctorId",
+  doctorAssignmentController.removeDoctor
+);
+
+router.post(
+  "/reports",
+  uploadSinglePatientReport,
+  reportController.createReport
+);
+
+router.get(
+  "/reports",
+  reportController.listReports
+);
+
+router.get(
+  "/reports/:reportId/file",
+  reportController.getReportFile
+);
+
+router.post(
+  "/reports/:reportId/seen",
+  reportController.markReportReviewsSeen
+);
+
+router.get(
+  "/reports/:reportId",
+  reportController.getReportDetail
+);
+
+router.post(
+  "/vitals/readings",
+  vitalsController.createReading
+);
+
+router.get(
+  "/vitals/latest",
+  vitalsController.getLatestReading
+);
+
+router.get(
+  "/vitals/history",
+  vitalsController.getReadingHistory
+);
+
+router.post(
+  "/safety-alerts",
+  safetyController.createSafetyAlert
+);
+
+router.get(
+  "/safety-alerts/active",
+  safetyController.getActiveSafetyAlert
+);
+
+router.post(
+  "/safety-alerts/:alertId/cancel",
+  safetyController.cancelSafetyAlert
+);
 
 router.post(
   "/safety-alerts/:alertId/escalate",
@@ -42,7 +137,10 @@ router.post(
   consultationController.createManualConsultation
 );
 
-router.get("/consultations", consultationController.listConsultations);
+router.get(
+  "/consultations",
+  consultationController.listConsultations
+);
 
 router.get(
   "/consultations/:consultationId",
@@ -54,17 +152,55 @@ router.get(
   consultationController.getPatientJoinConfig
 );
 
-router.post("/medicines", medicineController.createMedicine);
+router.post(
+  "/medicines",
+  medicineController.createMedicine
+);
 
-router.get("/medicines", medicineController.listMedicines);
+router.get(
+  "/medicines",
+  medicineController.listMedicines
+);
 
-router.get("/medicines/today", medicineController.getTodayMedicines);
+router.get(
+  "/medicines/today",
+  medicineController.getTodayMedicines
+);
 
-router.get("/medicines/:medicineId", medicineController.getMedicineById);
+router.get(
+  "/medicines/:medicineId",
+  medicineController.getMedicineById
+);
 
-router.patch("/medicines/:medicineId", medicineController.updateMedicine);
+router.patch(
+  "/medicines/:medicineId",
+  medicineController.updateMedicine
+);
 
-router.delete("/medicines/:medicineId", medicineController.deleteMedicine);
+router.post(
+  "/medicines/:medicineId/deletion-review",
+  medicineController.requestMedicineDeletion
+);
+
+router.get(
+  "/medicine-reviews",
+  medicineController.listMedicineReviews
+);
+
+router.post(
+  "/medicine-reviews/:requestId/seen",
+  medicineController.markMedicineReviewSeen
+);
+
+router.post(
+  "/medicine-reviews/:requestId/apply",
+  medicineController.applyApprovedMedicineReview
+);
+
+router.post(
+  "/medicine-reviews/:requestId/resubmit",
+  medicineController.resubmitMedicineReview
+);
 
 router.post(
   "/medicine-reminders/:reminderId/taken",
@@ -75,6 +211,7 @@ router.post(
   "/medicine-reminders/:reminderId/snooze",
   medicineController.snoozeReminder
 );
+
 router.get(
   "/medicine-references/search",
   medicineReferenceController.searchMedicineReferences

@@ -6,6 +6,8 @@ export const consultationIdParamsSchema = z.object({
 
 export const createManualConsultationSchema = z
   .object({
+    doctorId: z.string().uuid("Please select a valid assigned doctor."),
+
     reason: z
       .string()
       .trim()

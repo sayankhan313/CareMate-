@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -8,20 +10,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { CommonActions } from "@react-navigation/native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import LinearGradient from "react-native-linear-gradient";
+import { CommonActions, useFocusEffect } from "@react-navigation/native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import {
-  Bell,
-  CalendarDays,
+  AlertTriangle,
+  ChevronRight,
   ClipboardList,
+  Clock3,
+  FileText,
+  HeartPulse,
   LogOut,
-  MessageSquareText,
-  Search,
-  ShieldAlert,
+  Pill,
+  RefreshCw,
+  ShieldCheck,
   Stethoscope,
   UserRound,
   UsersRound,
@@ -29,6 +32,14 @@ import {
 } from "lucide-react-native";
 
 import { tokenStorage } from "../../services/tokenStorage";
+import {
+  doctorDashboardApi,
+  type DoctorDashboardData,
+  type DoctorDashboardPatient,
+  type DoctorUpcomingConsultation,
+  type DoctorUrgentAlert,
+} from "../../services/doctor/doctorDashboardApi";
+import { doctorReportsApi } from "../../services/doctor/doctorReportsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
 type DoctorDashboardScreenProps = BottomTabScreenProps<
@@ -40,20 +51,30 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
-const BORDER = "#E4E8F2";
-const SOFT_PANEL = "#F7F9FF";
 
-const DOCTOR_PRIMARY = "#7C3AED";
-const DOCTOR_DARK = "#5B21B6";
-const DOCTOR_LIGHT = "#F3E8FF";
+const DOCTOR_PRIMARY = "#0F766E";
+const DOCTOR_SECONDARY = "#14B8A6";
+const DOCTOR_DARK = "#134E4A";
+const DOCTOR_LIGHT = "#E6FFFA";
 
 const SUCCESS = "#42B883";
 const SUCCESS_LIGHT = "#EAF8F2";
 
-const WARNING_LIGHT = "#FFF3E2";
-
+const WARNING = "#F6A545";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
+
+const elevate = (level: 1 | 2 | 3 = 2) => {
+  const elevation = level === 1 ? 2 : level === 2 ? 4 : 7;
+
+  return {
+    elevation,
+    shadowColor: "#172033",
+    shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
+    shadowOpacity: level === 1 ? 0.06 : 0.1,
+    shadowRadius: level === 1 ? 4 : 9,
+  };
+};
 
 const getGreetingText = () => {
   const currentHour = new Date().getHours();
@@ -69,16 +90,167 @@ const getGreetingText = () => {
   return "Good evening";
 };
 
+const getFirstName = (fullName?: string | null) => {
+  if (!fullName) {
+    return "Doctor";
+  }
+
+  return fullName.replace(/^Dr\.?\s*/i, "").trim().split(" ")[0] || "Doctor";
+};
+
+const getInitials = (name?: string | null) => {
+  if (!name) {
+    return "DR";
+  }
+
+  const parts = name
+    .replace(/^Dr\.?\s*/i, "")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return "DR";
+  }
+
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
+
+  return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return "Not scheduled";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString([], {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getVitalTone = (status?: string | null) => {
+  if (status === "CRITICAL") {
+    return {
+      background: DANGER_LIGHT,
+      text: "#B42318",
+      label: "Critical",
+    };
+  }
+
+  if (status === "WARNING") {
+    return {
+      background: "#FFF3E2",
+      text: "#A85A13",
+      label: "Warning",
+    };
+  }
+
+  if (status === "STABLE") {
+    return {
+      background: SUCCESS_LIGHT,
+      text: "#167A58",
+      label: "Stable",
+    };
+  }
+
+  return {
+    background: DOCTOR_LIGHT,
+    text: DOCTOR_DARK,
+    label: "No vitals",
+  };
+};
+
 export const DoctorDashboardScreen = ({
   navigation,
   route,
 }: DoctorDashboardScreenProps) => {
   const insets = useSafeAreaInsets();
 
-  const user = route.params?.user;
-  const firstName =
-    user?.fullName?.split(" ")[0]?.replace("Dr", "").trim() || "Doctor";
-  const initial = firstName.charAt(0).toUpperCase() || "D";
+  const [dashboard, setDashboard] = useState<DoctorDashboardData | null>(null);
+  const [pendingReportReviews, setPendingReportReviews] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const routeUser = route.params?.user;
+  const doctorName = dashboard?.doctor.fullName || routeUser?.fullName || "";
+  const firstName = getFirstName(doctorName);
+  const initials = getInitials(doctorName);
+
+  const resetToLogin = useCallback(async () => {
+    await tokenStorage.removeToken();
+
+    const rootNavigation = navigation.getParent();
+
+    if (rootNavigation) {
+      rootNavigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        })
+      );
+
+      return;
+    }
+
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      })
+    );
+  }, [navigation]);
+
+  const loadDashboard = useCallback(
+    async (mode: "initial" | "refresh" = "initial") => {
+      try {
+        mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
+        setErrorMessage("");
+
+        const [dashboardData, reportQueue] = await Promise.all([
+          doctorDashboardApi.getDashboard(),
+
+          doctorReportsApi.listReportQueue("PENDING").catch(() => null),
+        ]);
+
+        setDashboard(dashboardData);
+        setPendingReportReviews(reportQueue?.summary?.pending || 0);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to load doctor dashboard.";
+
+        setErrorMessage(message);
+        setPendingReportReviews(0);
+
+        if (message.toLowerCase().includes("login")) {
+          await resetToLogin();
+        }
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [resetToLogin]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDashboard("initial");
+    }, [loadDashboard])
+  );
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -89,38 +261,80 @@ export const DoctorDashboardScreen = ({
       {
         text: "Logout",
         style: "destructive",
-        onPress: async () => {
-          await tokenStorage.removeToken();
-
-          const rootNavigation = navigation.getParent();
-
-          if (rootNavigation) {
-            rootNavigation.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [
-                  {
-                    name: "Login",
-                  },
-                ],
-              })
-            );
-            return;
-          }
-
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [
-                {
-                  name: "Login",
-                },
-              ],
-            })
-          );
-        },
+        onPress: resetToLogin,
       },
     ]);
+  };
+
+  const openPatients = () => {
+    navigation.navigate("Patients");
+  };
+
+  const openPrescriptionPatients = () => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open prescriptions",
+        "The prescription patient selector is not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorSelectPrescriptionPatient",
+      })
+    );
+  };
+
+  const openConsultations = () => {
+    navigation.navigate("Consultations");
+  };
+
+  const openMedicineReviews = () => {
+    navigation.navigate("Reviews");
+  };
+
+  const openAlerts = () => {
+    navigation.navigate("Alerts");
+  };
+
+  const openReportReviews = () => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open reports",
+        "The central report review queue is not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorReportReviews",
+      })
+    );
+  };
+
+  const openPatientDetail = (patient: DoctorDashboardPatient) => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      navigation.navigate("Patients");
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorPatientDetail",
+        params: {
+          patientId: patient.patient.id,
+          patientName: patient.patient.fullName,
+        },
+      })
+    );
   };
 
   return (
@@ -128,36 +342,29 @@ export const DoctorDashboardScreen = ({
       <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <View style={styles.topBar}>
-          <View style={styles.greetingBlock}>
-            <Text style={styles.helloText}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greetingText}>
               {getGreetingText()}, Dr {firstName}
             </Text>
-            <Text style={styles.subHelloText}>
-              Manage consultations, alerts and patient reviews
+
+            <Text style={styles.headerSubText}>
+              {dashboard?.doctor.specialization ||
+                "Your care workspace is ready"}
             </Text>
           </View>
 
-          <View style={styles.topActions}>
-            <TouchableOpacity style={styles.roundButton} activeOpacity={0.85}>
-              <Search size={18} color={TEXT} strokeWidth={2.5} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.roundButton} activeOpacity={0.85}>
-              <Bell size={18} color={TEXT} strokeWidth={2.5} />
-              <View style={styles.notificationDot} />
-            </TouchableOpacity>
-
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initial}</Text>
+          <View style={styles.headerActions}>
+            <View style={styles.profileCircle}>
+              <Text style={styles.profileInitial}>{initials}</Text>
             </View>
 
             <TouchableOpacity
-              style={styles.logoutButton}
-              activeOpacity={0.85}
+              style={styles.logoutCircle}
+              activeOpacity={0.86}
               onPress={handleLogout}
             >
-              <LogOut size={18} color={DOCTOR_PRIMARY} strokeWidth={2.5} />
+              <LogOut size={19} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
             </TouchableOpacity>
           </View>
         </View>
@@ -167,201 +374,533 @@ export const DoctorDashboardScreen = ({
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(insets.bottom + 98, 120),
+              paddingBottom: Math.max(insets.bottom + 108, 132),
             },
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void loadDashboard("refresh")}
+              tintColor={DOCTOR_PRIMARY}
+              colors={[DOCTOR_PRIMARY]}
+            />
+          }
         >
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryTop}>
-              <View>
-                <View style={styles.roleBadge}>
-                  <Stethoscope
-                    size={14}
-                    color={DOCTOR_DARK}
-                    strokeWidth={2.6}
-                  />
-                  <Text style={styles.roleBadgeText}>Doctor Workspace</Text>
+          {isLoading ? (
+            <View style={styles.stateCard}>
+              <ActivityIndicator color={DOCTOR_PRIMARY} />
+              <Text style={styles.stateText}>Loading doctor dashboard...</Text>
+            </View>
+          ) : null}
+
+          {!isLoading && errorMessage ? (
+            <View style={styles.errorCard}>
+              <View style={styles.errorIcon}>
+                <RefreshCw size={26} color={DANGER} strokeWidth={2.7} />
+              </View>
+
+              <Text style={styles.errorTitle}>Unable to load dashboard</Text>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+
+              <TouchableOpacity
+                style={styles.retryButton}
+                activeOpacity={0.86}
+                onPress={() => void loadDashboard("initial")}
+              >
+                <RefreshCw size={17} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {!isLoading && !errorMessage && dashboard ? (
+            <>
+              <LinearGradient
+                colors={[DOCTOR_PRIMARY, DOCTOR_SECONDARY]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroCard}
+              >
+                <View style={styles.heroTopRow}>
+                  <View style={styles.heroIcon}>
+                    <Stethoscope
+                      size={25}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.7}
+                    />
+                  </View>
+
+                  <View style={styles.heroBadge}>
+                    <ShieldCheck
+                      size={14}
+                      color="#FFFFFF"
+                      strokeWidth={2.5}
+                    />
+
+                    <Text style={styles.heroBadgeText}>
+                      Verified Workspace
+                    </Text>
+                  </View>
                 </View>
 
-                <Text style={styles.summaryTitle}>Today’s care overview</Text>
-                <Text style={styles.summarySubtitle}>
-                  Demo dashboard ready. Real consultation data will connect next.
+                <Text style={styles.heroTitle}>Doctor Dashboard</Text>
+
+                <Text style={styles.heroText}>
+                  Monitor assigned patients, reports, prescriptions, safety
+                  alerts, consultations and medicine reviews from one place.
                 </Text>
-              </View>
 
-              <View style={styles.summaryIconBox}>
-                <ClipboardList
-                  size={28}
-                  color={DOCTOR_PRIMARY}
-                  strokeWidth={2.6}
+                <View style={styles.heroStatsRow}>
+                  <View style={styles.heroStatBox}>
+                    <Text style={styles.heroStatValue}>
+                      {dashboard.stats.assignedPatients}
+                    </Text>
+                    <Text style={styles.heroStatLabel}>Patients</Text>
+                  </View>
+
+                  <View style={styles.heroStatDivider} />
+
+                  <View style={styles.heroStatBox}>
+                    <Text style={styles.heroStatValue}>
+                      {dashboard.stats.activeAlerts}
+                    </Text>
+                    <Text style={styles.heroStatLabel}>Active alerts</Text>
+                  </View>
+
+                  <View style={styles.heroStatDivider} />
+
+                  <View style={styles.heroStatBox}>
+                    <Text style={styles.heroStatValue}>
+                      {pendingReportReviews}
+                    </Text>
+                    <Text style={styles.heroStatLabel}>Reports</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+
+              <View style={styles.quickActionsRow}>
+                <QuickAction
+                  title="Patients"
+                  icon={
+                    <UsersRound
+                      size={23}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.6}
+                    />
+                  }
+                  onPress={openPatients}
+                />
+
+                <QuickAction
+                  title="Consults"
+                  icon={
+                    <Video
+                      size={23}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.6}
+                    />
+                  }
+                  onPress={openConsultations}
+                />
+
+                <QuickAction
+                  title="Reviews"
+                  icon={<Pill size={23} color={WARNING} strokeWidth={2.6} />}
+                  badgeCount={dashboard.stats.pendingMedicineReviews}
+                  onPress={openMedicineReviews}
+                />
+
+                <QuickAction
+                  title="Reports"
+                  icon={<FileText size={23} color={DANGER} strokeWidth={2.6} />}
+                  badgeCount={pendingReportReviews}
+                  onPress={openReportReviews}
+                />
+
+                <QuickAction
+                  title="Prescribe"
+                  icon={
+                    <ClipboardList
+                      size={23}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.6}
+                    />
+                  }
+                  onPress={openPrescriptionPatients}
                 />
               </View>
-            </View>
 
-            <View style={styles.statsRow}>
-              <SummaryStat label="Consults" value="3" />
-              <SummaryStat label="Reviews" value="5" />
-              <SummaryStat label="Alerts" value="1" />
-            </View>
-          </View>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Safety Response</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Escalated alerts from assigned patients
+                  </Text>
+                </View>
 
-          <View style={styles.quickGrid}>
-            <QuickAction
-              label="Consultations"
-              icon={<Video size={23} color={DOCTOR_PRIMARY} strokeWidth={2.5} />}
-            />
+                <TouchableOpacity activeOpacity={0.8} onPress={openAlerts}>
+                  <Text style={styles.sectionLink}>View all</Text>
+                </TouchableOpacity>
+              </View>
 
-            <QuickAction
-              label="Patients"
-              icon={
-                <UsersRound
-                  size={23}
-                  color={DOCTOR_PRIMARY}
-                  strokeWidth={2.5}
-                />
-              }
-            />
+              {dashboard.urgentAlerts.length > 0 ? (
+                <View style={styles.alertStack}>
+                  {dashboard.urgentAlerts.map((alert) => (
+                    <UrgentAlertPanel
+                      key={alert.id}
+                      alert={alert}
+                      onOpen={openAlerts}
+                      onJoin={openAlerts}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.safePanel}
+                  activeOpacity={0.86}
+                  onPress={openAlerts}
+                >
+                  <View style={styles.safePanelIcon}>
+                    <ShieldCheck
+                      size={23}
+                      color={SUCCESS}
+                      strokeWidth={2.6}
+                    />
+                  </View>
 
-            <QuickAction
-              label="Doctor Notes"
-              icon={
-                <MessageSquareText
-                  size={23}
-                  color={DOCTOR_PRIMARY}
-                  strokeWidth={2.5}
-                />
-              }
-            />
+                  <View style={styles.safePanelTextBlock}>
+                    <Text style={styles.safePanelTitle}>No active alerts</Text>
+                    <Text style={styles.safePanelText}>
+                      Critical Safety Response alerts will appear here when a
+                      patient escalates.
+                    </Text>
+                  </View>
 
-            <QuickAction
-              label="Alerts"
-              icon={
-                <ShieldAlert
-                  size={23}
-                  color={DOCTOR_PRIMARY}
-                  strokeWidth={2.5}
-                />
-              }
-            />
-          </View>
+                  <ChevronRight size={19} color={MUTED} strokeWidth={2.5} />
+                </TouchableOpacity>
+              )}
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming consultations</Text>
-            <Text style={styles.sectionAction}>View all</Text>
-          </View>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Upcoming Consultations
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Manual and emergency consultation requests
+                  </Text>
+                </View>
 
-          <View style={styles.whitePanel}>
-            <ConsultationRow
-              time="10:30"
-              title="Video consultation"
-              patient="Patient: Sarah Ahmed"
-              status="Accepted"
-              tone="success"
-            />
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={openConsultations}
+                >
+                  <Text style={styles.sectionLink}>View all</Text>
+                </TouchableOpacity>
+              </View>
 
-            <ConsultationRow
-              time="12:15"
-              title="Medicine review"
-              patient="Patient: James Wilson"
-              status="Pending"
-              tone="warning"
-            />
-          </View>
+              <View style={styles.cardStack}>
+                {dashboard.upcomingConsultations.length > 0 ? (
+                  dashboard.upcomingConsultations.map((consultation) => (
+                    <ConsultationCard
+                      key={consultation.id}
+                      consultation={consultation}
+                      onPress={openConsultations}
+                    />
+                  ))
+                ) : (
+                  <EmptyCard
+                    icon={
+                      <Video
+                        size={24}
+                        color={DOCTOR_PRIMARY}
+                        strokeWidth={2.5}
+                      />
+                    }
+                    title="No consultations yet"
+                    text="Consultation requests from assigned patients will appear here."
+                  />
+                )}
+              </View>
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Patient alerts</Text>
-          </View>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Recent Patients</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Latest assigned patient records
+                  </Text>
+                </View>
 
-          <View style={styles.alertCard}>
-            <View style={styles.alertIconBox}>
-              <ShieldAlert size={22} color={DANGER} strokeWidth={2.6} />
-            </View>
+                <TouchableOpacity activeOpacity={0.8} onPress={openPatients}>
+                  <Text style={styles.sectionLink}>View all</Text>
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.alertTextBlock}>
-              <Text style={styles.alertTitle}>Critical vitals review</Text>
-              <Text style={styles.alertText}>
-                One patient has an emergency safety response awaiting doctor
-                review.
-              </Text>
-            </View>
-          </View>
+              <View style={styles.cardStack}>
+                {dashboard.recentPatients.length > 0 ? (
+                  dashboard.recentPatients.map((patient) => (
+                    <PatientCard
+                      key={patient.assignmentId}
+                      patient={patient}
+                      onPress={() => openPatientDetail(patient)}
+                    />
+                  ))
+                ) : (
+                  <EmptyCard
+                    icon={
+                      <UserRound
+                        size={24}
+                        color={DOCTOR_PRIMARY}
+                        strokeWidth={2.5}
+                      />
+                    }
+                    title="No assigned patients"
+                    text="Patients will appear here after they select you as their doctor."
+                  />
+                )}
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       </View>
     </SafeAreaView>
   );
 };
 
-const SummaryStat = ({ label, value }: { label: string; value: string }) => {
-  return (
-    <View style={styles.summaryStat}>
-      <Text style={styles.summaryStatValue}>{value}</Text>
-      <Text style={styles.summaryStatLabel}>{label}</Text>
-    </View>
-  );
-};
-
 const QuickAction = ({
-  label,
+  title,
   icon,
+  badgeCount,
+  onPress,
 }: {
-  label: string;
+  title: string;
   icon: ReactNode;
+  badgeCount?: number;
+  onPress: () => void;
 }) => {
   return (
-    <TouchableOpacity style={styles.quickAction} activeOpacity={0.86}>
-      <View style={styles.quickIconBox}>{icon}</View>
-      <Text style={styles.quickLabel}>{label}</Text>
+    <TouchableOpacity
+      style={styles.quickAction}
+      activeOpacity={0.86}
+      onPress={onPress}
+    >
+      <View style={styles.quickActionIcon}>
+        {icon}
+
+        {badgeCount !== undefined && badgeCount > 0 ? (
+          <View style={styles.quickActionBadge}>
+            <Text style={styles.quickActionBadgeText}>
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <Text style={styles.quickActionText} numberOfLines={1}>
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 };
 
-const ConsultationRow = ({
-  time,
-  title,
-  patient,
-  status,
-  tone,
+const UrgentAlertPanel = ({
+  alert,
+  onOpen,
+  onJoin,
 }: {
-  time: string;
-  title: string;
-  patient: string;
-  status: string;
-  tone: "success" | "warning";
+  alert: DoctorUrgentAlert;
+  onOpen: () => void;
+  onJoin: () => void;
 }) => {
-  const isSuccess = tone === "success";
+  const patientName = alert.patient?.fullName || "Assigned patient";
 
   return (
-    <View style={styles.consultationRow}>
-      <View style={styles.timeBox}>
-        <CalendarDays size={16} color={DOCTOR_PRIMARY} strokeWidth={2.5} />
-        <Text style={styles.timeText}>{time}</Text>
+    <View style={styles.urgentAlertCard}>
+      <View style={styles.urgentHeader}>
+        <View style={styles.urgentIconBox}>
+          <AlertTriangle size={23} color={DANGER} strokeWidth={2.7} />
+        </View>
+
+        <View style={styles.urgentTitleBlock}>
+          <Text style={styles.urgentTitle}>Critical Safety Alert</Text>
+          <Text style={styles.urgentPatient}>{patientName}</Text>
+        </View>
+
+        <View style={styles.urgentBadge}>
+          <Text style={styles.urgentBadgeText}>{alert.status}</Text>
+        </View>
       </View>
 
-      <View style={styles.consultationTextBlock}>
-        <Text style={styles.consultationTitle}>{title}</Text>
-        <Text style={styles.consultationPatient}>{patient}</Text>
+      <View style={styles.alertMetricBox}>
+        <HeartPulse size={17} color={DANGER} strokeWidth={2.5} />
+
+        <Text style={styles.alertMetricText}>
+          {alert.vitalSummary
+            ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}`
+            : "Critical reading needs review"}
+        </Text>
+      </View>
+
+      <Text style={styles.urgentReason} numberOfLines={2}>
+        {alert.reason}
+      </Text>
+
+      <View style={styles.alertFooter}>
+        <View style={styles.timeRow}>
+          <Clock3 size={14} color={MUTED} strokeWidth={2.4} />
+          <Text style={styles.alertTime}>
+            {formatDateTime(alert.createdAt)}
+          </Text>
+        </View>
+
+        <View style={styles.alertButtons}>
+          <TouchableOpacity
+            style={styles.alertSecondaryButton}
+            activeOpacity={0.86}
+            onPress={onOpen}
+          >
+            <Text style={styles.alertSecondaryText}>View</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.alertPrimaryButton,
+              !alert.canJoinCall ? styles.alertButtonDisabled : undefined,
+            ]}
+            activeOpacity={0.86}
+            onPress={onJoin}
+            disabled={!alert.canJoinCall}
+          >
+            <Text style={styles.alertPrimaryText}>
+              {alert.canJoinCall ? "Join" : "No call"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const ConsultationCard = ({
+  consultation,
+  onPress,
+}: {
+  consultation: DoctorUpcomingConsultation;
+  onPress: () => void;
+}) => {
+  const isEmergency = consultation.type === "EMERGENCY";
+  const patientName = consultation.patient?.fullName || "Assigned patient";
+
+  return (
+    <TouchableOpacity
+      style={styles.listCard}
+      activeOpacity={0.86}
+      onPress={onPress}
+    >
+      <View
+        style={[
+          styles.listIconBox,
+          isEmergency ? styles.listIconDanger : undefined,
+        ]}
+      >
+        <Video
+          size={21}
+          color={isEmergency ? DANGER : DOCTOR_PRIMARY}
+          strokeWidth={2.6}
+        />
+      </View>
+
+      <View style={styles.listTextBlock}>
+        <Text style={styles.listTitle}>
+          {isEmergency ? "Emergency Consultation" : "Manual Consultation"}
+        </Text>
+
+        <Text style={styles.listSubtitle}>
+          {patientName} •{" "}
+          {formatDateTime(
+            consultation.preferredAt || consultation.createdAt
+          )}
+        </Text>
+      </View>
+
+      <View style={styles.statusChip}>
+        <Text style={styles.statusChipText}>
+          {consultation.status.replace("_", " ")}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const PatientCard = ({
+  patient,
+  onPress,
+}: {
+  patient: DoctorDashboardPatient;
+  onPress: () => void;
+}) => {
+  const tone = getVitalTone(patient.latestVital?.status);
+
+  return (
+    <TouchableOpacity
+      style={styles.listCard}
+      activeOpacity={0.86}
+      onPress={onPress}
+    >
+      <View style={styles.patientAvatar}>
+        <Text style={styles.patientAvatarText}>
+          {getInitials(patient.patient.fullName)}
+        </Text>
+      </View>
+
+      <View style={styles.listTextBlock}>
+        <Text style={styles.listTitle}>{patient.patient.fullName}</Text>
+
+        <Text style={styles.listSubtitle}>
+          {patient.activeMedicineCount} active medicine
+          {patient.activeMedicineCount === 1 ? "" : "s"}
+        </Text>
       </View>
 
       <View
         style={[
-          styles.statusPill,
+          styles.vitalChip,
           {
-            backgroundColor: isSuccess ? SUCCESS_LIGHT : WARNING_LIGHT,
+            backgroundColor: tone.background,
           },
         ]}
       >
         <Text
           style={[
-            styles.statusPillText,
+            styles.vitalChipText,
             {
-              color: isSuccess ? "#167A58" : "#A85A13",
+              color: tone.text,
             },
           ]}
         >
-          {status}
+          {tone.label}
         </Text>
       </View>
+
+      <ChevronRight size={18} color={MUTED} strokeWidth={2.5} />
+    </TouchableOpacity>
+  );
+};
+
+const EmptyCard = ({
+  icon,
+  title,
+  text,
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+}) => {
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIcon}>{icon}</View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyText}>{text}</Text>
     </View>
   );
 };
@@ -371,288 +910,603 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   screen: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
-  topBar: {
+
+  header: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
-  greetingBlock: {
+
+  headerLeft: {
     flex: 1,
-    paddingRight: 12,
   },
-  helloText: {
+
+  greetingText: {
     color: TEXT,
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: -0.3,
-  },
-  subHelloText: {
-    color: MUTED,
-    fontSize: 12,
+    fontSize: 25,
     fontWeight: "700",
-    lineHeight: 18,
+    letterSpacing: -0.4,
+  },
+
+  headerSubText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "600",
     marginTop: 4,
   },
-  topActions: {
+
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
+    marginLeft: 12,
   },
-  roundButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 7,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  logoutButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
+
+  profileCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
     backgroundColor: DOCTOR_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 7,
-    borderWidth: 1,
-    borderColor: "#E9D5FF",
+    marginRight: 8,
   },
-  notificationDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: DOCTOR_PRIMARY,
-    borderWidth: 1,
-    borderColor: SURFACE,
+
+  profileInitial: {
+    color: DOCTOR_PRIMARY,
+    fontSize: 15,
+    fontWeight: "800",
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_PRIMARY,
+
+  logoutCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
+    ...elevate(1),
   },
-  avatarText: {
-    color: SURFACE,
-    fontSize: 15,
-    fontWeight: "900",
-  },
+
   scrollView: {
     flex: 1,
   },
+
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
   },
-  summaryCard: {
-    backgroundColor: DOCTOR_PRIMARY,
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 16,
-  },
-  summaryTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  roleBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  roleBadgeText: {
-    color: DOCTOR_DARK,
-    fontSize: 11,
-    fontWeight: "900",
-    marginLeft: 6,
-  },
-  summaryTitle: {
-    color: SURFACE,
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: -0.6,
-    marginTop: 15,
-  },
-  summarySubtitle: {
-    color: "#F5F0FF",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 6,
-    maxWidth: 250,
-  },
-  summaryIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+
+  stateCard: {
     backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 22,
+    alignItems: "center",
+    marginTop: 12,
+    ...elevate(1),
+  },
+
+  stateText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 10,
+  },
+
+  errorCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 22,
+    alignItems: "center",
+    marginTop: 12,
+    ...elevate(1),
+  },
+
+  errorIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
+    backgroundColor: DANGER_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-  },
-  statsRow: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.17)",
-    borderRadius: 18,
-    padding: 10,
-    marginTop: 18,
-  },
-  summaryStat: {
-    flex: 1,
-    alignItems: "center",
-  },
-  summaryStatValue: {
-    color: SURFACE,
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  summaryStatLabel: {
-    color: "#F5F0FF",
-    fontSize: 10,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -5,
     marginBottom: 12,
   },
-  quickAction: {
-    width: "50%",
-    paddingHorizontal: 5,
-    marginBottom: 10,
-  },
-  quickIconBox: {
-    backgroundColor: SURFACE,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    marginBottom: 8,
-  },
-  quickLabel: {
+
+  errorTitle: {
     color: TEXT,
-    fontSize: 12,
-    fontWeight: "900",
-    marginLeft: 3,
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
-  sectionHeader: {
-    marginTop: 6,
-    marginBottom: 10,
+
+  errorText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  retryButton: {
+    backgroundColor: DOCTOR_PRIMARY,
+    borderRadius: 13,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+  },
+
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+
+  heroCard: {
+    borderRadius: 16,
+    padding: 18,
+    overflow: "hidden",
+    ...elevate(2),
+  },
+
+  heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sectionTitle: {
-    color: TEXT,
-    fontSize: 19,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sectionAction: {
-    color: DOCTOR_PRIMARY,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  whitePanel: {
-    backgroundColor: SURFACE,
-    borderRadius: 20,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 16,
-  },
-  consultationRow: {
+
+  heroBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
-  timeBox: {
-    width: 58,
-    height: 54,
+
+  heroBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  heroTitle: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 18,
+  },
+
+  heroText: {
+    color: "#D7FFFA",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 20,
+    marginTop: 6,
+  },
+
+  heroStatsRow: {
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+    paddingVertical: 13,
+  },
+
+  heroStatBox: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  heroStatValue: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "700",
+  },
+
+  heroStatLabel: {
+    color: "#D7FFFA",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  heroStatDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+
+  quickActionsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginTop: 18,
+    marginBottom: 2,
+  },
+
+  quickAction: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  quickActionIcon: {
+    width: 56,
+    height: 56,
     borderRadius: 16,
     backgroundColor: DOCTOR_LIGHT,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 11,
+    marginBottom: 8,
   },
-  timeText: {
-    color: DOCTOR_DARK,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 3,
+
+  quickActionBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: DANGER,
+    borderWidth: 2,
+    borderColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
   },
-  consultationTextBlock: {
-    flex: 1,
+
+  quickActionBadgeText: {
+    color: SURFACE,
+    fontSize: 9,
+    fontWeight: "700",
   },
-  consultationTitle: {
+
+  quickActionText: {
     color: TEXT,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  consultationPatient: {
-    color: MUTED,
     fontSize: 11,
     fontWeight: "700",
-    marginTop: 4,
+    textAlign: "center",
   },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    marginLeft: 8,
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginTop: 22,
+    marginBottom: 10,
   },
-  statusPillText: {
-    fontSize: 9,
-    fontWeight: "900",
+
+  sectionTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "700",
   },
-  alertCard: {
+
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  sectionLink: {
+    color: DOCTOR_PRIMARY,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  alertStack: {
+    gap: 12,
+  },
+
+  urgentAlertCard: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 15,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(2),
+  },
+
+  urgentHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
-  alertIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+
+  urgentIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: DANGER_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  alertTextBlock: {
+
+  urgentTitleBlock: {
     flex: 1,
   },
-  alertTitle: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "900",
+
+  urgentTitle: {
+    color: "#B42318",
+    fontSize: 15,
+    fontWeight: "700",
   },
-  alertText: {
+
+  urgentPatient: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  urgentBadge: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+
+  urgentBadgeText: {
+    color: "#B42318",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  alertMetricBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF5F5",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+
+  alertMetricText: {
+    color: "#B42318",
+    fontSize: 13,
+    fontWeight: "700",
+    marginLeft: 8,
+    flex: 1,
+  },
+
+  urgentReason: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 18,
-    marginTop: 4,
+    marginTop: 10,
+  },
+
+  alertFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 13,
+  },
+
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  alertTime: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    marginLeft: 5,
+  },
+
+  alertButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+
+  alertSecondaryButton: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+
+  alertSecondaryText: {
+    color: "#B42318",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  alertPrimaryButton: {
+    backgroundColor: DANGER,
+    borderRadius: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+
+  alertButtonDisabled: {
+    opacity: 0.55,
+  },
+
+  alertPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  safePanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    ...elevate(1),
+  },
+
+  safePanelIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: SUCCESS_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  safePanelTextBlock: {
+    flex: 1,
+  },
+
+  safePanelTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  safePanelText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 3,
+  },
+
+  cardStack: {
+    gap: 10,
+  },
+
+  listCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    ...elevate(1),
+  },
+
+  listIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  listIconDanger: {
+    backgroundColor: DANGER_LIGHT,
+  },
+
+  listTextBlock: {
+    flex: 1,
+  },
+
+  listTitle: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  listSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  statusChip: {
+    backgroundColor: DOCTOR_LIGHT,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+
+  statusChipText: {
+    color: DOCTOR_DARK,
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+
+  patientAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  patientAvatarText: {
+    color: DOCTOR_PRIMARY,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  vitalChip: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginRight: 8,
+  },
+
+  vitalChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  emptyCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    alignItems: "center",
+    ...elevate(1),
+  },
+
+  emptyIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 11,
+  },
+
+  emptyTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+
+  emptyText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 5,
   },
 });

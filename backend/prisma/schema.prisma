@@ -52,6 +52,18 @@ enum MedicineReviewStatus {
   REJECTED
 }
 
+enum MedicineReviewRequestType {
+  ADD
+  DELETE
+}
+
+enum MedicineReviewRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+}
+
 enum DoseLogStatus {
   PENDING
   TAKEN
@@ -105,6 +117,53 @@ enum MedicineSafetyLevel {
   DOCTOR_REVIEW_RECOMMENDED
 }
 
+enum PatientDoctorAssignmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DoctorAssignmentType {
+  PRIMARY
+  SPECIALIST
+}
+
+enum PrescriptionSource {
+  MANUAL
+  SCANNED
+}
+
+enum PatientReportCategory {
+  BLOOD_TEST
+  SCAN_XRAY
+  PRESCRIPTION
+  DISCHARGE_SUMMARY
+  MEDICAL_LETTER
+  OTHER_MEDICAL_REPORT
+}
+
+enum PatientReportStatus {
+  PENDING_REVIEW
+  PARTIALLY_REVIEWED
+  REVIEWED
+}
+
+enum PatientReportReviewStatus {
+  PENDING
+  REVIEWED
+}
+
+enum PatientReportContentSafetyStatus {
+  NOT_SCANNED
+  CLEAR
+  REVIEW_REQUIRED
+  BLOCKED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -132,8 +191,27 @@ model User {
   patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
   doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
 
-  patientConsultations Consultation[] @relation("PatientConsultations")
-  doctorConsultations  Consultation[] @relation("DoctorConsultations")
+  patientConsultations     Consultation[]            @relation("PatientConsultations")
+  doctorConsultations      Consultation[]            @relation("DoctorConsultations")
+  patientDoctorAssignments PatientDoctorAssignment[] @relation("PatientDoctorAssignments")
+  doctorPatientAssignments PatientDoctorAssignment[] @relation("DoctorPatientAssignments")
+
+  medicineReviewAssignments MedicineReminder[] @relation("MedicineReviewDoctor")
+  medicineReviewDecisions   MedicineReminder[] @relation("MedicineReviewedByDoctor")
+
+  patientMedicineReviewRequests MedicineReviewRequest[] @relation("MedicineReviewPatient")
+  doctorMedicineReviewRequests  MedicineReviewRequest[] @relation("MedicineReviewAssignedDoctor")
+  doctorMedicineReviewDecisions MedicineReviewRequest[] @relation("MedicineReviewDecisionDoctor")
+
+  patientPrescriptions      Prescription[] @relation("PatientPrescriptions")
+  doctorPrescriptions       Prescription[] @relation("DoctorPrescriptions")
+  doctorPrescribedMedicines Medicine[]     @relation("DoctorPrescribedMedicines")
+
+  patientReports      PatientReport[]       @relation("PatientReports")
+  doctorReportReviews PatientReportReview[] @relation("DoctorReportReviews")
+
+  actorAuditLogs   AuditLog[] @relation("ActorAuditLogs")
+  patientAuditLogs AuditLog[] @relation("PatientAuditLogs")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -180,22 +258,150 @@ model DoctorProfile {
   @@index([specialization])
 }
 
-model Medicine {
-  id           String         @id @default(uuid())
-  patientId    String
-  name         String
-  dose         String
-  instructions String?
-  source       MedicineSource @default(MANUAL)
-  isActive     Boolean        @default(true)
+model PatientDoctorAssignment {
+  id             String                        @id @default(uuid())
+  patientId      String
+  doctorId       String
+  assignmentType DoctorAssignmentType          @default(SPECIALIST)
+  status         PatientDoctorAssignmentStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  patient   User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  reminders MedicineReminder[]
+  patient User @relation("PatientDoctorAssignments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  User @relation("DoctorPatientAssignments", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, doctorId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([patientId, status])
+  @@index([doctorId, status])
+  @@index([patientId, assignmentType])
+}
+
+model Prescription {
+  id                   String             @id @default(uuid())
+  patientId            String
+  prescribedByDoctorId String
+  source               PrescriptionSource @default(MANUAL)
+  imageUrl             String?
+  rawDetectedText      String?
+  ocrConfidence        Float?
+  notes                String?
+  prescribedAt         DateTime           @default(now())
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  patient            User               @relation("PatientPrescriptions", fields: [patientId], references: [id], onDelete: Cascade)
+  prescribedByDoctor User               @relation("DoctorPrescriptions", fields: [prescribedByDoctorId], references: [id], onDelete: Restrict)
+  items              PrescriptionItem[]
 
   @@index([patientId])
+  @@index([prescribedByDoctorId])
+  @@index([source])
+  @@index([prescribedAt])
+}
+
+model PrescriptionItem {
+  id                  String            @id @default(uuid())
+  prescriptionId      String
+  medicineId          String?           @unique
+  name                String
+  dose                String
+  instructions        String?
+  frequency           MedicineFrequency
+  customFrequency     String?
+  selectedTimes       String[]
+  startDate           DateTime
+  endDate             DateTime?
+  prescriptionPattern String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine?    @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+
+  @@index([prescriptionId])
+  @@index([medicineId])
+  @@index([startDate])
+}
+
+model PatientReport {
+  id          String                @id @default(uuid())
+  patientId   String
+  title       String
+  category    PatientReportCategory
+  description String?
+  reportDate  DateTime?
+  status      PatientReportStatus   @default(PENDING_REVIEW)
+
+  originalFileName String
+  storedFileName   String @unique
+  mimeType         String
+  fileSize         Int
+  fileHash         String
+
+  contentSafetyStatus    PatientReportContentSafetyStatus @default(NOT_SCANNED)
+  contentSafetyMessage   String?
+  contentSafetyCheckedAt DateTime?
+
+  isSampleDataConfirmed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User                  @relation("PatientReports", fields: [patientId], references: [id], onDelete: Cascade)
+  reviews PatientReportReview[]
+
+  @@unique([patientId, fileHash])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
+  @@index([category])
+  @@index([contentSafetyStatus])
+}
+
+model PatientReportReview {
+  id            String                    @id @default(uuid())
+  reportId      String
+  doctorId      String
+  status        PatientReportReviewStatus @default(PENDING)
+  reviewNote    String?
+  reviewedAt    DateTime?
+  patientSeenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  report PatientReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  doctor User          @relation("DoctorReportReviews", fields: [doctorId], references: [id], onDelete: Restrict)
+
+  @@unique([reportId, doctorId])
+  @@index([doctorId, status])
+  @@index([reportId, status])
+  @@index([reviewedAt])
+}
+
+model Medicine {
+  id                   String         @id @default(uuid())
+  patientId            String
+  prescribedByDoctorId String?
+  name                 String
+  dose                 String
+  instructions         String?
+  source               MedicineSource @default(MANUAL)
+  isActive             Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  patient            User                    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescribedByDoctor User?                   @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
+  reminders          MedicineReminder[]
+  prescriptionItem   PrescriptionItem?
+  reviewRequests     MedicineReviewRequest[]
+
+  @@index([patientId])
+  @@index([prescribedByDoctorId])
+  @@index([source])
 }
 
 model MedicineReminder {
@@ -208,15 +414,53 @@ model MedicineReminder {
   endDate               DateTime?
   sendToDoctorForReview Boolean              @default(false)
   reviewStatus          MedicineReviewStatus @default(NOT_REQUESTED)
+  reviewDoctorId        String?
+  reviewedByDoctorId    String?
+  reviewedAt            DateTime?
+  reviewNote            String?
   isActive              Boolean              @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  medicine Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
-  doseLogs MedicineDoseLog[]
+  medicine         Medicine          @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  reviewDoctor     User?             @relation("MedicineReviewDoctor", fields: [reviewDoctorId], references: [id], onDelete: SetNull)
+  reviewedByDoctor User?             @relation("MedicineReviewedByDoctor", fields: [reviewedByDoctorId], references: [id], onDelete: SetNull)
+  doseLogs         MedicineDoseLog[]
 
   @@index([medicineId])
+  @@index([reviewDoctorId])
+  @@index([reviewedByDoctorId])
+  @@index([reviewStatus])
+  @@index([sendToDoctorForReview])
+}
+
+model MedicineReviewRequest {
+  id                 String                      @id @default(uuid())
+  patientId          String
+  doctorId           String
+  reviewedByDoctorId String?
+  medicineId         String
+  requestType        MedicineReviewRequestType
+  status             MedicineReviewRequestStatus @default(PENDING)
+  patientReason      String?
+  doctorNote         String?
+  reviewedAt         DateTime?
+  patientSeenAt      DateTime?
+  appliedAt          DateTime?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  patient          User     @relation("MedicineReviewPatient", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor           User     @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: Restrict)
+  reviewedByDoctor User?    @relation("MedicineReviewDecisionDoctor", fields: [reviewedByDoctorId], references: [id], onDelete: SetNull)
+  medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, status])
+  @@index([doctorId, status])
+  @@index([medicineId, requestType, status])
+  @@index([reviewedByDoctorId])
+  @@index([createdAt])
 }
 
 model MedicineDoseLog {
@@ -265,8 +509,9 @@ model PatientVitalReading {
 }
 
 model PatientDoctorNote {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   patientId String
+  doctorId  String?
   note      String
 
   createdAt DateTime @default(now())
@@ -385,4 +630,38 @@ model MedicineReference {
   @@index([brandName])
   @@index([genericName])
   @@index([isActive])
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  actorId   String?
+  actorRole String
+
+  action     String
+  entityType String
+  entityId   String?
+
+  patientId   String?
+  outcome     AuditOutcome @default(SUCCESS)
+  description String
+  metadata    Json?
+
+  requestMethod String?
+  requestPath   String?
+  ipAddress     String?
+  userAgent     String?
+
+  createdAt DateTime @default(now())
+
+  actor   User? @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  patient User? @relation("PatientAuditLogs", fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([actorRole, createdAt])
+  @@index([patientId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([outcome, createdAt])
+  @@index([createdAt])
 }

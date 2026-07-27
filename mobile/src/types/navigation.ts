@@ -14,8 +14,9 @@ export type PatientTabParamList = {
 export type DoctorTabParamList = {
   Home: { user?: any } | undefined;
   Consultations: undefined;
+  Alerts: undefined;
   Patients: undefined;
-  Profile: undefined;
+  Reviews: undefined;
 };
 
 export type AdminAccountStatus =
@@ -57,7 +58,11 @@ export type MedicineDraft = {
   name: string;
   dose: string;
   instructions?: string;
-  frequency: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY" | "AS_NEEDED";
+  frequency:
+    | "ONCE_DAILY"
+    | "TWICE_DAILY"
+    | "THREE_TIMES_DAILY"
+    | "AS_NEEDED";
   timeOfDay: string;
   selectedTimes?: string[];
   startDate: string;
@@ -68,6 +73,12 @@ export type MedicineDraft = {
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 
+export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
+
+export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
+
+export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
+
 export type RootStackParamList = {
   Splash: undefined;
   Welcome: undefined;
@@ -76,23 +87,6 @@ export type RootStackParamList = {
   PatientSignup: undefined;
   DoctorSignup: undefined;
   PharmacySignup: undefined;
-  PharmacyPendingApproval:
-  | {
-      user?: any;
-      email?: string;
-    }
-  | undefined;
-PharmacyDashboard:
-  | {
-      user?: any;
-    }
-  | undefined;
-  DoctorPendingApproval:
-    | {
-        user?: any;
-        email?: string;
-      }
-    | undefined;
 
   EmailVerification: {
     email?: string;
@@ -100,16 +94,42 @@ PharmacyDashboard:
 
   ForgotPassword: undefined;
 
+  DoctorPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
+  PharmacyPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
   PatientTabs:
-    | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
+    | (NavigatorScreenParams<PatientTabParamList> & {
+        user?: any;
+      })
     | undefined;
 
   DoctorTabs:
-    | (NavigatorScreenParams<DoctorTabParamList> & { user?: any })
+    | (NavigatorScreenParams<DoctorTabParamList> & {
+        user?: any;
+      })
     | undefined;
 
   AdminTabs:
-    | (NavigatorScreenParams<AdminTabParamList> & { user?: any })
+    | (NavigatorScreenParams<AdminTabParamList> & {
+        user?: any;
+      })
+    | undefined;
+
+  PharmacyDashboard:
+    | {
+        user?: any;
+      }
     | undefined;
 
   AdminDashboard: undefined;
@@ -120,6 +140,12 @@ PharmacyDashboard:
 
   AdminPharmacyVerificationDetail: {
     pharmacyId: string;
+  };
+
+  AdminAuditLogs: undefined;
+
+  AdminAuditLogDetail: {
+    auditLogId: string;
   };
 
   AdminRegisterWebView: {
@@ -134,10 +160,17 @@ PharmacyDashboard:
       }
     | undefined;
 
+  SelectDoctor: undefined;
+  PatientActiveCalls: undefined;
+  MedicineUpdates: undefined;
+  PatientReports: undefined;
+  PatientUploadReport: undefined;
+
   AddMedicine:
     | {
         medicineDraft?: MedicineDraft;
-        mode?: "CREATE" | "EDIT_DRAFT";
+        mode?: "CREATE" | "EDIT_DRAFT" | "RESUBMIT_REVIEW";
+        medicineReviewRequestId?: string;
       }
     | undefined;
 
@@ -161,7 +194,6 @@ PharmacyDashboard:
   };
 
   ConnectedDevice: undefined;
-
   ManualSafetyResponse: undefined;
 
   SafetyResponse: {
@@ -186,5 +218,40 @@ PharmacyDashboard:
   ConsultationEnded: {
     consultationId: string;
     consultationType?: "EMERGENCY" | "MANUAL";
+    participantRole?: ConsultationParticipantRole;
+    endedBy?: ConsultationEndedBy;
+    completionStatus?: ConsultationCompletionStatus;
+  };
+
+  DoctorPatientDetail: {
+    patientId: string;
+    patientName?: string;
+  };
+
+  DoctorPatientReports: {
+    patientId: string;
+    patientName: string;
+  };
+
+  DoctorReportReviews: undefined;
+
+  DoctorReportReview: {
+    patientId: string;
+    patientName: string;
+    reportId: string;
+  };
+
+  DoctorSelectPrescriptionPatient: undefined;
+
+  DoctorPrescription: {
+    patientId: string;
+    patientName: string;
+  };
+
+  DoctorSelectNotePatient: undefined;
+
+  DoctorAddNote: {
+    patientId: string;
+    patientName: string;
   };
 };
