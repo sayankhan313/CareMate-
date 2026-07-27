@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -35,23 +36,34 @@ type Props = NativeStackScreenProps<RootStackParamList, "SafetyResponse">;
 
 const DEFAULT_TIMER_SECONDS = 30;
 
-const BACKGROUND = "#FFF5F5";
+
+const BACKGROUND = "#FBF1F1";
 const SURFACE = "#FFFFFF";
-const TEXT = "#111827";
-const MUTED = "#64748B";
-const SOFT_MUTED = "#94A3B8";
+const TEXT = "#1B1D2A";
+const MUTED = "#5F6270";
+const SOFT_MUTED = "#7B7E8C";
 
-const RED = "#EF4444";
-const RED_DARK = "#B91C1C";
-const RED_DEEP = "#991B1B";
-const RED_LIGHT = "#FEE2E2";
-const RED_SOFT = "#FEF2F2";
-const RED_BORDER = "#FCA5A5";
+const RED = "#D9483F"; // M3-style error, slightly desaturated vs pure #EF4444
+const RED_DARK = "#A6332C";
+const RED_DEEP = "#7A241F";
+const RED_CONTAINER = "#F9DAD7"; // M3 error container
+const ON_RED_CONTAINER = "#7A241F";
+const RED_SOFT = "#FCEBE9";
+const RED_BORDER = "#F0B4AE";
 
-const BORDER = "#F1D4D4";
-const PANEL = "#FFF7F7";
+const SURFACE_VARIANT = "#F2E4E2";
+const PANEL = "#FDF3F2";
 
 const DEFAULT_SOURCE_TEXT = "CareMate+";
+
+
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: "#1B1D2A",
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
+  shadowRadius: level * 1.6,
+  shadowOffset: { width: 0, height: level * 0.8 },
+});
 
 const formatReadingTime = (value?: string | null) => {
   if (!value) {
@@ -328,7 +340,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             onPress={goBackToVitals}
             disabled={isEscalating}
           >
-            <ArrowLeft size={22} color={SURFACE} strokeWidth={2.6} />
+            <ArrowLeft size={22} color={SURFACE} strokeWidth={2.2} />
           </TouchableOpacity>
 
           <View style={styles.headerTextBlock}>
@@ -350,7 +362,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
           <View style={styles.emergencyPanel}>
             <View style={styles.emergencyTopRow}>
               <View style={styles.emergencyIconCircle}>
-                <ShieldAlert size={28} color={SURFACE} strokeWidth={2.8} />
+                <ShieldAlert size={26} color={SURFACE} strokeWidth={2.2} />
               </View>
 
               <View style={styles.emergencyTextBlock}>
@@ -368,12 +380,12 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
             <View style={styles.emergencyValuePanel}>
               <View style={styles.vitalValueRow}>
-                <HeartPulse size={21} color={RED} strokeWidth={2.8} />
+                <HeartPulse size={20} color={RED} strokeWidth={2.4} />
                 <Text style={styles.vitalValue}>{vitalInfo.value}</Text>
               </View>
 
               <View style={styles.metaRow}>
-                <Clock size={15} color={MUTED} strokeWidth={2.3} />
+                <Clock size={15} color={MUTED} strokeWidth={2} />
                 <Text style={styles.metaText}>
                   {formatReadingTime(vitalReading.recordedAt)}
                 </Text>
@@ -415,7 +427,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
           {errorMessage ? (
             <View style={styles.errorBox}>
-              <AlertCircle size={18} color={RED_DARK} strokeWidth={2.5} />
+              <AlertCircle size={18} color={RED_DARK} strokeWidth={2.2} />
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
@@ -461,7 +473,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             <Text style={styles.workflowTitle}>Safety workflow</Text>
 
             <WorkflowStep
-              icon={<CheckCircle2 size={20} color={SURFACE} strokeWidth={2.6} />}
+              icon={<CheckCircle2 size={19} color={SURFACE} strokeWidth={2.2} />}
               circleStyle={styles.completedStepCircle}
               title="Critical reading detected"
               subtitle={vitalInfo.reason}
@@ -471,7 +483,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             />
 
             <WorkflowStep
-              icon={<Clock size={18} color={SURFACE} strokeWidth={2.6} />}
+              icon={<Clock size={17} color={SURFACE} strokeWidth={2.2} />}
               circleStyle={styles.activeStepCircle}
               title="Waiting for patient response"
               subtitle={`Timer: ${timeLeft} seconds remaining`}
@@ -481,7 +493,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             />
 
             <WorkflowStep
-              icon={<UserRound size={18} color={RED} strokeWidth={2.5} />}
+              icon={<UserRound size={17} color={RED} strokeWidth={2.2} />}
               circleStyle={styles.pendingStepCircle}
               title="Caregiver escalation prepared"
               subtitle="Caregiver notification can be connected here"
@@ -491,7 +503,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             />
 
             <WorkflowStep
-              icon={<Stethoscope size={18} color={RED} strokeWidth={2.5} />}
+              icon={<Stethoscope size={17} color={RED} strokeWidth={2.2} />}
               circleStyle={styles.pendingStepCircle}
               title="Doctor consultation request"
               subtitle="Emergency consultation is created after escalation"
@@ -501,7 +513,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             />
 
             <WorkflowStep
-              icon={<Video size={18} color={RED} strokeWidth={2.5} />}
+              icon={<Video size={17} color={RED} strokeWidth={2.2} />}
               circleStyle={styles.pendingStepCircle}
               title="Video consultation"
               subtitle="Patient and doctor join the same JaaS room"
@@ -511,7 +523,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
           </View>
 
           <View style={styles.warningBox}>
-            <AlertCircle size={18} color={RED_DARK} strokeWidth={2.5} />
+            <AlertCircle size={18} color={RED_DARK} strokeWidth={2.2} />
             <Text style={styles.warningText}>
               If the timer ends, CareMate+ will automatically escalate this
               critical alert and create an emergency video consultation.
@@ -566,17 +578,18 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingTop: 10,
+    paddingBottom: 22,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: RED,
+    ...elevate(2),
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,
@@ -586,16 +599,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: SURFACE,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   headerSubtitle: {
     color: SURFACE,
     fontSize: 13,
-    fontWeight: "700",
-    marginTop: 4,
-    opacity: 0.95,
+    fontWeight: "500",
+    marginTop: 3,
+    opacity: 0.9,
   },
   content: {
     flex: 1,
@@ -606,20 +619,21 @@ const styles = StyleSheet.create({
   },
   emergencyPanel: {
     backgroundColor: RED,
-    borderRadius: 26,
+    borderRadius: 18,
     padding: 18,
     marginBottom: 14,
     overflow: "hidden",
+    ...elevate(2),
   },
   emergencyTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
   emergencyIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 13,
@@ -632,9 +646,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: SURFACE,
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   emergencyBadgeDot: {
     width: 7,
@@ -646,25 +660,25 @@ const styles = StyleSheet.create({
   emergencyBadgeText: {
     color: RED_DARK,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   emergencyTitle: {
     color: SURFACE,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.5,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0,
     marginTop: 13,
   },
   emergencySubtitle: {
-    color: "#FFECEC",
+    color: "#FCE6E4",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 19,
     marginTop: 6,
   },
   emergencyValuePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 14,
     padding: 15,
     marginTop: 18,
   },
@@ -674,8 +688,8 @@ const styles = StyleSheet.create({
   },
   vitalValue: {
     color: RED,
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 22,
+    fontWeight: "700",
     marginLeft: 8,
   },
   metaRow: {
@@ -686,44 +700,41 @@ const styles = StyleSheet.create({
   metaText: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     marginLeft: 6,
   },
   sourceText: {
     color: SOFT_MUTED,
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "600",
     marginTop: 8,
   },
   timerCard: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
     alignItems: "center",
     marginBottom: 14,
+    ...elevate(1),
   },
   timerCircle: {
-    width: 142,
-    height: 142,
-    borderRadius: 71,
-    backgroundColor: RED_LIGHT,
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    backgroundColor: RED_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 18,
-    borderWidth: 8,
-    borderColor: RED_SOFT,
   },
   timerText: {
-    color: RED,
-    fontSize: 36,
-    fontWeight: "900",
+    color: RED_DARK,
+    fontSize: 34,
+    fontWeight: "700",
   },
   timerTitle: {
     color: TEXT,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 12,
     marginBottom: 6,
     textAlign: "center",
@@ -731,79 +742,76 @@ const styles = StyleSheet.create({
   timerSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     marginBottom: 14,
   },
   progressTrack: {
     width: "100%",
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: RED_LIGHT,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: RED_CONTAINER,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: 99,
+    borderRadius: 3,
     backgroundColor: RED,
   },
   errorBox: {
     backgroundColor: RED_SOFT,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: RED_BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 14,
+    ...elevate(0.5),
   },
   errorText: {
     flex: 1,
     color: RED_DARK,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 18,
     marginLeft: 10,
   },
   actionCard: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
     marginBottom: 14,
+    ...elevate(1),
   },
   questionText: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 22,
     marginBottom: 18,
   },
   cancelButton: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    paddingVertical: 15,
+    backgroundColor: RED_CONTAINER,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: RED,
     marginBottom: 12,
   },
   cancelButtonText: {
-    color: RED,
+    color: ON_RED_CONTAINER,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   startButton: {
     backgroundColor: RED,
-    borderRadius: 16,
-    paddingVertical: 15,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
+    ...elevate(1),
   },
   startButtonText: {
     color: SURFACE,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   disabledButton: {
     opacity: 0.55,
@@ -813,16 +821,15 @@ const styles = StyleSheet.create({
   },
   workflowCard: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
     marginBottom: 14,
+    ...elevate(1),
   },
   workflowTitle: {
     color: TEXT,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "700",
     marginBottom: 18,
   },
   workflowStep: {
@@ -834,16 +841,16 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   stepCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   stepLine: {
     width: 2,
     height: 30,
-    backgroundColor: RED_LIGHT,
+    backgroundColor: RED_CONTAINER,
     marginVertical: 5,
   },
   completedStepCircle: {
@@ -853,9 +860,7 @@ const styles = StyleSheet.create({
     backgroundColor: RED_DARK,
   },
   pendingStepCircle: {
-    backgroundColor: RED_LIGHT,
-    borderWidth: 1,
-    borderColor: RED_BORDER,
+    backgroundColor: RED_CONTAINER,
   },
   workflowTextBlock: {
     flex: 1,
@@ -864,53 +869,52 @@ const styles = StyleSheet.create({
   workflowStepTitle: {
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   workflowStepSubtitle: {
     color: SOFT_MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 4,
     lineHeight: 17,
   },
   activeStepTitle: {
     color: RED_DARK,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   activeStepSubtitle: {
     color: RED,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     marginTop: 4,
     lineHeight: 17,
   },
   pendingStepTitle: {
     color: RED_DARK,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   pendingStepSubtitle: {
     color: SOFT_MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 4,
     lineHeight: 17,
   },
   warningBox: {
     backgroundColor: RED_SOFT,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 15,
-    borderWidth: 1,
-    borderColor: RED_BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
+    ...elevate(0.5),
   },
   warningText: {
     flex: 1,
     color: RED_DARK,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 18,
     marginLeft: 10,
   },

@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -66,11 +67,7 @@ type VitalsScreenProps = CompositeScreenProps<
 type LoadMode = "initial" | "refresh" | "silent";
 
 type TrendMetricKey =
-  | "heartRate"
-  | "spo2"
-  | "bpSystolic"
-  | "glucose"
-  | "temperature";
+  "heartRate" | "spo2" | "bpSystolic" | "glucose" | "temperature";
 
 type TrendMetricOption = {
   key: TrendMetricKey;
@@ -88,34 +85,41 @@ type VitalBarData = {
   unit: string;
   percentage: number;
   color: string;
+  status: VitalStatus;
   hasData: boolean;
 };
 
-const BACKGROUND = "#EEF1FA";
+const BACKGROUND = "#F2F3F8";
 const SURFACE = "#FFFFFF";
-const TEXT = "#111936";
-const MUTED = "#7A8194";
-const BORDER = "#E4E8F2";
-const SOFT_PANEL = "#F7F9FF";
+const SURFACE_VARIANT = "#E7E9F2";
+const TEXT = "#1B1D2A";
+const MUTED = "#5F6270";
+const SOFT_PANEL = "#F3F4FA";
+const PRIMARY = "#4C6FE0";
+const PRIMARY_CONTAINER = "#E1E7FF";
+const ON_PRIMARY_CONTAINER = "#0C2A8C";
+const PRIMARY_LIGHT = PRIMARY_CONTAINER;
 
-const PRIMARY = "#5B86E5";
-const PRIMARY_DARK = "#3F6FD0";
-const PRIMARY_LIGHT = "#EEF4FF";
+const SUCCESS = "#3A9D75";
+const SUCCESS_CONTAINER = "#DBF3E7";
+const ON_SUCCESS_CONTAINER = "#0F5C3C";
+const SUCCESS_LIGHT = SUCCESS_CONTAINER;
 
-const SUCCESS = "#42B883";
-const SUCCESS_LIGHT = "#EAF8F2";
+const WARNING = "#C77A1F";
+const WARNING_CONTAINER = "#FBE7CD";
+const ON_WARNING_CONTAINER = "#7A4708";
+const WARNING_LIGHT = WARNING_CONTAINER;
 
-const WARNING = "#F6A545";
-const WARNING_LIGHT = "#FFF3E2";
-
-const DANGER = "#EF4D56";
-const DANGER_LIGHT = "#FFEDEE";
+const DANGER = "#C6404A";
+const DANGER_CONTAINER = "#FBDADC";
+const ON_DANGER_CONTAINER = "#8C1D24";
+const DANGER_LIGHT = DANGER_CONTAINER;
 
 const TEAL = "#0F766E";
-const TEAL_LIGHT = "#EAF8F2";
+const TEAL_LIGHT = "#DDF3F0";
 
-const INDIGO = "#4F46E5";
-const INDIGO_LIGHT = "#EEF2FF";
+const INDIGO = "#5A55B8";
+const INDIGO_LIGHT = "#E8E7F8";
 
 const CHART_WIDTH = 330;
 const CHART_HEIGHT = 210;
@@ -176,7 +180,7 @@ const clamp = (value: number, min: number, max: number) => {
 const getPercentage = (
   value: number | null,
   minimum: number,
-  maximum: number
+  maximum: number,
 ) => {
   if (value === null) {
     return 12;
@@ -190,8 +194,8 @@ const getPercentage = (
 const getStatusTheme = (status: VitalStatus) => {
   if (status === "STABLE") {
     return {
-      badgeBackground: SUCCESS_LIGHT,
-      text: "#167A58",
+      badgeBackground: SUCCESS_CONTAINER,
+      text: ON_SUCCESS_CONTAINER,
       dot: SUCCESS,
       label: "Stable",
       title: "Vitals look stable",
@@ -201,8 +205,8 @@ const getStatusTheme = (status: VitalStatus) => {
 
   if (status === "WARNING") {
     return {
-      badgeBackground: WARNING_LIGHT,
-      text: "#A85A13",
+      badgeBackground: WARNING_CONTAINER,
+      text: ON_WARNING_CONTAINER,
       dot: WARNING,
       label: "Warning",
       title: "Needs attention",
@@ -212,8 +216,8 @@ const getStatusTheme = (status: VitalStatus) => {
 
   if (status === "CRITICAL") {
     return {
-      badgeBackground: DANGER_LIGHT,
-      text: "#B42318",
+      badgeBackground: DANGER_CONTAINER,
+      text: ON_DANGER_CONTAINER,
       dot: DANGER,
       label: "Critical",
       title: "Critical reading",
@@ -222,8 +226,8 @@ const getStatusTheme = (status: VitalStatus) => {
   }
 
   return {
-    badgeBackground: PRIMARY_LIGHT,
-    text: PRIMARY_DARK,
+    badgeBackground: PRIMARY_CONTAINER,
+    text: ON_PRIMARY_CONTAINER,
     dot: PRIMARY,
     label: "No Data",
     title: "No latest reading",
@@ -306,12 +310,112 @@ const getNumberValue = (value?: number | null) => {
   return null;
 };
 
+const getVitalBarColor = (status: VitalStatus) => {
+  if (status === "CRITICAL") {
+    return DANGER;
+  }
+
+  if (status === "WARNING") {
+    return WARNING;
+  }
+
+  if (status === "NO_DATA") {
+    return "#CBD0DB";
+  }
+
+  return PRIMARY;
+};
+
+const getIndividualVitalStatus = (
+  key: "heartRate" | "spo2" | "bp" | "glucose" | "temperature",
+  primaryValue: number | null,
+  secondaryValue: number | null = null,
+): VitalStatus => {
+  if (primaryValue === null && secondaryValue === null) {
+    return "NO_DATA";
+  }
+
+  if (key === "heartRate" && primaryValue !== null) {
+    if (primaryValue < 40 || primaryValue >= 130) {
+      return "CRITICAL";
+    }
+
+    if (primaryValue < 50 || primaryValue > 110) {
+      return "WARNING";
+    }
+  }
+
+  if (key === "spo2" && primaryValue !== null) {
+    if (primaryValue < 90) {
+      return "CRITICAL";
+    }
+
+    if (primaryValue < 94) {
+      return "WARNING";
+    }
+  }
+
+  if (key === "bp") {
+    const isCritical =
+      (primaryValue !== null && primaryValue >= 180) ||
+      (secondaryValue !== null && secondaryValue >= 120);
+
+    if (isCritical) {
+      return "CRITICAL";
+    }
+
+    const isWarning =
+      (primaryValue !== null && primaryValue >= 140) ||
+      (secondaryValue !== null && secondaryValue >= 90);
+
+    if (isWarning) {
+      return "WARNING";
+    }
+  }
+
+  if (key === "glucose" && primaryValue !== null) {
+    if (primaryValue < 54 || primaryValue >= 250) {
+      return "CRITICAL";
+    }
+
+    if (primaryValue < 70 || primaryValue >= 180) {
+      return "WARNING";
+    }
+  }
+
+  if (key === "temperature" && primaryValue !== null) {
+    if (primaryValue >= 39) {
+      return "CRITICAL";
+    }
+
+    if (primaryValue >= 37.8) {
+      return "WARNING";
+    }
+  }
+
+  return "STABLE";
+};
+
 const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
   const heartRate = getNumberValue(reading?.heartRate);
   const spo2 = getNumberValue(reading?.spo2);
   const bpSystolic = getNumberValue(reading?.bpSystolic);
+  const bpDiastolic = getNumberValue(reading?.bpDiastolic);
   const glucose = getNumberValue(reading?.glucose);
   const temperature = getNumberValue(reading?.temperature);
+
+  const heartRateStatus = getIndividualVitalStatus("heartRate", heartRate);
+  const spo2Status = getIndividualVitalStatus("spo2", spo2);
+  const bloodPressureStatus = getIndividualVitalStatus(
+    "bp",
+    bpSystolic,
+    bpDiastolic,
+  );
+  const glucoseStatus = getIndividualVitalStatus("glucose", glucose);
+  const temperatureStatus = getIndividualVitalStatus(
+    "temperature",
+    temperature,
+  );
 
   return [
     {
@@ -320,7 +424,8 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
       displayValue: heartRate === null ? "--" : `${heartRate}`,
       unit: "bpm",
       percentage: getPercentage(heartRate, 50, 150),
-      color: PRIMARY,
+      color: getVitalBarColor(heartRateStatus),
+      status: heartRateStatus,
       hasData: heartRate !== null,
     },
     {
@@ -329,7 +434,8 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
       displayValue: spo2 === null ? "--" : `${spo2}`,
       unit: "%",
       percentage: getPercentage(spo2, 85, 100),
-      color: PRIMARY,
+      color: getVitalBarColor(spo2Status),
+      status: spo2Status,
       hasData: spo2 !== null,
     },
     {
@@ -337,9 +443,10 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
       label: "BP",
       displayValue: formatBloodPressure(reading),
       unit: "mmHg",
-      percentage: getPercentage(bpSystolic, 90, 180),
-      color: PRIMARY,
-      hasData: bpSystolic !== null,
+      percentage: getPercentage(bpSystolic ?? bpDiastolic, 90, 180),
+      color: getVitalBarColor(bloodPressureStatus),
+      status: bloodPressureStatus,
+      hasData: bpSystolic !== null || bpDiastolic !== null,
     },
     {
       key: "glucose",
@@ -347,7 +454,8 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
       displayValue: glucose === null ? "--" : `${glucose}`,
       unit: "mg/dL",
       percentage: getPercentage(glucose, 60, 220),
-      color: PRIMARY,
+      color: getVitalBarColor(glucoseStatus),
+      status: glucoseStatus,
       hasData: glucose !== null,
     },
     {
@@ -356,14 +464,16 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
       displayValue: temperature === null ? "--" : `${temperature}`,
       unit: "°C",
       percentage: getPercentage(temperature, 35, 40),
-      color: PRIMARY,
+      color: getVitalBarColor(temperatureStatus),
+      status: temperatureStatus,
       hasData: temperature !== null,
     },
   ];
 };
+
 const getTrendMetricValue = (
   reading: VitalReading,
-  metricKey: TrendMetricKey
+  metricKey: TrendMetricKey,
 ) => {
   return getNumberValue(reading[metricKey]);
 };
@@ -386,7 +496,7 @@ const buildSmoothLinePath = (points: { x: number; y: number }[]) => {
 
 const buildSmoothAreaPath = (
   points: { x: number; y: number }[],
-  bottomY: number
+  bottomY: number,
 ) => {
   if (points.length < 2) return "";
 
@@ -409,7 +519,7 @@ const buildSmoothAreaPath = (
 
 const buildTrendChartData = (
   readings: VitalReading[],
-  selectedMetric: TrendMetricOption
+  selectedMetric: TrendMetricOption,
 ) => {
   const chartReadings = readings.slice(0, 8).reverse();
 
@@ -429,12 +539,12 @@ const buildTrendChartData = (
     })
     .filter(
       (
-        item
+        item,
       ): item is {
         reading: VitalReading;
         index: number;
         value: number;
-      } => item !== null
+      } => item !== null,
     );
 
   if (validReadings.length === 0) {
@@ -484,7 +594,9 @@ const buildTrendChartData = (
   };
 
   const getY = (value: number) => {
-    return chartBottom - ((value - minValue) / range) * (chartBottom - chartTop);
+    return (
+      chartBottom - ((value - minValue) / range) * (chartBottom - chartTop)
+    );
   };
 
   const points = validReadings.map((item) => ({
@@ -592,7 +704,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
   useFocusEffect(
     useCallback(() => {
       loadVitals("initial");
-    }, [loadVitals])
+    }, [loadVitals]),
   );
 
   useEffect(() => {
@@ -636,14 +748,14 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
 
           <TouchableOpacity
             style={styles.deviceButton}
-            activeOpacity={0.85}
+            activeOpacity={0.72}
             onPress={openConnectedDevice}
           >
-            <Bluetooth
-              size={22}
-              color={isHealthConnectConnected ? SUCCESS : PRIMARY}
-              strokeWidth={2.6}
-            />
+            <Bluetooth size={27} color={PRIMARY} strokeWidth={2.6} />
+
+            {isHealthConnectConnected ? (
+              <View style={styles.deviceConnectedDot} />
+            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -816,9 +928,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                         style={[
                           styles.deviceStatusText,
                           {
-                            color: isHealthConnectConnected
-                              ? "#167A58"
-                              : MUTED,
+                            color: isHealthConnectConnected ? "#167A58" : MUTED,
                           },
                         ]}
                       >
@@ -924,19 +1034,24 @@ const VitalBarGraph = ({
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
               <View style={styles.legendSafeDot} />
-              <Text style={styles.legendText}>Latest</Text>
+              <Text style={styles.legendText}>Stable</Text>
             </View>
 
             <View style={styles.legendItem}>
-              <View style={styles.legendRangeDot} />
-              <Text style={styles.legendText}>Range</Text>
+              <View style={styles.legendWarningDot} />
+              <Text style={styles.legendText}>Warning</Text>
+            </View>
+
+            <View style={styles.legendItem}>
+              <View style={styles.legendCriticalDot} />
+              <Text style={styles.legendText}>Critical</Text>
             </View>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.filterButton} activeOpacity={0.85}>
-          <SlidersHorizontal size={20} color={TEXT} strokeWidth={2.5} />
-        </TouchableOpacity>
+        <View style={styles.filterButton}>
+          <SlidersHorizontal size={20} color={TEXT} strokeWidth={2.2} />
+        </View>
       </View>
 
       <View style={styles.flowPill}>
@@ -1049,7 +1164,7 @@ const VitalsTrendChart = ({
 
   const chartData = useMemo(
     () => buildTrendChartData(readings, selectedMetric),
-    [readings, selectedMetric]
+    [readings, selectedMetric],
   );
 
   const hasChartData = chartData.points.length > 0;
@@ -1132,13 +1247,7 @@ const VitalsTrendChart = ({
               viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
             >
               <Defs>
-                <SvgLinearGradient
-                  id="trendFill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
+                <SvgLinearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
                   <Stop
                     offset="0%"
                     stopColor={selectedMetric.color}
@@ -1157,7 +1266,7 @@ const VitalsTrendChart = ({
                 y1={chartTop}
                 x2={chartRight}
                 y2={chartTop}
-                stroke="#E4E8F2"
+                stroke={SURFACE_VARIANT}
                 strokeWidth="1"
               />
 
@@ -1166,7 +1275,7 @@ const VitalsTrendChart = ({
                 y1={middleY}
                 x2={chartRight}
                 y2={middleY}
-                stroke="#E4E8F2"
+                stroke={SURFACE_VARIANT}
                 strokeWidth="1"
               />
 
@@ -1175,7 +1284,7 @@ const VitalsTrendChart = ({
                 y1={chartBottom}
                 x2={chartRight}
                 y2={chartBottom}
-                stroke="#E4E8F2"
+                stroke={SURFACE_VARIANT}
                 strokeWidth="1.4"
               />
 
@@ -1184,14 +1293,14 @@ const VitalsTrendChart = ({
                 y1={chartTop}
                 x2={chartLeft}
                 y2={chartBottom}
-                stroke="#E4E8F2"
+                stroke={SURFACE_VARIANT}
                 strokeWidth="1.4"
               />
 
               <SvgText
                 x={chartLeft - 8}
                 y={chartTop + 4}
-                fill="#9CA3AF"
+                fill={MUTED}
                 fontSize="10"
                 textAnchor="end"
               >
@@ -1201,20 +1310,20 @@ const VitalsTrendChart = ({
               <SvgText
                 x={chartLeft - 8}
                 y={middleY + 4}
-                fill="#9CA3AF"
+                fill={MUTED}
                 fontSize="10"
                 textAnchor="end"
               >
                 {formatTrendNumber(
                   (chartData.maxValue + chartData.minValue) / 2,
-                  selectedMetric.key
+                  selectedMetric.key,
                 )}
               </SvgText>
 
               <SvgText
                 x={chartLeft - 8}
                 y={chartBottom + 4}
-                fill="#9CA3AF"
+                fill={MUTED}
                 fontSize="10"
                 textAnchor="end"
               >
@@ -1287,7 +1396,7 @@ const VitalsTrendChart = ({
                     key={`${reading.id}-label-${index}`}
                     x={x}
                     y={CHART_HEIGHT - 8}
-                    fill="#9CA3AF"
+                    fill={MUTED}
                     fontSize="10"
                     textAnchor="middle"
                   >
@@ -1303,7 +1412,7 @@ const VitalsTrendChart = ({
               label="Min"
               value={formatTrendNumber(
                 chartData.actualMinValue,
-                selectedMetric.key
+                selectedMetric.key,
               )}
               unit={selectedMetric.unit}
             />
@@ -1318,7 +1427,7 @@ const VitalsTrendChart = ({
               label="Max"
               value={formatTrendNumber(
                 chartData.actualMaxValue,
-                selectedMetric.key
+                selectedMetric.key,
               )}
               unit={selectedMetric.unit}
             />
@@ -1369,7 +1478,9 @@ const HistoryRow = ({
     <View style={[styles.historyRow, isLast ? styles.rowLast : undefined]}>
       <View style={styles.historyTopRow}>
         <View style={styles.historyTitleBlock}>
-          <Text style={styles.historyTime}>{formatTime(reading.recordedAt)}</Text>
+          <Text style={styles.historyTime}>
+            {formatTime(reading.recordedAt)}
+          </Text>
           <Text style={styles.historySource}>
             {formatSource(reading.source)} ·{" "}
             {reading.deviceSource || "No device source"}
@@ -1400,8 +1511,12 @@ const HistoryRow = ({
       <View style={styles.historyValues}>
         <Text style={styles.historyValue}>HR {reading.heartRate ?? "--"}</Text>
         <Text style={styles.historyValue}>SpO₂ {reading.spo2 ?? "--"}%</Text>
-        <Text style={styles.historyValue}>BP {formatBloodPressure(reading)}</Text>
-        <Text style={styles.historyValue}>Glucose {reading.glucose ?? "--"}</Text>
+        <Text style={styles.historyValue}>
+          BP {formatBloodPressure(reading)}
+        </Text>
+        <Text style={styles.historyValue}>
+          Glucose {reading.glucose ?? "--"}
+        </Text>
         <Text style={styles.historyValue}>
           Temp{" "}
           {reading.temperature !== null && reading.temperature !== undefined
@@ -1412,6 +1527,17 @@ const HistoryRow = ({
     </View>
   );
 };
+
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: TEXT,
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
+  shadowRadius: level * 1.6,
+  shadowOffset: {
+    width: 0,
+    height: level * 0.8,
+  },
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1429,28 +1555,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: BACKGROUND,
   },
   appBarTitle: {
     color: TEXT,
-    fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: -0.5,
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
   },
   deviceButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: SURFACE,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    backgroundColor: "transparent",
+  },
+  deviceConnectedDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: SUCCESS,
+    borderWidth: 1.5,
+    borderColor: BACKGROUND,
   },
   scrollView: {
     flex: 1,
@@ -1461,52 +1597,52 @@ const styles = StyleSheet.create({
   },
   statePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 24,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    marginTop: 20,
+    ...elevate(1),
   },
   stateTitle: {
     color: TEXT,
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 12,
   },
   stateText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     lineHeight: 19,
     marginTop: 5,
   },
   errorPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     padding: 24,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#FECACA",
+    marginTop: 20,
+    ...elevate(1),
   },
   errorIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: DANGER_LIGHT,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: DANGER_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
   },
   errorTitle: {
-    color: "#991B1B",
-    fontSize: 18,
-    fontWeight: "900",
+    color: ON_DANGER_CONTAINER,
+    fontSize: 17,
+    fontWeight: "700",
     marginTop: 12,
   },
   errorText: {
-    color: "#7F1D1D",
+    color: MUTED,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     lineHeight: 20,
     marginTop: 6,
@@ -1514,24 +1650,27 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    borderRadius: 20,
+    paddingHorizontal: 18,
     paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
+    overflow: "hidden",
+    ...elevate(1),
   },
   retryButtonText: {
     color: SURFACE,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     marginLeft: 8,
   },
   featureCard: {
     backgroundColor: PRIMARY,
-    borderRadius: 28,
+    borderRadius: 18,
     padding: 18,
-    marginBottom: 14,
+    marginBottom: 16,
     overflow: "hidden",
+    ...elevate(2),
   },
   featureTopRow: {
     flexDirection: "row",
@@ -1546,9 +1685,9 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   statusDot: {
     width: 7,
@@ -1558,151 +1697,157 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   featureTitle: {
     color: SURFACE,
-    fontSize: 27,
-    fontWeight: "900",
-    letterSpacing: -0.6,
+    fontSize: 25,
+    fontWeight: "700",
+    letterSpacing: -0.3,
     marginTop: 14,
   },
   featureSubtitle: {
-    color: "#EAF1FF",
+    color: "#E4EAFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 6,
   },
   featureIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
   },
-barGraphPanel: {
-  backgroundColor: SURFACE,
-  borderRadius: 24,
-  paddingHorizontal: 15,
-  paddingTop: 15,
-  paddingBottom: 12,
-  marginTop: 18,
-},
-barGraphHeader: {
-  flexDirection: "row",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-},
-barGraphTitle: {
-  color: TEXT,
-  fontSize: 18,
-  fontWeight: "900",
-},
-legendRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginTop: 8,
-},
-legendItem: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginRight: 12,
-},
-legendSafeDot: {
-  width: 10,
-  height: 10,
-  borderRadius: 3,
-  backgroundColor: PRIMARY,
-  marginRight: 6,
-},
-legendRangeDot: {
-  width: 10,
-  height: 10,
-  borderRadius: 3,
-  backgroundColor: PRIMARY_LIGHT,
-  marginRight: 6,
-},
-legendText: {
-  color: MUTED,
-  fontSize: 12,
-  fontWeight: "800",
-},
-filterButton: {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  backgroundColor: SOFT_PANEL,
-  alignItems: "center",
-  justifyContent: "center",
-  borderWidth: 1,
-  borderColor: BORDER,
-},
-flowPill: {
-  alignSelf: "center",
-  backgroundColor: PRIMARY_LIGHT,
-  borderRadius: 999,
-  paddingHorizontal: 18,
-  paddingVertical: 8,
-  marginTop: 10,
-},
-flowPillText: {
-  color: PRIMARY_DARK,
-  fontSize: 13,
-  fontWeight: "900",
-},
-barChartRow: {
-  height: 184,
-  flexDirection: "row",
-  alignItems: "flex-end",
-  justifyContent: "space-between",
-  marginTop: 14,
-},
-barItem: {
-  flex: 1,
-  alignItems: "center",
-},
-barValueText: {
-  color: TEXT,
-  fontSize: 11,
-  fontWeight: "900",
-  marginBottom: 6,
-  maxWidth: 60,
-},
-barTrack: {
-  width: 32,
-  height: BAR_MAX_HEIGHT,
-  borderRadius: 16,
-  backgroundColor: PRIMARY_LIGHT,
-  justifyContent: "flex-end",
-  overflow: "hidden",
-},
-barFill: {
-  width: "100%",
-  borderRadius: 16,
-},
-barLabel: {
-  color: TEXT,
-  fontSize: 11,
-  fontWeight: "900",
-  marginTop: 8,
-  textAlign: "center",
-},
-barUnit: {
-  color: MUTED,
-  fontSize: 9,
-  fontWeight: "800",
-  marginTop: 2,
-},
+  barGraphPanel: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingTop: 15,
+    paddingBottom: 12,
+    marginTop: 18,
+  },
+  barGraphHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  barGraphTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 10,
+    marginBottom: 3,
+  },
+  legendSafeDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 3,
+    backgroundColor: PRIMARY,
+    marginRight: 5,
+  },
+  legendWarningDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 3,
+    backgroundColor: WARNING,
+    marginRight: 5,
+  },
+  legendCriticalDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 3,
+    backgroundColor: DANGER,
+    marginRight: 5,
+  },
+  legendText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "500",
+  },
+  filterButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  flowPill: {
+    alignSelf: "center",
+    backgroundColor: PRIMARY_CONTAINER,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginTop: 10,
+  },
+  flowPillText: {
+    color: ON_PRIMARY_CONTAINER,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  barChartRow: {
+    height: 184,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginTop: 14,
+  },
+  barItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  barValueText: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 6,
+    maxWidth: 60,
+  },
+  barTrack: {
+    width: 30,
+    height: BAR_MAX_HEIGHT,
+    borderRadius: 10,
+    backgroundColor: PRIMARY_CONTAINER,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  barFill: {
+    width: "100%",
+    borderRadius: 10,
+  },
+  barLabel: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  barUnit: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    marginTop: 2,
+  },
   whitePanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 14,
+    marginBottom: 16,
+    ...elevate(1),
   },
   panelHeader: {
     flexDirection: "row",
@@ -1712,13 +1857,13 @@ barUnit: {
   },
   panelTitle: {
     color: TEXT,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "700",
   },
   panelAction: {
     color: PRIMARY,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   rowLast: {
     borderBottomWidth: 0,
@@ -1728,18 +1873,18 @@ barUnit: {
     alignItems: "flex-start",
     justifyContent: "space-between",
     paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SURFACE_VARIANT,
   },
   infoLabel: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "500",
   },
   infoValue: {
     color: TEXT,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "600",
     textAlign: "right",
     flex: 1,
     marginLeft: 16,
@@ -1747,11 +1892,10 @@ barUnit: {
   },
   trendPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+    marginBottom: 16,
+    ...elevate(1),
   },
   trendHeader: {
     flexDirection: "row",
@@ -1765,18 +1909,18 @@ barUnit: {
   },
   trendTitle: {
     color: TEXT,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "700",
   },
   trendSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 4,
     lineHeight: 18,
   },
   latestBadge: {
-    borderRadius: 14,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 7,
     alignItems: "center",
@@ -1784,11 +1928,11 @@ barUnit: {
   },
   latestBadgeLabel: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   latestBadgeValue: {
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "700",
     marginTop: 2,
   },
   metricShortcutContentInside: {
@@ -1802,42 +1946,31 @@ barUnit: {
   metricShortcutIcon: {
     width: 54,
     height: 54,
-    borderRadius: 27,
+    borderRadius: 16,
     backgroundColor: SOFT_PANEL,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   metricShortcutIconSelected: {
-    borderColor: PRIMARY,
-    backgroundColor: SURFACE,
-    shadowColor: PRIMARY,
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    elevation: 2,
+    backgroundColor: PRIMARY_CONTAINER,
+    ...elevate(1),
   },
   metricShortcutLabel: {
     color: TEXT,
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "600",
     marginTop: 7,
     textAlign: "center",
   },
   metricShortcutLabelSelected: {
-    color: PRIMARY,
+    color: ON_PRIMARY_CONTAINER,
+    fontWeight: "700",
   },
   chartWrapper: {
     alignItems: "center",
     backgroundColor: SOFT_PANEL,
-    borderRadius: 16,
+    borderRadius: 14,
     paddingTop: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
     overflow: "hidden",
   },
   trendStatsRow: {
@@ -1848,17 +1981,15 @@ barUnit: {
   trendStatBox: {
     flex: 1,
     backgroundColor: SOFT_PANEL,
-    borderRadius: 13,
+    borderRadius: 12,
     paddingVertical: 11,
     paddingHorizontal: 8,
     marginHorizontal: 3,
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   trendStatLabel: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "600",
     textAlign: "center",
   },
   trendStatValueRow: {
@@ -1870,50 +2001,48 @@ barUnit: {
   trendStatValue: {
     color: TEXT,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
     marginRight: 3,
   },
   trendStatUnit: {
     color: MUTED,
     fontSize: 9,
-    fontWeight: "900",
+    fontWeight: "500",
     marginBottom: 3,
   },
   noChartPanel: {
     backgroundColor: SOFT_PANEL,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 20,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   noChartTitle: {
     color: TEXT,
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   noChartText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     textAlign: "center",
     marginTop: 6,
     lineHeight: 19,
   },
   connectedRow: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
     marginBottom: 10,
+    overflow: "hidden",
+    ...elevate(1),
   },
   connectedIcon: {
     width: 46,
     height: 46,
-    borderRadius: 15,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1929,53 +2058,51 @@ barUnit: {
   connectedTitle: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     flex: 1,
   },
   deviceStatusBadge: {
-    borderRadius: 999,
+    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginLeft: 8,
   },
   deviceStatusText: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   connectedSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 17,
     marginTop: 5,
   },
   connectedMeta: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
   },
   connectedError: {
-    color: "#B91C1C",
+    color: ON_DANGER_CONTAINER,
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "600",
     marginTop: 6,
     lineHeight: 16,
   },
   syncingPanel: {
-    backgroundColor: PRIMARY_LIGHT,
-    borderRadius: 16,
+    backgroundColor: PRIMARY_CONTAINER,
+    borderRadius: 12,
     padding: 13,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
     marginBottom: 12,
   },
   syncingText: {
-    color: PRIMARY,
+    color: ON_PRIMARY_CONTAINER,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "600",
     marginLeft: 10,
   },
   sectionHeader: {
@@ -1988,36 +2115,35 @@ barUnit: {
   sectionTitle: {
     color: TEXT,
     fontSize: 19,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   sectionSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 2,
   },
   refreshSmallButton: {
     width: 40,
     height: 40,
-    borderRadius: 14,
-    backgroundColor: SURFACE,
+    borderRadius: 13,
+    backgroundColor: PRIMARY_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    overflow: "hidden",
   },
   historyPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
+    overflow: "hidden",
+    ...elevate(1),
   },
   historyRow: {
     paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SURFACE_VARIANT,
   },
   historyTopRow: {
     flexDirection: "row",
@@ -2031,23 +2157,23 @@ barUnit: {
   historyTime: {
     color: TEXT,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   historySource: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
     lineHeight: 17,
   },
   historyStatusBadge: {
-    borderRadius: 999,
+    borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
   historyStatusText: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   historyValues: {
     flexDirection: "row",
@@ -2056,34 +2182,31 @@ barUnit: {
   },
   historyValue: {
     color: TEXT,
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "600",
     backgroundColor: SOFT_PANEL,
-    borderRadius: 999,
+    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 5,
     marginRight: 6,
     marginBottom: 6,
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   emptyPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 22,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   emptyTitle: {
     color: TEXT,
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   emptyText: {
     color: MUTED,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 20,
     textAlign: "center",
     marginTop: 8,

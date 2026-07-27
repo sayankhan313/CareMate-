@@ -92,6 +92,56 @@ const getPatientProfileData = (data: RegisterInput) => {
   };
 };
 
+const getDoctorProfileData = (data: RegisterInput) => {
+  if (data.role !== "DOCTOR") {
+    return undefined;
+  }
+
+  if (!data.phoneNumber) {
+    throw new AppError("Phone number is required for doctor registration", 400);
+  }
+
+  if (!data.gmcNumber) {
+    throw new AppError("GMC number is required for doctor registration", 400);
+  }
+
+  if (!data.specialization) {
+    throw new AppError("Specialisation is required for doctor registration", 400);
+  }
+
+  if (!data.clinicName) {
+    throw new AppError(
+      "Clinic or hospital name is required for doctor registration",
+      400
+    );
+  }
+
+  if (!data.gmcDocumentUrl) {
+    throw new AppError("GMC registration proof is required", 400);
+  }
+
+  if (!data.photoIdDocumentUrl) {
+    throw new AppError("Photo ID proof is required", 400);
+  }
+
+  if (!data.qualificationDocumentUrl) {
+    throw new AppError("Qualification or employment proof is required", 400);
+  }
+
+  return {
+    phoneNumber: data.phoneNumber.trim(),
+    gmcNumber: data.gmcNumber.trim().toUpperCase(),
+    specialization: data.specialization.trim(),
+    clinicName: data.clinicName.trim(),
+    clinicAddress: data.clinicAddress?.trim() || null,
+    yearsExperience: data.yearsExperience ?? null,
+    bio: data.bio?.trim() || null,
+    gmcDocumentUrl: data.gmcDocumentUrl,
+    photoIdDocumentUrl: data.photoIdDocumentUrl,
+    qualificationDocumentUrl: data.qualificationDocumentUrl,
+  };
+};
+
 export const authService = {
   async register(data: RegisterInput) {
     const existingUser = await prisma.user.findUnique({
@@ -104,6 +154,18 @@ export const authService = {
       throw new AppError("Email is already registered", 409);
     }
 
+    if (data.role === "DOCTOR" && data.gmcNumber) {
+      const existingDoctorProfile = await prisma.doctorProfile.findUnique({
+        where: {
+          gmcNumber: data.gmcNumber.trim().toUpperCase(),
+        },
+      });
+
+      if (existingDoctorProfile) {
+        throw new AppError("GMC number is already registered", 409);
+      }
+    }
+
     const passwordHash = await hashPassword(data.password);
 
     const accountStatus =
@@ -114,6 +176,7 @@ export const authService = {
     const { token, expiresAt } = createEmailVerificationToken();
 
     const patientProfileData = getPatientProfileData(data);
+    const doctorProfileData = getDoctorProfileData(data);
 
     const user = await prisma.user.create({
       data: {
@@ -132,6 +195,14 @@ export const authService = {
               },
             }
           : {}),
+
+        ...(doctorProfileData
+          ? {
+              doctorProfile: {
+                create: doctorProfileData,
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -142,6 +213,7 @@ export const authService = {
         isEmailVerified: true,
         createdAt: true,
         patientProfile: true,
+        doctorProfile: true,
       },
     });
 

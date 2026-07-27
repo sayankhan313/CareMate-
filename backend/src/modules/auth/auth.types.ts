@@ -21,6 +21,17 @@ export type RegisterInput = {
   gender?: PatientGender;
   medicalConditions?: string;
   emergencyContact?: string;
+
+  gmcNumber?: string;
+  specialization?: string;
+  clinicName?: string;
+  clinicAddress?: string;
+  yearsExperience?: number;
+  bio?: string;
+
+  gmcDocumentUrl?: string;
+  photoIdDocumentUrl?: string;
+  qualificationDocumentUrl?: string;
 };
 
 export type LoginInput = {

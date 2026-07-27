@@ -24,6 +24,23 @@ type LoginFormValues = {
 
 type LoginScreenProps = NativeStackScreenProps<RootStackParamList, "Login">;
 
+type LoggedInUser = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: "PATIENT" | "DOCTOR" | "CAREGIVER" | "PHARMACY" | "ADMIN";
+  accountStatus?: string;
+  isEmailVerified?: boolean;
+};
+
+const isApprovedAccount = (accountStatus?: string) => {
+  return accountStatus === "ACTIVE" || accountStatus === "APPROVED";
+};
+
+const isPendingAccount = (accountStatus?: string) => {
+  return accountStatus === "PENDING_VERIFICATION";
+};
+
 export const LoginScreen = ({ navigation }: LoginScreenProps) => {
   const {
     control,
@@ -35,6 +52,132 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
       password: "",
     },
   });
+
+  const clearTokenAndShowMessage = async (title: string, message: string) => {
+    await tokenStorage.removeToken();
+    Alert.alert(title, message);
+  };
+
+  const redirectByRole = async (user: LoggedInUser) => {
+    if (user.role === "PATIENT") {
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: "PatientTabs",
+            params: {
+              user,
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    if (user.role === "DOCTOR") {
+      if (isPendingAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "DoctorPendingApproval",
+              params: {
+                user,
+                email: user.email,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      if (isApprovedAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "DoctorTabs",
+              params: {
+                user,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      await clearTokenAndShowMessage(
+        "Doctor account unavailable",
+        "Your doctor account is not active right now."
+      );
+      return;
+    }
+
+    if (user.role === "ADMIN") {
+      if (isApprovedAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "AdminTabs",
+              params: {
+                user,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      await clearTokenAndShowMessage(
+        "Admin account unavailable",
+        "Your admin account is not active right now."
+      );
+      return;
+    }
+if (user.role === "PHARMACY") {
+  if (isPendingAccount(user.accountStatus)) {
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "PharmacyPendingApproval",
+          params: {
+            user,
+            email: user.email,
+          },
+        },
+      ],
+    });
+    return;
+  }
+
+  if (isApprovedAccount(user.accountStatus)) {
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "PharmacyDashboard",
+          params: {
+            user,
+          },
+        },
+      ],
+    });
+    return;
+  }
+
+  await clearTokenAndShowMessage(
+    "Pharmacy account unavailable",
+    "Your pharmacy account is not active right now."
+  );
+  return;
+}
+    await clearTokenAndShowMessage(
+      "Unsupported role",
+      "This account role is not supported yet."
+    );
+  };
 
   const onSubmit = async (formData: LoginFormValues) => {
     try {
@@ -55,7 +198,11 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         throw new Error(loginJson.message || "Login failed.");
       }
 
-      const token = loginJson.data.token;
+      const token = loginJson.data?.token;
+
+      if (!token) {
+        throw new Error("Login token missing from server response.");
+      }
 
       await tokenStorage.saveToken(token);
 
@@ -68,21 +215,16 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
 
       const currentUserJson = await currentUserResponse.json();
 
-      if (!currentUserResponse.ok || !currentUserJson.success) {
+      if (
+        !currentUserResponse.ok ||
+        !currentUserJson.success ||
+        !currentUserJson.data?.user
+      ) {
+        await tokenStorage.removeToken();
         throw new Error(currentUserJson.message || "Could not load user.");
       }
 
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name: "PatientTabs",
-            params: {
-              user: currentUserJson.data.user,
-            },
-          },
-        ],
-      });
+      await redirectByRole(currentUserJson.data.user as LoggedInUser);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong.";
@@ -247,7 +389,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
 
           <Text style={styles.securityText}>
             CareMate+ uses secure authentication and role-based access to
-            protect patient workflows.
+            protect patient and clinical workflows.
           </Text>
         </View>
       </ScrollView>

@@ -1,14 +1,26 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Alert,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  HeartPulse,
+  Pill,
+  ShieldCheck,
+  Stethoscope,
+  UsersRound,
+} from "lucide-react-native";
 
 import type { RootStackParamList } from "../../types/navigation";
 
@@ -23,58 +35,81 @@ type RoleOption = {
   id: UserRole;
   title: string;
   description: string;
-  icon: string;
-  borderColor: string;
-  iconBackground: string;
-  iconColor: string;
+  accent: string;
+  light: string;
   badge?: string;
+  icon: ReactNode;
 };
+
+const BACKGROUND = "#EEF1FA";
+const SURFACE = "#FFFFFF";
+const TEXT = "#111936";
+const MUTED = "#7A8194";
+const BORDER = "#E4E8F2";
+const SOFT_PANEL = "#F7F9FF";
+
+const PATIENT_PRIMARY = "#5B86E5";
+const DOCTOR_PRIMARY = "#7C3AED";
+const PHARMACY_PRIMARY = "#16A34A";
+const CAREGIVER_PRIMARY = "#F6A545";
+
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: "#172033",
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.07 + level * 0.01,
+  shadowRadius: level * 1.5,
+  shadowOffset: {
+    width: 0,
+    height: level * 0.8,
+  },
+});
 
 const roleOptions: RoleOption[] = [
   {
     id: "PATIENT",
     title: "Patient",
-    description: "Manage medicines, vitals, consultations and orders",
-    icon: "♡",
-    borderColor: "#2563EB",
-    iconBackground: "#DBEAFE",
-    iconColor: "#2563EB",
+    description: "Track medicines, vitals, safety alerts and consultations.",
+    accent: PATIENT_PRIMARY,
+    light: "#EEF4FF",
+    icon: <HeartPulse size={24} color={PATIENT_PRIMARY} strokeWidth={2.5} />,
   },
   {
     id: "DOCTOR",
     title: "Doctor",
-    description: "Monitor patients, prescriptions and safety alerts",
-    icon: "⌁",
-    borderColor: "#14B8A6",
-    iconBackground: "#CCFBF1",
-    iconColor: "#14B8A6",
+    description: "Review patient consultations, safety cases and notes.",
+    accent: DOCTOR_PRIMARY,
+    light: "#F3E8FF",
     badge: "Verification required",
-  },
-  {
-    id: "CAREGIVER",
-    title: "Caregiver",
-    description: "Support linked patient and view alerts",
-    icon: "👥",
-    borderColor: "#F59E0B",
-    iconBackground: "#FEF3C7",
-    iconColor: "#F59E0B",
+    icon: <Stethoscope size={24} color={DOCTOR_PRIMARY} strokeWidth={2.5} />,
   },
   {
     id: "PHARMACY",
     title: "Pharmacy",
-    description: "Manage prescription-linked fulfilment requests",
-    icon: "▣",
-    borderColor: "#8B5CF6",
-    iconBackground: "#EDE9FE",
-    iconColor: "#8B5CF6",
+    description: "Manage prescription-linked medicine fulfilment requests.",
+    accent: PHARMACY_PRIMARY,
+    light: "#ECFDF3",
     badge: "Verification required",
+    icon: <Pill size={24} color={PHARMACY_PRIMARY} strokeWidth={2.5} />,
+  },
+  {
+    id: "CAREGIVER",
+    title: "Caregiver",
+    description: "Support a linked patient and view important alerts.",
+    accent: CAREGIVER_PRIMARY,
+    light: "#FFF3E2",
+    badge: "Coming next",
+    icon: <UsersRound size={24} color={CAREGIVER_PRIMARY} strokeWidth={2.5} />,
   },
 ];
 
 export const RoleSelectionScreen = ({
   navigation,
 }: RoleSelectionScreenProps) => {
+  const insets = useSafeAreaInsets();
   const [selectedRole, setSelectedRole] = useState<UserRole>("PATIENT");
+
+  const selectedOption =
+    roleOptions.find((role) => role.id === selectedRole) || roleOptions[0];
 
   const handleContinue = () => {
     if (selectedRole === "PATIENT") {
@@ -83,41 +118,44 @@ export const RoleSelectionScreen = ({
     }
 
     if (selectedRole === "DOCTOR") {
-      Alert.alert(
-        "Doctor verification required",
-        "Doctor registration will be connected with admin verification after patient authentication is completed."
-      );
+      navigation.navigate("DoctorSignup");
       return;
     }
 
     if (selectedRole === "PHARMACY") {
-      Alert.alert(
-        "Pharmacy verification required",
-        "Pharmacy registration will be connected with admin verification after patient authentication is completed."
-      );
+      navigation.navigate("PharmacySignup");
       return;
     }
 
-    if (selectedRole === "CAREGIVER") {
-      Alert.alert(
-        "Caregiver registration coming next",
-        "Caregiver registration will be connected after the patient authentication flow is completed."
-      );
-    }
+    Alert.alert(
+      "Caregiver registration coming next",
+      "Caregiver registration will be connected after the main patient, doctor and pharmacy workflows."
+    );
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingBottom: Math.max(insets.bottom + 28, 40),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
+          <View style={styles.logoCircle}>
+            <ShieldCheck size={28} color={selectedOption.accent} strokeWidth={2.7} />
+          </View>
+
           <Text style={styles.title}>Choose Your Role</Text>
 
           <Text style={styles.subtitle}>
-            Select how you will use CareMate+
+            Select how you want to use CareMate+
           </Text>
         </View>
 
@@ -128,33 +166,35 @@ export const RoleSelectionScreen = ({
             return (
               <TouchableOpacity
                 key={role.id}
-                activeOpacity={0.85}
+                activeOpacity={0.86}
                 onPress={() => setSelectedRole(role.id)}
                 style={[
                   styles.roleCard,
-                  {
-                    borderColor: isSelected ? role.borderColor : "#E2E8F0",
-                  },
+                  isSelected
+                    ? {
+                        backgroundColor: role.light,
+                      }
+                    : undefined,
                 ]}
               >
                 <View
                   style={[
+                    styles.roleAccent,
+                    {
+                      backgroundColor: isSelected ? role.accent : BORDER,
+                    },
+                  ]}
+                />
+
+                <View
+                  style={[
                     styles.roleIconCircle,
                     {
-                      backgroundColor: role.iconBackground,
+                      backgroundColor: role.light,
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.roleIcon,
-                      {
-                        color: role.iconColor,
-                      },
-                    ]}
-                  >
-                    {role.icon}
-                  </Text>
+                  {role.icon}
                 </View>
 
                 <View style={styles.roleContent}>
@@ -162,8 +202,24 @@ export const RoleSelectionScreen = ({
                     <Text style={styles.roleTitle}>{role.title}</Text>
 
                     {role.badge ? (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{role.badge}</Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          {
+                            backgroundColor: isSelected ? SURFACE : role.light,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            {
+                              color: role.accent,
+                            },
+                          ]}
+                        >
+                          {role.badge}
+                        </Text>
                       </View>
                     ) : null}
                   </View>
@@ -172,26 +228,70 @@ export const RoleSelectionScreen = ({
                     {role.description}
                   </Text>
                 </View>
+
+                <View
+                  style={[
+                    styles.radioOuter,
+                    {
+                      borderColor: isSelected ? role.accent : BORDER,
+                    },
+                  ]}
+                >
+                  {isSelected ? (
+                    <View
+                      style={[
+                        styles.radioInner,
+                        {
+                          backgroundColor: role.accent,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </View>
               </TouchableOpacity>
             );
           })}
         </View>
 
         <View style={styles.noteCard}>
-          <Text style={styles.noteIcon}>♡</Text>
+          <View
+            style={[
+              styles.noteIconBox,
+              {
+                backgroundColor: selectedOption.light,
+              },
+            ]}
+          >
+            <ShieldCheck
+              size={18}
+              color={selectedOption.accent}
+              strokeWidth={2.6}
+            />
+          </View>
 
           <Text style={styles.noteText}>
-            Doctors and pharmacies require admin verification.
+            Doctors and pharmacies require admin verification before accessing
+            clinical or fulfilment data.
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+        <TouchableOpacity
+          style={[
+            styles.continueButton,
+            {
+              backgroundColor: selectedOption.accent,
+            },
+          ]}
+          onPress={handleContinue}
+          activeOpacity={0.88}
+        >
           <Text style={styles.continueButtonText}>Continue</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
+          activeOpacity={0.82}
         >
           <Text style={styles.backButtonText}>Back to login</Text>
         </TouchableOpacity>
@@ -203,103 +303,121 @@ export const RoleSelectionScreen = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F6FAFF",
+    backgroundColor: BACKGROUND,
   },
   screen: {
     flex: 1,
-    backgroundColor: "#F6FAFF",
+    backgroundColor: BACKGROUND,
   },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 56,
-    paddingBottom: 34,
+    paddingHorizontal: 22,
+    paddingTop: 34,
     justifyContent: "center",
   },
   header: {
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: 24,
+  },
+  logoCircle: {
+    width: 66,
+    height: 66,
+    borderRadius: 20,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
+    ...elevate(2),
   },
   title: {
-    color: "#0F172A",
-    fontSize: 24,
-    fontWeight: "800",
+    color: TEXT,
+    fontSize: 25,
+    fontWeight: "700",
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: "#64748B",
+    color: MUTED,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   rolesContainer: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   roleCard: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginBottom: 14,
+    position: "relative",
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#0F172A",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    overflow: "hidden",
+    ...elevate(2),
+  },
+  roleAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
   },
   roleIconCircle: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 16,
-  },
-  roleIcon: {
-    fontSize: 24,
-    fontWeight: "800",
+    marginRight: 14,
   },
   roleContent: {
     flex: 1,
+    paddingRight: 10,
   },
   roleTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 5,
     flexWrap: "wrap",
   },
   roleTitle: {
-    color: "#0F172A",
+    color: TEXT,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
     marginRight: 8,
   },
   badge: {
-    backgroundColor: "#FEF3C7",
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   badgeText: {
-    color: "#92400E",
-    fontSize: 8,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "700",
   },
   roleDescription: {
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: "600",
+    color: MUTED,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "500",
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: SURFACE,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   noteCard: {
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
+    backgroundColor: SOFT_PANEL,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 13,
@@ -307,36 +425,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 18,
   },
-  noteIcon: {
-    color: "#2563EB",
-    fontSize: 15,
+  noteIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
-    fontWeight: "800",
   },
   noteText: {
     flex: 1,
-    color: "#1E40AF",
-    fontSize: 11,
-    fontWeight: "600",
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "500",
+    lineHeight: 18,
   },
   continueButton: {
-    backgroundColor: "#2563EB",
-    borderRadius: 14,
+    borderRadius: 15,
     paddingVertical: 15,
     alignItems: "center",
     marginBottom: 14,
+    ...elevate(2),
   },
   continueButtonText: {
-    color: "#FFFFFF",
+    color: SURFACE,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   backButton: {
     alignItems: "center",
     paddingVertical: 6,
   },
   backButtonText: {
-    color: "#2563EB",
+    color: MUTED,
     fontSize: 13,
     fontWeight: "700",
   },
