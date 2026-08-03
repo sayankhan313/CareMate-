@@ -45,6 +45,21 @@ enum Gender {
   PREFER_NOT_TO_SAY
 }
 
+enum AppLanguage {
+  ENGLISH
+  HINDI
+  GREEK
+  HAUSA
+  GERMAN
+}
+
+enum AppTextSize {
+  SMALL
+  NORMAL
+  LARGE
+  EXTRA_LARGE
+}
+
 enum MedicineReviewStatus {
   NOT_REQUESTED
   PENDING
@@ -179,8 +194,13 @@ model User {
   passwordResetToken          String?
   passwordResetTokenExpiresAt DateTime?
 
-  patientProfile PatientProfile?
-  doctorProfile  DoctorProfile?
+  patientProfile           PatientProfile?
+  notificationPreferences  PatientNotificationPreference?
+  reminderPreferences      PatientReminderPreference?
+  safetyPreferences        PatientSafetyPreference?
+  accessibilityPreferences PatientAccessibilityPreference?
+  privacyPreferences       PatientPrivacyPreference?
+  doctorProfile            DoctorProfile?
 
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
@@ -218,17 +238,114 @@ model User {
 }
 
 model PatientProfile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  phoneNumber       String
-  dateOfBirth       DateTime
-  gender            Gender?
-  medicalConditions String?
-  emergencyContact  String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  phoneNumber           String
+  dateOfBirth           DateTime
+  gender                Gender?
+  healthRecordNumber    String?  @unique
+  medicalConditions     String?
+  allergies             String?
+  bloodGroup            String?
+  addressLine           String?
+  postcode              String?
+  emergencyContact      String
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([healthRecordNumber])
+}
+
+model PatientNotificationPreference {
+  id                    String   @id @default(uuid())
+  patientId             String   @unique
+  medicineReminders     Boolean  @default(true)
+  missedDoseAlerts      Boolean  @default(true)
+  consultationUpdates   Boolean  @default(true)
+  medicineReviewUpdates Boolean  @default(true)
+  reportReviewUpdates   Boolean  @default(true)
+  criticalVitalAlerts   Boolean  @default(true)
+  safetyResponseAlerts  Boolean  @default(true)
+  careTeamUpdates       Boolean  @default(true)
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientReminderPreference {
+  id                    String   @id @default(uuid())
+  patientId             String   @unique
+  defaultSnoozeMinutes  Int      @default(10)
+  missedDoseReminder    Boolean  @default(true)
+  repeatMissedDoseAlert Boolean  @default(true)
+  repeatIntervalMinutes Int      @default(30)
+  vibrationEnabled      Boolean  @default(true)
+  soundEnabled          Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientSafetyPreference {
+  id                            String   @id @default(uuid())
+  patientId                     String   @unique
+  countdownSeconds              Int      @default(30)
+  notifyAssignedDoctors         Boolean  @default(true)
+  shareLatestVitalsOnEscalation Boolean  @default(true)
+  notifyEmergencyContact        Boolean  @default(false)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientAccessibilityPreference {
+  id                       String      @id @default(uuid())
+  patientId                String      @unique
+  language                 AppLanguage @default(ENGLISH)
+  textSize                 AppTextSize @default(NORMAL)
+  highContrastEnabled      Boolean     @default(false)
+  reduceMotionEnabled      Boolean     @default(false)
+  screenReaderHintsEnabled Boolean     @default(true)
+  hapticFeedbackEnabled    Boolean     @default(true)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientPrivacyPreference {
+  id                                String   @id @default(uuid())
+  patientId                         String   @unique
+  shareVitalsWithAssignedDoctors    Boolean  @default(true)
+  shareMedicinesWithAssignedDoctors Boolean  @default(true)
+  shareReportsWithAssignedDoctors   Boolean  @default(true)
+  hideSensitiveNotificationContent  Boolean  @default(true)
+  loginAlertsEnabled                Boolean  @default(true)
+  sessionTimeoutMinutes             Int      @default(30)
+  confirmBeforeReportSharing        Boolean  @default(true)
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
 }
 
 model DoctorProfile {

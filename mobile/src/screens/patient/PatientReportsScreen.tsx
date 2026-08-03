@@ -10,7 +10,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -34,6 +33,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
 
 import {
   patientReportsApi,

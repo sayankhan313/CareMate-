@@ -1,11 +1,9 @@
 import React, { useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -27,6 +25,8 @@ import {
   Sparkles,
   Upload,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import { medicineOcrService } from "../../services/medicineOcrService";
 import type { RootStackParamList } from "../../types/navigation";

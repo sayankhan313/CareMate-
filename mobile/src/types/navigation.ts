@@ -79,6 +79,15 @@ export type RootStackParamList = {
   AdminAuditLogDetail: { auditLogId: string };
   AdminRegisterWebView: { title: string; url: string; helperText?: string };
   PatientProfile: { user?: any } | undefined;
+<<<<<<< HEAD
+=======
+  EditPatientProfile: undefined;
+  NotificationPreferences: undefined;
+  ReminderSettings: undefined;
+SafetyResponseSettings: undefined;
+LanguageAccessibility: undefined;
+PrivacySecurity: undefined;
+>>>>>>> multilingual-settings-integration
   SelectDoctor: undefined;
   PatientActiveCalls: undefined;
   MedicineUpdates: undefined;

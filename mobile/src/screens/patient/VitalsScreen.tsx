@@ -51,6 +51,7 @@ import {
   Thermometer,
 } from "lucide-react-native";
 
+import { useLanguage } from "../../context/LanguageContext";
 import { vitalsApi } from "../../services/vitalsApi";
 import { useHealthConnectDevice } from "../../context/HealthConnectDeviceContext";
 import type {
@@ -191,98 +192,49 @@ const getPercentage = (
   return clamp(percentage, 18, 100);
 };
 
-const getStatusTheme = (status: VitalStatus) => {
-  if (status === "STABLE") {
-    return {
-      badgeBackground: SUCCESS_CONTAINER,
-      text: ON_SUCCESS_CONTAINER,
-      dot: SUCCESS,
-      label: "Stable",
-      title: "Vitals look stable",
-      flowLabel: "Good Flow",
-    };
-  }
+type Translate = ReturnType<typeof useLanguage>["t"];
 
-  if (status === "WARNING") {
-    return {
-      badgeBackground: WARNING_CONTAINER,
-      text: ON_WARNING_CONTAINER,
-      dot: WARNING,
-      label: "Warning",
-      title: "Needs attention",
-      flowLabel: "Check Flow",
-    };
-  }
-
-  if (status === "CRITICAL") {
-    return {
-      badgeBackground: DANGER_CONTAINER,
-      text: ON_DANGER_CONTAINER,
-      dot: DANGER,
-      label: "Critical",
-      title: "Critical reading",
-      flowLabel: "Urgent Flow",
-    };
-  }
-
-  return {
-    badgeBackground: PRIMARY_CONTAINER,
-    text: ON_PRIMARY_CONTAINER,
-    dot: PRIMARY,
-    label: "No Data",
-    title: "No latest reading",
-    flowLabel: "No Flow",
-  };
+const getStatusTheme = (status: VitalStatus, t: Translate) => {
+  if (status === "STABLE") return { badgeBackground: SUCCESS_CONTAINER, text: ON_SUCCESS_CONTAINER, dot: SUCCESS, label: t("vitals.statusStable"), title: t("vitals.titleStable"), flowLabel: t("vitals.flowGood") };
+  if (status === "WARNING") return { badgeBackground: WARNING_CONTAINER, text: ON_WARNING_CONTAINER, dot: WARNING, label: t("vitals.statusWarning"), title: t("vitals.titleWarning"), flowLabel: t("vitals.flowCheck") };
+  if (status === "CRITICAL") return { badgeBackground: DANGER_CONTAINER, text: ON_DANGER_CONTAINER, dot: DANGER, label: t("vitals.statusCritical"), title: t("vitals.titleCritical"), flowLabel: t("vitals.flowUrgent") };
+  return { badgeBackground: PRIMARY_CONTAINER, text: ON_PRIMARY_CONTAINER, dot: PRIMARY, label: t("vitals.statusNoData"), title: t("vitals.titleNoData"), flowLabel: t("vitals.flowNone") };
 };
 
-const formatSource = (source?: string | null) => {
-  if (source === "HEALTH_CONNECT") return "Health Connect";
-  if (source === "SIMULATED") return "Simulator";
-  if (source === "MANUAL") return "Manual";
-
-  return "No source";
+const formatSource = (source: string | null | undefined, t: Translate) => {
+  if (source === "HEALTH_CONNECT") return t("dashboard.healthConnect");
+  if (source === "SIMULATED") return t("dashboard.simulator");
+  if (source === "MANUAL") return t("dashboard.manualEntry");
+  return t("common.noSource");
 };
 
-const formatTime = (value?: string | null) => {
-  if (!value) return "Not available";
-
+const formatTime = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("vitals.notAvailable");
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "Not available";
-
-  return date.toLocaleString([], {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(date.getTime())) return t("vitals.notAvailable");
+  return date.toLocaleString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
-const formatShortTime = (value?: string | null) => {
+const formatShortTime = (value: string | null | undefined, locale: string) => {
   if (!value) return "--";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "--";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 };
 
-const formatSyncTime = (value?: string | null) => {
-  if (!value) return "Not synced yet";
-
+const formatSyncTime = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("vitals.notSynced");
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return t("vitals.notSynced");
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
 
-  if (Number.isNaN(date.getTime())) return "Not synced yet";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+const getMetricLabel = (metricKey: TrendMetricKey, t: Translate, short = false) => {
+  if (metricKey === "heartRate") return t(short ? "vitals.metricHeart" : "vitals.metricHeartRate");
+  if (metricKey === "spo2") return "SpO₂";
+  if (metricKey === "bpSystolic") return short ? "BP" : t("vitals.metricBloodPressure");
+  if (metricKey === "glucose") return t(short ? "vitals.metricSugar" : "vitals.metricGlucose");
+  return t(short ? "vitals.metricTemp" : "vitals.metricTemperature");
 };
 
 const formatBloodPressure = (reading?: VitalReading | null) => {
@@ -396,7 +348,7 @@ const getIndividualVitalStatus = (
   return "STABLE";
 };
 
-const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
+const getLatestVitalBars = (reading: VitalReading | null, t: Translate): VitalBarData[] => {
   const heartRate = getNumberValue(reading?.heartRate);
   const spo2 = getNumberValue(reading?.spo2);
   const bpSystolic = getNumberValue(reading?.bpSystolic);
@@ -420,7 +372,7 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
   return [
     {
       key: "heartRate",
-      label: "Heart",
+      label: t("vitals.metricHeart"),
       displayValue: heartRate === null ? "--" : `${heartRate}`,
       unit: "bpm",
       percentage: getPercentage(heartRate, 50, 150),
@@ -450,7 +402,7 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
     },
     {
       key: "glucose",
-      label: "Sugar",
+      label: t("vitals.metricSugar"),
       displayValue: glucose === null ? "--" : `${glucose}`,
       unit: "mg/dL",
       percentage: getPercentage(glucose, 60, 220),
@@ -460,7 +412,7 @@ const getLatestVitalBars = (reading: VitalReading | null): VitalBarData[] => {
     },
     {
       key: "temperature",
-      label: "Temp",
+      label: t("vitals.metricTemp"),
       displayValue: temperature === null ? "--" : `${temperature}`,
       unit: "°C",
       percentage: getPercentage(temperature, 35, 40),
@@ -653,6 +605,7 @@ const getMetricShortcutIcon = (metricKey: TrendMetricKey) => {
 
 export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
   const insets = useSafeAreaInsets();
+  const { t, locale } = useLanguage();
 
   const [latestReading, setLatestReading] = useState<VitalReading | null>(null);
   const [history, setHistory] = useState<VitalReading[]>([]);
@@ -692,14 +645,14 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
       setHistory(readings);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to load vitals.";
+        error instanceof Error ? error.message : t("vitals.unableLoad");
 
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -721,7 +674,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
   };
 
   const status = getReadingStatus(latestReading);
-  const statusTheme = getStatusTheme(status);
+  const statusTheme = getStatusTheme(status, t);
 
   const graphReadings = useMemo(() => {
     if (history.length > 0) {
@@ -742,8 +695,8 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
       <View style={styles.screen}>
         <View style={styles.appBar}>
           <View>
-            <Text style={styles.appBarTitle}>Vitals</Text>
-            <Text style={styles.appBarSubtitle}>Track health readings</Text>
+            <Text style={styles.appBarTitle}>{t("vitals.title")}</Text>
+            <Text style={styles.appBarSubtitle}>{t("vitals.subtitle")}</Text>
           </View>
 
           <TouchableOpacity
@@ -780,10 +733,8 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
           {isLoading ? (
             <View style={styles.statePanel}>
               <ActivityIndicator color={PRIMARY} />
-              <Text style={styles.stateTitle}>Loading vitals...</Text>
-              <Text style={styles.stateText}>
-                Getting the latest saved health readings.
-              </Text>
+              <Text style={styles.stateTitle}>{t("vitals.loadingTitle")}</Text>
+              <Text style={styles.stateText}>{t("vitals.loadingText")}</Text>
             </View>
           ) : null}
 
@@ -793,7 +744,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                 <AlertCircle size={26} color={DANGER} strokeWidth={2.6} />
               </View>
 
-              <Text style={styles.errorTitle}>Vitals unavailable</Text>
+              <Text style={styles.errorTitle}>{t("vitals.unavailable")}</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
               <TouchableOpacity
@@ -802,7 +753,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                 onPress={() => loadVitals("initial")}
               >
                 <RefreshCw size={18} color={SURFACE} strokeWidth={2.5} />
-                <Text style={styles.retryButtonText}>Try again</Text>
+                <Text style={styles.retryButtonText}>{t("common.tryAgain")}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -842,7 +793,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
 
                     <Text style={styles.featureTitle}>{statusTheme.title}</Text>
                     <Text style={styles.featureSubtitle}>
-                      {formatTime(latestReading?.recordedAt)}
+                      {formatTime(latestReading?.recordedAt, t, locale)}
                     </Text>
                   </View>
 
@@ -859,25 +810,25 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
 
               <View style={styles.whitePanel}>
                 <View style={styles.panelHeader}>
-                  <Text style={styles.panelTitle}>Reading source</Text>
+                  <Text style={styles.panelTitle}>{t("vitals.readingSource")}</Text>
                   <Text style={styles.panelAction}>
-                    {formatSource(latestReading?.source)}
+                    {formatSource(latestReading?.source, t)}
                   </Text>
                 </View>
 
                 <InfoRow
-                  label="Source"
-                  value={formatSource(latestReading?.source)}
+                  label={t("vitals.source")}
+                  value={formatSource(latestReading?.source, t)}
                 />
 
                 <InfoRow
-                  label="Device"
-                  value={latestReading?.deviceSource || "No device source"}
+                  label={t("vitals.device")}
+                  value={latestReading?.deviceSource || t("vitals.noDeviceSource")}
                 />
 
                 <InfoRow
-                  label="Recorded"
-                  value={formatTime(latestReading?.recordedAt)}
+                  label={t("vitals.recorded")}
+                  value={formatTime(latestReading?.recordedAt, t, locale)}
                   isLast
                 />
               </View>
@@ -912,7 +863,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
 
                 <View style={styles.connectedTextBlock}>
                   <View style={styles.connectedTitleRow}>
-                    <Text style={styles.connectedTitle}>Connected device</Text>
+                    <Text style={styles.connectedTitle}>{t("vitals.connectedDevice")}</Text>
 
                     <View
                       style={[
@@ -932,7 +883,7 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                           },
                         ]}
                       >
-                        {isHealthConnectConnected ? "Connected" : "Off"}
+                        {isHealthConnectConnected ? t("common.connected") : t("common.off")}
                       </Text>
                     </View>
                   </View>
@@ -940,16 +891,12 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                   <Text style={styles.connectedSubtitle}>
                     {isHealthConnectConnected
                       ? connectedDeviceName
-                      : "Connect Health Connect to update vitals automatically"}
+                      : t("vitals.connectPrompt")}
                   </Text>
 
-                  <Text style={styles.connectedMeta}>
-                    Last sync: {formatSyncTime(lastSyncAt)}
-                  </Text>
+                  <Text style={styles.connectedMeta}>{t("vitals.lastSync", { time: formatSyncTime(lastSyncAt, t, locale) })}</Text>
 
-                  <Text style={styles.connectedMeta}>
-                    Last status: {lastSyncStatus || "No reading yet"}
-                  </Text>
+                  <Text style={styles.connectedMeta}>{t("vitals.lastStatus", { status: lastSyncStatus || t("vitals.noReadingYet") })}</Text>
 
                   {lastSyncError ? (
                     <Text style={styles.connectedError}>{lastSyncError}</Text>
@@ -962,21 +909,19 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
               {isHealthConnectSyncing ? (
                 <View style={styles.syncingPanel}>
                   <ActivityIndicator color={PRIMARY} />
-                  <Text style={styles.syncingText}>
-                    Updating latest Health Connect vitals...
-                  </Text>
+                  <Text style={styles.syncingText}>{t("vitals.syncing")}</Text>
                 </View>
               ) : null}
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>Recent readings</Text>
+                  <Text style={styles.sectionTitle}>{t("vitals.recentReadings")}</Text>
                   <Text style={styles.sectionSubtitle}>
-                    {history.length > 0
-                      ? `${history.length} saved reading${
-                          history.length === 1 ? "" : "s"
-                        }`
-                      : "No saved readings yet"}
+                    {history.length === 1
+                      ? t("vitals.oneSavedReading")
+                      : history.length > 1
+                        ? t("vitals.manySavedReadings", { count: history.length })
+                        : t("vitals.noSavedReadings")}
                   </Text>
                 </View>
 
@@ -1001,11 +946,8 @@ export const VitalsScreen = ({ navigation }: VitalsScreenProps) => {
                 </View>
               ) : (
                 <View style={styles.emptyPanel}>
-                  <Text style={styles.emptyTitle}>No readings yet</Text>
-                  <Text style={styles.emptyText}>
-                    Connect Health Connect or add a simulated reading to start
-                    tracking vitals.
-                  </Text>
+                  <Text style={styles.emptyTitle}>{t("vitals.noReadingsTitle")}</Text>
+                  <Text style={styles.emptyText}>{t("vitals.noReadingsText")}</Text>
                 </View>
               )}
             </>
@@ -1023,28 +965,29 @@ const VitalBarGraph = ({
   reading: VitalReading | null;
   flowLabel: string;
 }) => {
-  const bars = useMemo(() => getLatestVitalBars(reading), [reading]);
+  const { t } = useLanguage();
+  const bars = useMemo(() => getLatestVitalBars(reading, t), [reading, t]);
 
   return (
     <View style={styles.barGraphPanel}>
       <View style={styles.barGraphHeader}>
         <View>
-          <Text style={styles.barGraphTitle}>Health readings</Text>
+          <Text style={styles.barGraphTitle}>{t("vitals.healthReadings")}</Text>
 
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
               <View style={styles.legendSafeDot} />
-              <Text style={styles.legendText}>Stable</Text>
+              <Text style={styles.legendText}>{t("common.stable")}</Text>
             </View>
 
             <View style={styles.legendItem}>
               <View style={styles.legendWarningDot} />
-              <Text style={styles.legendText}>Warning</Text>
+              <Text style={styles.legendText}>{t("common.warning")}</Text>
             </View>
 
             <View style={styles.legendItem}>
               <View style={styles.legendCriticalDot} />
-              <Text style={styles.legendText}>Critical</Text>
+              <Text style={styles.legendText}>{t("common.critical")}</Text>
             </View>
           </View>
         </View>
@@ -1158,6 +1101,7 @@ const VitalsTrendChart = ({
   selectedMetricKey: TrendMetricKey;
   onChangeMetric: (metric: TrendMetricKey) => void;
 }) => {
+  const { t, locale } = useLanguage();
   const selectedMetric =
     TREND_METRICS.find((metric) => metric.key === selectedMetricKey) ||
     TREND_METRICS[0];
@@ -1183,9 +1127,9 @@ const VitalsTrendChart = ({
     <View style={styles.trendPanel}>
       <View style={styles.trendHeader}>
         <View style={styles.trendTitleBlock}>
-          <Text style={styles.trendTitle}>Vitals trend</Text>
+          <Text style={styles.trendTitle}>{t("vitals.trendTitle")}</Text>
           <Text style={styles.trendSubtitle}>
-            {selectedMetric.label} changes from recent readings
+            {t("vitals.trendSubtitle", { metric: getMetricLabel(selectedMetric.key, t) })}
           </Text>
         </View>
 
@@ -1206,7 +1150,7 @@ const VitalsTrendChart = ({
                 },
               ]}
             >
-              Latest
+              {t("vitals.latest")}
             </Text>
             <Text
               style={[
@@ -1230,7 +1174,7 @@ const VitalsTrendChart = ({
         {TREND_METRICS.map((metric) => (
           <MetricShortcut
             key={metric.key}
-            label={metric.shortLabel}
+            label={getMetricLabel(metric.key, t, true)}
             icon={getMetricShortcutIcon(metric.key)}
             isSelected={selectedMetricKey === metric.key}
             onPress={() => onChangeMetric(metric.key)}
@@ -1400,7 +1344,7 @@ const VitalsTrendChart = ({
                     fontSize="10"
                     textAnchor="middle"
                   >
-                    {formatShortTime(reading.recordedAt)}
+                    {formatShortTime(reading.recordedAt, locale)}
                   </SvgText>
                 );
               })}
@@ -1409,7 +1353,7 @@ const VitalsTrendChart = ({
 
           <View style={styles.trendStatsRow}>
             <TrendStat
-              label="Min"
+              label={t("vitals.min")}
               value={formatTrendNumber(
                 chartData.actualMinValue,
                 selectedMetric.key,
@@ -1418,13 +1362,13 @@ const VitalsTrendChart = ({
             />
 
             <TrendStat
-              label="Avg"
+              label={t("vitals.avg")}
               value={formatTrendNumber(chartData.avgValue, selectedMetric.key)}
               unit={selectedMetric.unit}
             />
 
             <TrendStat
-              label="Max"
+              label={t("vitals.max")}
               value={formatTrendNumber(
                 chartData.actualMaxValue,
                 selectedMetric.key,
@@ -1435,10 +1379,8 @@ const VitalsTrendChart = ({
         </>
       ) : (
         <View style={styles.noChartPanel}>
-          <Text style={styles.noChartTitle}>No trend data yet</Text>
-          <Text style={styles.noChartText}>
-            Connect Health Connect or add readings to show a graph.
-          </Text>
+          <Text style={styles.noChartTitle}>{t("vitals.noTrendTitle")}</Text>
+          <Text style={styles.noChartText}>{t("vitals.noTrendText")}</Text>
         </View>
       )}
     </View>
@@ -1472,18 +1414,19 @@ const HistoryRow = ({
   reading: VitalReading;
   isLast: boolean;
 }) => {
-  const theme = getStatusTheme(reading.status);
+  const { t, locale } = useLanguage();
+  const theme = getStatusTheme(reading.status, t);
 
   return (
     <View style={[styles.historyRow, isLast ? styles.rowLast : undefined]}>
       <View style={styles.historyTopRow}>
         <View style={styles.historyTitleBlock}>
           <Text style={styles.historyTime}>
-            {formatTime(reading.recordedAt)}
+            {formatTime(reading.recordedAt, t, locale)}
           </Text>
           <Text style={styles.historySource}>
-            {formatSource(reading.source)} ·{" "}
-            {reading.deviceSource || "No device source"}
+            {formatSource(reading.source, t)} ·{" "}
+            {reading.deviceSource || t("vitals.noDeviceSource")}
           </Text>
         </View>
 
@@ -1515,10 +1458,10 @@ const HistoryRow = ({
           BP {formatBloodPressure(reading)}
         </Text>
         <Text style={styles.historyValue}>
-          Glucose {reading.glucose ?? "--"}
+          {t("vitals.metricGlucose")} {reading.glucose ?? "--"}
         </Text>
         <Text style={styles.historyValue}>
-          Temp{" "}
+          {t("vitals.metricTemp")}{" "}
           {reading.temperature !== null && reading.temperature !== undefined
             ? `${reading.temperature}°C`
             : "--"}

@@ -1,81 +1,32 @@
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import LinearGradient from "react-native-linear-gradient";
+import { ActivityIndicator, Alert, Image, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  FileText,
-  RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
-  Stethoscope,
-} from "lucide-react-native";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileImage, FileText, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  doctorReportsApi,
-  type DoctorPatientReport,
-  type DoctorPatientReportsData,
-  type DoctorReportQueueStatus,
-} from "../../services/doctor/doctorReportsApi";
+import { doctorReportsApi, type DoctorPatientReport } from "../../services/doctor/doctorReportsApi";
 import type { RootStackParamList } from "../../types/navigation";
 
-type Props = NativeStackScreenProps<RootStackParamList, "DoctorReportReviews">;
+type Props = NativeStackScreenProps<RootStackParamList, "DoctorReportReview">;
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
 const SOFT_PANEL = "#F7F9FF";
-
+const BORDER = "#E4E8F2";
 const DOCTOR_PRIMARY = "#0F766E";
-const DOCTOR_SECONDARY = "#14B8A6";
 const DOCTOR_DARK = "#115E59";
 const DOCTOR_LIGHT = "#DDF4F0";
-
-const SUCCESS = "#42B883";
 const SUCCESS_DARK = "#167A58";
 const SUCCESS_LIGHT = "#EAF8F2";
-
 const WARNING = "#F6A545";
 const WARNING_DARK = "#A85A13";
 const WARNING_LIGHT = "#FFF3E2";
-
 const DANGER = "#EF4D56";
 const DANGER_DARK = "#B42318";
 const DANGER_LIGHT = "#FFEDEE";
-
-const FILTERS: Array<{
-  label: string;
-  value: DoctorReportQueueStatus;
-}> = [
-  { label: "Pending", value: "PENDING" },
-  { label: "Reviewed", value: "REVIEWED" },
-  { label: "All", value: "ALL" },
-];
-
-const EMPTY_SUMMARY: DoctorPatientReportsData["summary"] = {
-  total: 0,
-  pending: 0,
-  reviewed: 0,
-  blocked: 0,
-};
 
 const elevate = (level: 1 | 2 = 1) => ({
   elevation: level === 1 ? 2 : 4,
@@ -85,248 +36,132 @@ const elevate = (level: 1 | 2 = 1) => ({
   shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
 });
 
-const getSafeString = (value: unknown) => {
-  return typeof value === "string" ? value.trim() : "";
-};
+const getSafeString = (value: unknown) => typeof value === "string" ? value.trim() : "";
 
 const formatLabel = (value?: string | null) => {
   const safeValue = getSafeString(value);
-
-  if (!safeValue) {
-    return "Medical Report";
-  }
-
-  return safeValue
-    .toLowerCase()
-    .split("_")
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
+  if (!safeValue) return "Medical Report";
+  return safeValue.toLowerCase().split("_").map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) {
-    return "Not provided";
-  }
-
+  if (!value) return "Not provided";
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not provided";
-  }
-
-  return date.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) {
-    return "Not available";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not available";
-  }
-
-  return date.toLocaleString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(date.getTime())) return "Not provided";
+  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const formatFileSize = (value?: number | null) => {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return "Unknown size";
-  }
-
-  if (value < 1024) {
-    return `${value} B`;
-  }
-
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "Unknown size";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 const getInitials = (name?: string | null) => {
   const safeName = getSafeString(name);
-
-  if (!safeName) {
-    return "PT";
-  }
-
+  if (!safeName) return "PT";
   const parts = safeName.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
-
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
 };
 
-const getReviewTone = (report: DoctorPatientReport) => {
-  if (report.review?.status === "REVIEWED") {
-    return {
-      background: SUCCESS_LIGHT,
-      text: SUCCESS_DARK,
-      accent: SUCCESS,
-      label: "Reviewed",
-      Icon: CheckCircle2,
-    };
-  }
-
-  return {
-    background: WARNING_LIGHT,
-    text: WARNING_DARK,
-    accent: WARNING,
-    label: "Pending",
-    Icon: Clock3,
-  };
-};
-
-const getSafetyTone = (status: DoctorPatientReport["contentSafetyStatus"]) => {
-  if (status === "BLOCKED") {
-    return {
-      background: DANGER_LIGHT,
-      text: DANGER_DARK,
-      label: "Blocked",
-      Icon: ShieldAlert,
-    };
-  }
-
-  if (status === "CLEAR") {
-    return {
-      background: SUCCESS_LIGHT,
-      text: SUCCESS_DARK,
-      label: "File checked",
-      Icon: ShieldCheck,
-    };
-  }
-
-  return {
-    background: WARNING_LIGHT,
-    text: WARNING_DARK,
-    label: "Manual review",
-    Icon: AlertTriangle,
-  };
-};
-
-const getEmptyTitle = (filter: DoctorReportQueueStatus) => {
-  if (filter === "PENDING") {
-    return "No pending reports";
-  }
-
-  if (filter === "REVIEWED") {
-    return "No reviewed reports";
-  }
-
-  return "No reports found";
-};
-
-const getEmptyText = (filter: DoctorReportQueueStatus) => {
-  if (filter === "PENDING") {
-    return "New medical reports uploaded by assigned patients will appear here.";
-  }
-
-  if (filter === "REVIEWED") {
-    return "Reports will appear here after you complete their clinical review.";
-  }
-
-  return "Reports uploaded by assigned patients will appear here.";
-};
-
-const DoctorReportReviewsScreen = ({ navigation }: Props) => {
+const DoctorReportReviewScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
+  const patientId = getSafeString(route.params?.patientId);
+  const patientName = getSafeString(route.params?.patientName) || "Patient";
+  const reportId = getSafeString(route.params?.reportId);
 
-  const [reports, setReports] = useState<DoctorPatientReport[]>([]);
-  const [summary, setSummary] =
-    useState<DoctorPatientReportsData["summary"]>(EMPTY_SUMMARY);
-  const [selectedFilter, setSelectedFilter] =
-    useState<DoctorReportQueueStatus>("PENDING");
+  const [report, setReport] = useState<DoctorPatientReport | null>(null);
+  const [imageDataUri, setImageDataUri] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isImageLoading, setIsImageLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [imageErrorMessage, setImageErrorMessage] = useState("");
 
-  const loadReports = useCallback(
-    async (
-      mode: "initial" | "refresh" = "initial",
-      filter: DoctorReportQueueStatus = selectedFilter
-    ) => {
-      try {
-        mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
-        setErrorMessage("");
+  const loadReport = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    if (!patientId || !reportId) {
+      setErrorMessage("Patient ID or report ID is missing. Please reopen this report.");
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
 
-        const result = await doctorReportsApi.listReportQueue(filter);
-        const nextReports = Array.isArray(result?.reports) ? result.reports : [];
+    try {
+      mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
+      setErrorMessage("");
+      setImageErrorMessage("");
 
-        setReports(nextReports);
-        setSummary(result?.summary || EMPTY_SUMMARY);
-      } catch (error) {
-        setReports([]);
-        setSummary(EMPTY_SUMMARY);
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to load report reviews."
-        );
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+      const reportData = await doctorReportsApi.getReportDetail(patientId, reportId);
+
+      setReport(reportData);
+      setReviewNote(reportData.review?.reviewNote || "");
+
+      const isImage = getSafeString(reportData.mimeType).toLowerCase().startsWith("image/");
+
+      if (isImage) {
+        try {
+          setIsImageLoading(true);
+          const dataUri = await doctorReportsApi.getReportImageDataUri(patientId, reportId);
+          setImageDataUri(dataUri);
+        } catch (error) {
+          setImageDataUri("");
+          setImageErrorMessage(error instanceof Error ? error.message : "Unable to load report image.");
+        } finally {
+          setIsImageLoading(false);
+        }
+      } else {
+        setImageDataUri("");
+        setImageErrorMessage(`Image preview is unavailable for ${reportData.mimeType || "this file type"}.`);
       }
-    },
-    [selectedFilter]
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadReports("initial", selectedFilter);
-    }, [loadReports, selectedFilter])
-  );
-
-  const selectFilter = (filter: DoctorReportQueueStatus) => {
-    if (filter !== selectedFilter) {
-      setSelectedFilter(filter);
+    } catch (error) {
+      setReport(null);
+      setImageDataUri("");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to load report.");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [patientId, reportId]);
 
-  const openReport = (report: DoctorPatientReport) => {
-    const reportId = getSafeString(report.id);
-    const patientId =
-      getSafeString(report.patientId) || getSafeString(report.patient?.id);
-    const patientName =
-      getSafeString(report.patient?.fullName) || "Patient";
+  useFocusEffect(useCallback(() => {
+    void loadReport("initial");
+  }, [loadReport]));
 
-    if (!reportId) {
-      Alert.alert(
-        "Unable to open report",
-        "The backend did not return the report ID."
-      );
+  const submitReview = async () => {
+    const trimmedNote = reviewNote.trim();
+
+    if (trimmedNote.length < 2) {
+      Alert.alert("Review note required", "Please enter at least 2 characters.");
       return;
     }
 
-    if (!patientId) {
-      Alert.alert(
-        "Unable to open report",
-        "The backend did not return the patient ID."
-      );
+    if (!patientId || !reportId) {
+      Alert.alert("Unable to submit", "Patient ID or report ID is missing.");
       return;
     }
 
-    navigation.push("DoctorReportReview", {
-      patientId,
-      patientName,
-      reportId,
-    });
+    try {
+      setIsSubmitting(true);
+
+      const updatedReport = await doctorReportsApi.reviewReport(patientId, reportId, { reviewNote: trimmedNote });
+
+      setReport(updatedReport);
+      setReviewNote(updatedReport.review?.reviewNote || trimmedNote);
+
+      Alert.alert("Review submitted", "The report has been marked as reviewed.");
+    } catch (error) {
+      Alert.alert("Unable to submit review", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const isReviewed = report?.review?.status === "REVIEWED";
+  const contentSafetyStatus = report?.contentSafetyStatus;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -334,979 +169,246 @@ const DoctorReportReviewsScreen = ({ navigation }: Props) => {
 
       <View style={styles.screen}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.84}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.headerButton} activeOpacity={0.84} onPress={() => navigation.goBack()}>
             <ArrowLeft size={21} color={TEXT} strokeWidth={2.5} />
           </TouchableOpacity>
 
           <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Report Reviews</Text>
-            <Text style={styles.headerSubtitle}>
-              Reports from assigned patients
-            </Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>Review Report</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>{patientName}</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.84}
-            onPress={() => void loadReports("refresh", selectedFilter)}
-          >
+          <TouchableOpacity style={styles.headerButton} activeOpacity={0.84} onPress={() => void loadReport("refresh")}>
             <RefreshCw size={20} color={DOCTOR_PRIMARY} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: Math.max(32, insets.bottom + 24) },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(32, insets.bottom + 24) }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void loadReports("refresh", selectedFilter)}
-              tintColor={DOCTOR_PRIMARY}
-              colors={[DOCTOR_PRIMARY]}
-            />
-          }
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadReport("refresh")} tintColor={DOCTOR_PRIMARY} colors={[DOCTOR_PRIMARY]} />}
         >
-          <LinearGradient
-            colors={[DOCTOR_PRIMARY, DOCTOR_SECONDARY]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroHeader}>
-              <View style={styles.heroIcon}>
-                <FileText
-                  size={27}
-                  color={DOCTOR_PRIMARY}
-                  strokeWidth={2.6}
-                />
-              </View>
-
-              <View style={styles.heroTextBlock}>
-                <Text style={styles.heroTitle}>Central report queue</Text>
-                <Text style={styles.heroText}>
-                  Review medical reports uploaded by all patients currently
-                  assigned to you.
-                </Text>
-              </View>
+          {isLoading ? (
+            <View style={styles.stateCard}>
+              <ActivityIndicator size="large" color={DOCTOR_PRIMARY} />
+              <Text style={styles.stateTitle}>Loading report</Text>
+              <Text style={styles.stateText}>Fetching the protected report and image.</Text>
             </View>
+          ) : null}
 
-            <View style={styles.summaryRow}>
-              <SummaryItem value={summary.total} label="Total" />
-
-              <View style={styles.summaryDivider} />
-
-              <SummaryItem
-                value={summary.pending}
-                label="Pending"
-                valueTone="warning"
-              />
-
-              <View style={styles.summaryDivider} />
-
-              <SummaryItem
-                value={summary.reviewed}
-                label="Reviewed"
-                valueTone="success"
-              />
-
-              <View style={styles.summaryDivider} />
-
-              <SummaryItem
-                value={summary.blocked}
-                label="Blocked"
-                valueTone="danger"
-              />
-            </View>
-          </LinearGradient>
-
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersRow}
-          >
-            {FILTERS.map((filter) => {
-              const selected = selectedFilter === filter.value;
-              const count =
-                filter.value === "PENDING"
-                  ? summary.pending
-                  : filter.value === "REVIEWED"
-                  ? summary.reviewed
-                  : summary.total;
-
-              return (
-                <TouchableOpacity
-                  key={filter.value}
-                  style={[
-                    styles.filterChip,
-                    selected ? styles.filterChipSelected : undefined,
-                  ]}
-                  activeOpacity={0.84}
-                  onPress={() => selectFilter(filter.value)}
-                >
-                  <Text
-                    style={[
-                      styles.filterText,
-                      selected ? styles.filterTextSelected : undefined,
-                    ]}
-                  >
-                    {filter.label}
-                  </Text>
-
-                  <View
-                    style={[
-                      styles.filterCount,
-                      selected ? styles.filterCountSelected : undefined,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.filterCountText,
-                        selected ? styles.filterCountTextSelected : undefined,
-                      ]}
-                    >
-                      {count > 99 ? "99+" : count}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {errorMessage ? (
+          {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
-              <View style={styles.errorIcon}>
-                <AlertTriangle
-                  size={24}
-                  color={DANGER_DARK}
-                  strokeWidth={2.6}
-                />
-              </View>
+              <AlertTriangle size={24} color={DANGER_DARK} strokeWidth={2.6} />
 
               <View style={styles.errorTextBlock}>
-                <Text style={styles.errorTitle}>
-                  Unable to load report queue
-                </Text>
-
+                <Text style={styles.errorTitle}>Unable to open report</Text>
                 <Text style={styles.errorText}>{errorMessage}</Text>
 
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  activeOpacity={0.84}
-                  onPress={() =>
-                    void loadReports("initial", selectedFilter)
-                  }
-                >
-                  <RefreshCw
-                    size={16}
-                    color={SURFACE}
-                    strokeWidth={2.6}
-                  />
+                <TouchableOpacity style={styles.retryButton} activeOpacity={0.84} onPress={() => void loadReport("initial")}>
+                  <RefreshCw size={16} color={SURFACE} strokeWidth={2.6} />
                   <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : null}
 
-          {isLoading ? (
-            <View style={styles.stateCard}>
-              <ActivityIndicator size="large" color={DOCTOR_PRIMARY} />
-              <Text style={styles.stateTitle}>Loading report reviews</Text>
-              <Text style={styles.stateText}>
-                Fetching reports from your assigned patients.
-              </Text>
-            </View>
-          ) : !errorMessage && reports.length === 0 ? (
-            <View style={styles.stateCard}>
-              <View style={styles.emptyIcon}>
-                {selectedFilter === "PENDING" ? (
-                  <CheckCircle2
-                    size={30}
-                    color={SUCCESS}
-                    strokeWidth={2.6}
-                  />
+          {!isLoading && !errorMessage && report ? (
+            <>
+              <View style={styles.patientCard}>
+                <View style={styles.patientAvatar}>
+                  <Text style={styles.patientAvatarText}>{getInitials(report.patient?.fullName || patientName)}</Text>
+                </View>
+
+                <View style={styles.patientTextBlock}>
+                  <Text style={styles.patientName}>{report.patient?.fullName || patientName}</Text>
+                  <Text style={styles.patientEmail}>{report.patient?.email || "Email unavailable"}</Text>
+                </View>
+
+                <View style={[styles.reviewStatusBadge, isReviewed ? styles.reviewedBadge : styles.pendingBadge]}>
+                  {isReviewed ? <CheckCircle2 size={15} color={SUCCESS_DARK} strokeWidth={2.7} /> : <FileText size={15} color={WARNING_DARK} strokeWidth={2.7} />}
+
+                  <Text style={[styles.reviewStatusText, isReviewed ? styles.reviewedText : styles.pendingText]}>{isReviewed ? "Reviewed" : "Pending"}</Text>
+                </View>
+              </View>
+
+              <View style={styles.reportInfoCard}>
+                <View style={styles.reportInfoHeader}>
+                  <View style={styles.reportIcon}>
+                    <FileText size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
+                  </View>
+
+                  <View style={styles.reportInfoTitleBlock}>
+                    <Text style={styles.reportTitle}>{report.title || "Medical Report"}</Text>
+                    <Text style={styles.reportCategory}>{formatLabel(report.category)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailsPanel}>
+                  <DetailRow label="Report date" value={formatDate(report.reportDate)} />
+                  <DetailRow label="File name" value={report.originalFileName || "Medical report"} />
+                  <DetailRow label="File size" value={formatFileSize(report.fileSize)} />
+                  <DetailRow label="File type" value={report.mimeType || "Unknown"} isLast />
+                </View>
+
+                {report.description ? (
+                  <View style={styles.descriptionPanel}>
+                    <Text style={styles.descriptionLabel}>Patient description</Text>
+                    <Text style={styles.descriptionText}>{report.description}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Uploaded report image</Text>
+                <Text style={styles.sectionSubtitle}>Review the image before submitting your note.</Text>
+              </View>
+
+              <View style={styles.imageCard}>
+                {isImageLoading ? (
+                  <View style={styles.imageState}>
+                    <ActivityIndicator size="large" color={DOCTOR_PRIMARY} />
+                    <Text style={styles.imageStateTitle}>Loading image</Text>
+                  </View>
+                ) : imageDataUri ? (
+                  <Image source={{ uri: imageDataUri }} style={styles.reportImage} resizeMode="contain" />
                 ) : (
-                  <FileText
-                    size={30}
-                    color={DOCTOR_PRIMARY}
-                    strokeWidth={2.6}
-                  />
+                  <View style={styles.imageState}>
+                    <FileImage size={38} color={WARNING} strokeWidth={2.4} />
+                    <Text style={styles.imageStateTitle}>Image preview unavailable</Text>
+                    <Text style={styles.imageStateText}>{imageErrorMessage || "Unable to display this report image."}</Text>
+                  </View>
                 )}
               </View>
 
-              <Text style={styles.stateTitle}>
-                {getEmptyTitle(selectedFilter)}
-              </Text>
+              <View style={[styles.safetyCard, contentSafetyStatus === "CLEAR" ? styles.safetyCardClear : undefined]}>
+                {contentSafetyStatus === "CLEAR" ? <ShieldCheck size={22} color={SUCCESS_DARK} strokeWidth={2.6} /> : <ShieldAlert size={22} color={WARNING_DARK} strokeWidth={2.6} />}
 
-              <Text style={styles.stateText}>
-                {getEmptyText(selectedFilter)}
-              </Text>
-            </View>
-          ) : (
-            reports.map((report) => (
-              <ReportQueueCard
-                key={report.id}
-                report={report}
-                onPress={() => openReport(report)}
-              />
-            ))
-          )}
+                <View style={styles.safetyTextBlock}>
+                  <Text style={[styles.safetyTitle, contentSafetyStatus === "CLEAR" ? styles.safetyClearText : styles.safetyWarningText]}>
+                    {contentSafetyStatus === "CLEAR" ? "File safety check completed" : "Manual content review required"}
+                  </Text>
+
+                  <Text style={styles.safetyText}>{report.contentSafetyMessage || "Review the uploaded report carefully before recording your response."}</Text>
+                </View>
+              </View>
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{isReviewed ? "Doctor review" : "Add review note"}</Text>
+                <Text style={styles.sectionSubtitle}>{isReviewed ? "You can update the existing review note." : "Enter findings or follow-up instructions."}</Text>
+              </View>
+
+              <View style={styles.reviewCard}>
+                <TextInput
+                  style={styles.reviewInput}
+                  value={reviewNote}
+                  onChangeText={setReviewNote}
+                  placeholder="Enter report review, findings or follow-up instructions..."
+                  placeholderTextColor={MUTED}
+                  multiline
+                  textAlignVertical="top"
+                  editable={!isSubmitting}
+                  maxLength={2000}
+                />
+
+                <View style={styles.inputFooter}>
+                  <Text style={styles.characterCount}>{reviewNote.length}/2000</Text>
+                </View>
+
+                <TouchableOpacity style={[styles.submitButton, isSubmitting ? styles.submitButtonDisabled : undefined]} activeOpacity={0.84} onPress={submitReview} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <ActivityIndicator color={SURFACE} />
+                  ) : (
+                    <>
+                      <Send size={18} color={SURFACE} strokeWidth={2.6} />
+                      <Text style={styles.submitButtonText}>{isReviewed ? "Update Review" : "Submit Review"}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       </View>
     </SafeAreaView>
   );
 };
 
-const SummaryItem = ({
-  value,
-  label,
-  valueTone,
-}: {
-  value: number;
-  label: string;
-  valueTone?: "warning" | "success" | "danger";
-}) => {
-  const valueStyle =
-    valueTone === "warning"
-      ? styles.summaryValueWarning
-      : valueTone === "success"
-      ? styles.summaryValueSuccess
-      : valueTone === "danger"
-      ? styles.summaryValueDanger
-      : undefined;
+const DetailRow = ({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) => (
+  <View style={[styles.detailRow, isLast ? styles.detailRowLast : undefined]}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={styles.detailValue} numberOfLines={1}>{value}</Text>
+  </View>
+);
 
-  return (
-    <View style={styles.summaryItem}>
-      <Text style={[styles.summaryValue, valueStyle]}>{value}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
-    </View>
-  );
-};
-
-const ReportQueueCard = ({
-  report,
-  onPress,
-}: {
-  report: DoctorPatientReport;
-  onPress: () => void;
-}) => {
-  const reviewTone = getReviewTone(report);
-  const safetyTone = getSafetyTone(report.contentSafetyStatus);
-  const ReviewIcon = reviewTone.Icon;
-  const SafetyIcon = safetyTone.Icon;
-
-  const patientName =
-    getSafeString(report.patient?.fullName) || "Assigned patient";
-  const patientEmail =
-    getSafeString(report.patient?.email) || "Email unavailable";
-
-  return (
-    <TouchableOpacity
-      style={styles.reportCard}
-      activeOpacity={0.84}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.reportAccent,
-          { backgroundColor: reviewTone.accent },
-        ]}
-      />
-
-      <View style={styles.patientRow}>
-        <View style={styles.patientAvatar}>
-          <Text style={styles.patientAvatarText}>
-            {getInitials(patientName)}
-          </Text>
-        </View>
-
-        <View style={styles.patientTextBlock}>
-          <Text style={styles.patientName} numberOfLines={1}>
-            {patientName}
-          </Text>
-
-          <Text style={styles.patientEmail} numberOfLines={1}>
-            {patientEmail}
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.reviewBadge,
-            { backgroundColor: reviewTone.background },
-          ]}
-        >
-          <ReviewIcon
-            size={14}
-            color={reviewTone.text}
-            strokeWidth={2.7}
-          />
-
-          <Text
-            style={[
-              styles.reviewBadgeText,
-              { color: reviewTone.text },
-            ]}
-          >
-            {reviewTone.label}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.reportDivider} />
-
-      <View style={styles.reportMainRow}>
-        <View
-          style={[
-            styles.reportIcon,
-            { backgroundColor: reviewTone.background },
-          ]}
-        >
-          <FileText
-            size={24}
-            color={reviewTone.text}
-            strokeWidth={2.6}
-          />
-        </View>
-
-        <View style={styles.reportTextBlock}>
-          <Text style={styles.reportTitle} numberOfLines={1}>
-            {getSafeString(report.title) || "Medical Report"}
-          </Text>
-
-          <Text style={styles.reportCategory}>
-            {formatLabel(report.category)}
-          </Text>
-        </View>
-
-        <ChevronRight
-          size={20}
-          color={DOCTOR_PRIMARY}
-          strokeWidth={2.6}
-        />
-      </View>
-
-      <View style={styles.detailsPanel}>
-        <DetailRow
-          label="Report date"
-          value={formatDate(report.reportDate)}
-        />
-
-        <DetailRow
-          label="Uploaded"
-          value={formatDateTime(report.createdAt)}
-        />
-
-        <DetailRow
-          label="File"
-          value={`${formatFileSize(report.fileSize)} · ${
-            getSafeString(report.originalFileName) || "Medical report"
-          }`}
-          isLast
-        />
-      </View>
-
-      {getSafeString(report.description) ? (
-        <View style={styles.descriptionPanel}>
-          <Stethoscope
-            size={17}
-            color={DOCTOR_PRIMARY}
-            strokeWidth={2.5}
-          />
-
-          <Text style={styles.descriptionText} numberOfLines={2}>
-            {report.description}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.reportFooter}>
-        <View
-          style={[
-            styles.safetyBadge,
-            { backgroundColor: safetyTone.background },
-          ]}
-        >
-          <SafetyIcon
-            size={15}
-            color={safetyTone.text}
-            strokeWidth={2.5}
-          />
-
-          <Text
-            style={[
-              styles.safetyBadgeText,
-              { color: safetyTone.text },
-            ]}
-          >
-            {safetyTone.label}
-          </Text>
-        </View>
-
-        <View style={styles.openAction}>
-          <Text style={styles.openActionText}>
-            {report.review?.status === "REVIEWED"
-              ? "View review"
-              : "Review report"}
-          </Text>
-
-          <ChevronRight
-            size={17}
-            color={DOCTOR_PRIMARY}
-            strokeWidth={2.6}
-          />
-        </View>
-      </View>
-
-      {report.review?.reviewNote ? (
-        <View style={styles.reviewNotePanel}>
-          <CheckCircle2
-            size={17}
-            color={SUCCESS_DARK}
-            strokeWidth={2.6}
-          />
-
-          <Text style={styles.reviewNoteText} numberOfLines={2}>
-            {report.review.reviewNote}
-          </Text>
-        </View>
-      ) : null}
-    </TouchableOpacity>
-  );
-};
-
-const DetailRow = ({
-  label,
-  value,
-  isLast,
-}: {
-  label: string;
-  value: string;
-  isLast?: boolean;
-}) => {
-  return (
-    <View
-      style={[
-        styles.detailRow,
-        isLast ? styles.detailRowLast : undefined,
-      ]}
-    >
-      <Text style={styles.detailLabel}>{label}</Text>
-
-      <Text style={styles.detailValue} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-};
-
-export default DoctorReportReviewsScreen;
+export default DoctorReportReviewScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-
-  screen: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-
-  header: {
-    minHeight: 70,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    ...elevate(1),
-  },
-
-  headerTextBlock: {
-    flex: 1,
-    paddingHorizontal: 12,
-  },
-
-  headerTitle: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: "700",
-  },
-
-  headerSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  scrollView: {
-    flex: 1,
-  },
-
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-
-  heroCard: {
-    borderRadius: 16,
-    padding: 17,
-    overflow: "hidden",
-    ...elevate(2),
-  },
-
-  heroHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  heroIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 15,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  heroTextBlock: {
-    flex: 1,
-  },
-
-  heroTitle: {
-    color: SURFACE,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  heroText: {
-    color: "#D7FFFA",
-    fontSize: 12,
-    fontWeight: "500",
-    lineHeight: 18,
-    marginTop: 4,
-  },
-
-  summaryRow: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderRadius: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 15,
-    paddingVertical: 12,
-  },
-
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-
-  summaryValue: {
-    color: SURFACE,
-    fontSize: 19,
-    fontWeight: "700",
-  },
-
-  summaryValueWarning: {
-    color: "#FFE0B2",
-  },
-
-  summaryValueSuccess: {
-    color: "#D1FAE5",
-  },
-
-  summaryValueDanger: {
-    color: "#FFD6DA",
-  },
-
-  summaryLabel: {
-    color: "#D7FFFA",
-    fontSize: 10,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  summaryDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 34,
-    backgroundColor: "rgba(255,255,255,0.28)",
-  },
-
-  filtersRow: {
-    paddingVertical: 16,
-  },
-
-  filterChip: {
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: SURFACE,
-    paddingHorizontal: 14,
-    marginRight: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "hidden",
-    ...elevate(1),
-  },
-
-  filterChipSelected: {
-    backgroundColor: DOCTOR_PRIMARY,
-  },
-
-  filterText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
-  filterTextSelected: {
-    color: SURFACE,
-  },
-
-  filterCount: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 8,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-    marginLeft: 8,
-  },
-
-  filterCountSelected: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
-
-  filterCountText: {
-    color: DOCTOR_DARK,
-    fontSize: 10,
-    fontWeight: "700",
-  },
-
-  filterCountTextSelected: {
-    color: SURFACE,
-  },
-
-  errorCard: {
-    backgroundColor: DANGER_LIGHT,
-    borderRadius: 16,
-    padding: 15,
-    flexDirection: "row",
-    marginBottom: 14,
-  },
-
-  errorIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-
-  errorTextBlock: {
-    flex: 1,
-  },
-
-  errorTitle: {
-    color: DANGER_DARK,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  errorText: {
-    color: DANGER_DARK,
-    fontSize: 12,
-    fontWeight: "500",
-    lineHeight: 18,
-    marginTop: 4,
-  },
-
-  retryButton: {
-    alignSelf: "flex-start",
-    backgroundColor: DANGER,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    overflow: "hidden",
-  },
-
-  retryText: {
-    color: SURFACE,
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 6,
-  },
-
-  stateCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    paddingHorizontal: 22,
-    paddingVertical: 32,
-    alignItems: "center",
-    ...elevate(1),
-  },
-
-  emptyIcon: {
-    width: 62,
-    height: 62,
-    borderRadius: 17,
-    backgroundColor: SUCCESS_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-
-  stateTitle: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
-    textAlign: "center",
-    marginTop: 13,
-  },
-
-  stateText: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: "500",
-    lineHeight: 19,
-    textAlign: "center",
-    marginTop: 6,
-  },
-
-  reportCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 12,
-    overflow: "hidden",
-    ...elevate(1),
-  },
-
-  reportAccent: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 5,
-  },
-
-  patientRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: 3,
-  },
-
-  patientAvatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-
-  patientAvatarText: {
-    color: DOCTOR_PRIMARY,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
-  patientTextBlock: {
-    flex: 1,
-  },
-
-  patientName: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  patientEmail: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "500",
-    marginTop: 3,
-  },
-
-  reviewBadge: {
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 8,
-  },
-
-  reviewBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    marginLeft: 5,
-  },
-
-  reportDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E4E8F2",
-    marginVertical: 13,
-  },
-
-  reportMainRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: 3,
-  },
-
-  reportIcon: {
-    width: 47,
-    height: 47,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-
-  reportTextBlock: {
-    flex: 1,
-  },
-
-  reportTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  reportCategory: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 4,
-  },
-
-  detailsPanel: {
-    backgroundColor: SOFT_PANEL,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginTop: 13,
-  },
-
-  detailRow: {
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E0E5EE",
-  },
-
-  detailRowLast: {
-    borderBottomWidth: 0,
-  },
-
-  detailLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    width: 83,
-  },
-
-  detailValue: {
-    flex: 1,
-    color: TEXT,
-    fontSize: 11,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-
-  descriptionPanel: {
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 11,
-    padding: 11,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 11,
-  },
-
-  descriptionText: {
-    flex: 1,
-    color: DOCTOR_DARK,
-    fontSize: 11,
-    fontWeight: "500",
-    lineHeight: 17,
-    marginLeft: 8,
-  },
-
-  reportFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 13,
-    paddingLeft: 3,
-  },
-
-  safetyBadge: {
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  safetyBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    marginLeft: 5,
-  },
-
-  openAction: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  openActionText: {
-    color: DOCTOR_PRIMARY,
-    fontSize: 12,
-    fontWeight: "700",
-    marginRight: 3,
-  },
-
-  reviewNotePanel: {
-    backgroundColor: SUCCESS_LIGHT,
-    borderRadius: 11,
-    padding: 11,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 11,
-  },
-
-  reviewNoteText: {
-    flex: 1,
-    color: SUCCESS_DARK,
-    fontSize: 11,
-    fontWeight: "500",
-    lineHeight: 17,
-    marginLeft: 8,
-  },
+  safeArea: { flex: 1, backgroundColor: BACKGROUND },
+  screen: { flex: 1, backgroundColor: BACKGROUND },
+  header: { minHeight: 70, paddingHorizontal: 16, flexDirection: "row", alignItems: "center" },
+  headerButton: { width: 44, height: 44, borderRadius: 13, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", overflow: "hidden", ...elevate(1) },
+  headerTextBlock: { flex: 1, paddingHorizontal: 12 },
+  headerTitle: { color: TEXT, fontSize: 20, fontWeight: "700" },
+  headerSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
+  stateCard: { backgroundColor: SURFACE, borderRadius: 16, paddingHorizontal: 22, paddingVertical: 34, alignItems: "center", ...elevate(1) },
+  stateTitle: { color: TEXT, fontSize: 17, fontWeight: "700", textAlign: "center", marginTop: 13 },
+  stateText: { color: MUTED, fontSize: 13, fontWeight: "500", lineHeight: 19, textAlign: "center", marginTop: 6 },
+  errorCard: { backgroundColor: DANGER_LIGHT, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "flex-start" },
+  errorTextBlock: { flex: 1, marginLeft: 11 },
+  errorTitle: { color: DANGER_DARK, fontSize: 15, fontWeight: "700" },
+  errorText: { color: DANGER_DARK, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 4 },
+  retryButton: { alignSelf: "flex-start", backgroundColor: DANGER, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", marginTop: 10 },
+  retryText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 6 },
+  patientCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", marginBottom: 12, ...elevate(1) },
+  patientAvatar: { width: 48, height: 48, borderRadius: 14, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  patientAvatarText: { color: DOCTOR_PRIMARY, fontSize: 14, fontWeight: "800" },
+  patientTextBlock: { flex: 1 },
+  patientName: { color: TEXT, fontSize: 15, fontWeight: "700" },
+  patientEmail: { color: MUTED, fontSize: 11, fontWeight: "500", marginTop: 3 },
+  reviewStatusBadge: { borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7, flexDirection: "row", alignItems: "center", marginLeft: 8 },
+  reviewedBadge: { backgroundColor: SUCCESS_LIGHT },
+  pendingBadge: { backgroundColor: WARNING_LIGHT },
+  reviewStatusText: { fontSize: 10, fontWeight: "700", marginLeft: 5 },
+  reviewedText: { color: SUCCESS_DARK },
+  pendingText: { color: WARNING_DARK },
+  reportInfoCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginBottom: 18, ...elevate(1) },
+  reportInfoHeader: { flexDirection: "row", alignItems: "center" },
+  reportIcon: { width: 50, height: 50, borderRadius: 14, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  reportInfoTitleBlock: { flex: 1 },
+  reportTitle: { color: TEXT, fontSize: 16, fontWeight: "700" },
+  reportCategory: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 4 },
+  detailsPanel: { backgroundColor: SOFT_PANEL, borderRadius: 12, paddingHorizontal: 12, marginTop: 13 },
+  detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
+  detailRowLast: { borderBottomWidth: 0 },
+  detailLabel: { color: MUTED, fontSize: 11, fontWeight: "600", width: 82 },
+  detailValue: { flex: 1, color: TEXT, fontSize: 11, fontWeight: "600", textAlign: "right" },
+  descriptionPanel: { backgroundColor: DOCTOR_LIGHT, borderRadius: 12, padding: 12, marginTop: 12 },
+  descriptionLabel: { color: DOCTOR_DARK, fontSize: 11, fontWeight: "700" },
+  descriptionText: { color: DOCTOR_DARK, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 5 },
+  sectionHeader: { marginBottom: 10 },
+  sectionTitle: { color: TEXT, fontSize: 17, fontWeight: "700" },
+  sectionSubtitle: { color: MUTED, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 3 },
+  imageCard: { backgroundColor: SURFACE, borderRadius: 16, minHeight: 380, overflow: "hidden", marginBottom: 14, ...elevate(1) },
+  reportImage: { width: "100%", height: 520, backgroundColor: "#111111" },
+  imageState: { minHeight: 380, padding: 24, alignItems: "center", justifyContent: "center" },
+  imageStateTitle: { color: TEXT, fontSize: 15, fontWeight: "700", marginTop: 12 },
+  imageStateText: { color: MUTED, fontSize: 12, fontWeight: "500", lineHeight: 18, textAlign: "center", marginTop: 6 },
+  safetyCard: { backgroundColor: WARNING_LIGHT, borderRadius: 14, padding: 13, flexDirection: "row", alignItems: "flex-start", marginBottom: 20 },
+  safetyCardClear: { backgroundColor: SUCCESS_LIGHT },
+  safetyTextBlock: { flex: 1, marginLeft: 10 },
+  safetyTitle: { fontSize: 13, fontWeight: "700" },
+  safetyClearText: { color: SUCCESS_DARK },
+  safetyWarningText: { color: WARNING_DARK },
+  safetyText: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 17, marginTop: 4 },
+  reviewCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
+  reviewInput: { minHeight: 150, borderRadius: 12, backgroundColor: SOFT_PANEL, color: TEXT, fontSize: 13, fontWeight: "500", lineHeight: 20, padding: 13, borderWidth: 1, borderColor: BORDER },
+  inputFooter: { alignItems: "flex-end", marginTop: 6 },
+  characterCount: { color: MUTED, fontSize: 10, fontWeight: "600" },
+  submitButton: { minHeight: 48, borderRadius: 12, backgroundColor: DOCTOR_PRIMARY, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12, overflow: "hidden" },
+  submitButtonDisabled: { opacity: 0.55 },
+  submitButtonText: { color: SURFACE, fontSize: 13, fontWeight: "700", marginLeft: 7 },
 });
