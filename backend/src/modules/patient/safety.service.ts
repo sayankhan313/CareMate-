@@ -5,7 +5,7 @@ import { consultationService } from "./consultation.service.js";
 
 import type { CreateSafetyAlertInput } from "./safety.types.js";
 
-const SAFETY_RESPONSE_TIMER_SECONDS = 30;
+const DEFAULT_SAFETY_RESPONSE_TIMER_SECONDS = 30;
 
 const safetyAlertInclude = {
   doctor: {
@@ -46,33 +46,50 @@ const formatSafetyAlert = (alert: any) => {
 };
 
 const getActivePrimaryDoctor = async (patientId: string) => {
-  const assignment =
-    await prisma.patientDoctorAssignment.findFirst({
-      where: {
-        patientId,
-        status: "ACTIVE",
-        assignmentType: "PRIMARY",
-        doctor: {
-          is: {
-            role: "DOCTOR",
-            isEmailVerified: true,
-            accountStatus: {
-              in: ["ACTIVE", "APPROVED"],
-            },
+  const assignment = await prisma.patientDoctorAssignment.findFirst({
+    where: {
+      patientId,
+      status: "ACTIVE",
+      assignmentType: "PRIMARY",
+      doctor: {
+        is: {
+          role: "DOCTOR",
+          isEmailVerified: true,
+          accountStatus: {
+            in: ["ACTIVE", "APPROVED"],
           },
         },
       },
-      include: {
-        doctor: true,
-      },
-    });
+    },
+    include: {
+      doctor: true,
+    },
+  });
 
   return assignment?.doctor || null;
 };
 
+const getSafetyPreferences = async (patientId: string) => {
+  return prisma.patientSafetyPreference.upsert({
+    where: {
+      patientId,
+    },
+    create: {
+      patientId,
+    },
+    update: {},
+    select: {
+      countdownSeconds: true,
+      notifyAssignedDoctors: true,
+      shareLatestVitalsOnEscalation: true,
+      notifyEmergencyContact: true,
+    },
+  });
+};
+
 const getSafetyAlertForPatient = async (
   patientId: string,
-  alertId: string
+  alertId: string,
 ) => {
   const alert = await prisma.safetyAlert.findFirst({
     where: {
@@ -92,13 +109,14 @@ const getSafetyAlertForPatient = async (
 export const safetyService = {
   async createSafetyAlert(
     patientId: string,
-    data: CreateSafetyAlertInput
+    data: CreateSafetyAlertInput,
   ) {
-    const primaryDoctor =
-      await getActivePrimaryDoctor(patientId);
+  const [primaryDoctor, safetyPreferences] = await Promise.all([
+  getActivePrimaryDoctor(patientId),
+  getSafetyPreferences(patientId),
+]);
 
-    const existingActiveAlert =
-      await prisma.safetyAlert.findFirst({
+const existingActiveAlert = await prisma.safetyAlert.findFirst({
         where: {
           patientId,
           status: "ACTIVE",
@@ -143,20 +161,26 @@ export const safetyService = {
         });
 
       if (!vitalReading) {
-        throw new AppError("Vital reading not found.", 404);
+        throw new AppError(
+          "Vital reading not found.",
+          404,
+        );
       }
 
       if (vitalReading.status !== "CRITICAL") {
         throw new AppError(
           "Safety response can only be started for critical vitals.",
-          400
+          400,
         );
       }
     }
 
+    const configuredCountdown =
+      safetyPreferences.countdownSeconds ||
+      DEFAULT_SAFETY_RESPONSE_TIMER_SECONDS;
+
     const timerEndsAt = new Date(
-      Date.now() +
-        SAFETY_RESPONSE_TIMER_SECONDS * 1000
+      Date.now() + configuredCountdown * 1000,
     );
 
     const alert = await prisma.safetyAlert.create({
@@ -197,17 +221,17 @@ export const safetyService = {
 
   async cancelSafetyAlert(
     patientId: string,
-    alertId: string
+    alertId: string,
   ) {
     const alert = await getSafetyAlertForPatient(
       patientId,
-      alertId
+      alertId,
     );
 
     if (alert.status !== "ACTIVE") {
       throw new AppError(
         "Only active safety alerts can be cancelled.",
-        400
+        400,
       );
     }
 
@@ -228,24 +252,24 @@ export const safetyService = {
 
   async escalateSafetyAlert(
     patientId: string,
-    alertId: string
+    alertId: string,
   ) {
     const alert = await getSafetyAlertForPatient(
       patientId,
-      alertId
+      alertId,
     );
 
     if (alert.status === "CANCELLED") {
       throw new AppError(
         "Cancelled safety alerts cannot be escalated.",
-        400
+        400,
       );
     }
 
     if (alert.status === "RESOLVED") {
       throw new AppError(
         "Resolved safety alerts cannot be escalated.",
-        400
+        400,
       );
     }
 
@@ -255,7 +279,7 @@ export const safetyService = {
     if (!primaryDoctor) {
       throw new AppError(
         "No active primary doctor is assigned. Please assign a primary doctor before escalation.",
-        400
+        400,
       );
     }
 
@@ -274,11 +298,12 @@ export const safetyService = {
       });
 
     const consultationResult =
-      await consultationService.createEmergencyConsultationFromAlert(
-        patientId,
-        updatedAlert.id,
-        primaryDoctor.id
-      );
+      await consultationService
+        .createEmergencyConsultationFromAlert(
+          patientId,
+          updatedAlert.id,
+          primaryDoctor.id,
+        );
 
     return {
       alert: formatSafetyAlert(updatedAlert),

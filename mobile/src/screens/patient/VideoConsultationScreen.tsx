@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, } from "react";
-import { ActivityIndicator, Alert, PermissionsAndroid, Platform, Share, StatusBar, StyleSheet, Text, TouchableOpacity, View, } from "react-native";
+import { ActivityIndicator, PermissionsAndroid, Platform, Share, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets, } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AlertCircle, Camera, CheckCircle2, Link, Mic, PhoneOff, RefreshCw, Share2, ShieldAlert, Video, } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 import { consultationsApi } from "../../services/consultationsApi";
 import { doctorConsultationsApi } from "../../services/doctor/doctorConsultationsApi";
 import type { RootStackParamList } from "../../types/navigation";

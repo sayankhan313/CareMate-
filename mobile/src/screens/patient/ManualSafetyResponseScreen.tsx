@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -25,6 +23,8 @@ import {
   ShieldAlert,
   Thermometer,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import type { RootStackParamList } from "../../types/navigation";
 import { vitalsApi } from "../../services/vitalsApi";

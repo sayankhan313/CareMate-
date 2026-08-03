@@ -1,9 +1,7 @@
 import {
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -20,6 +18,8 @@ import {
   RefreshCcw,
   Truck,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 type OrderStepStatus = "COMPLETED" | "ACTIVE" | "PENDING";
 

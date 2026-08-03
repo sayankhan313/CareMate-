@@ -1,14 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -31,6 +28,9 @@ import {
   X,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedTextInput as TextInput } from "../../components/common/LocalizedTextInput";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import {
   doctorAssignmentApi,

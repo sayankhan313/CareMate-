@@ -41,6 +41,7 @@ import {
   X,
 } from "lucide-react-native";
 
+import { useLanguage } from "../../context/LanguageContext";
 import {
   consultationsApi,
   type CreateManualConsultationPayload,
@@ -179,88 +180,33 @@ const getTimeForBackend = (
   return null;
 };
 
-const formatConsultationDate = (
-  value?: string | null
-) => {
-  if (!value) {
-    return "No preferred time";
-  }
+type Translate = ReturnType<typeof useLanguage>["t"];
 
+const formatConsultationDate = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("consultations.noPreferredTime");
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "No preferred time";
-  }
-
-  return date.toLocaleDateString(
-    undefined,
-    {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  );
+  if (Number.isNaN(date.getTime())) return t("consultations.noPreferredTime");
+  return date.toLocaleDateString(locale, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
-const getStatusLabel = (
-  status: string
-) => {
-  if (status === "PENDING") {
-    return "Requested";
-  }
-
-  if (status === "ACCEPTED") {
-    return "Accepted";
-  }
-
-  if (status === "IN_PROGRESS") {
-    return "In progress";
-  }
-
-  if (status === "COMPLETED") {
-    return "Completed";
-  }
-
-  if (status === "CANCELLED") {
-    return "Cancelled";
-  }
-
-  if (status === "REJECTED") {
-    return "Rejected";
-  }
-
+const getStatusLabel = (status: string, t: Translate) => {
+  if (status === "PENDING") return t("consultations.statusRequested");
+  if (status === "ACCEPTED") return t("consultations.statusAccepted");
+  if (status === "IN_PROGRESS") return t("consultations.statusInProgress");
+  if (status === "COMPLETED") return t("consultations.statusCompleted");
+  if (status === "CANCELLED") return t("consultations.statusCancelled");
+  if (status === "REJECTED") return t("consultations.statusRejected");
   return status;
 };
 
-const getStatusHint = (
-  status: string
-) => {
-  if (status === "PENDING") {
-    return "Waiting for doctor response";
-  }
-
-  if (status === "ACCEPTED") {
-    return "Doctor accepted. You can join now.";
-  }
-
-  if (status === "IN_PROGRESS") {
-    return "Consultation is in progress.";
-  }
-
-  if (status === "COMPLETED") {
-    return "Consultation completed.";
-  }
-
-  if (status === "REJECTED") {
-    return "Doctor rejected this request.";
-  }
-
-  if (status === "CANCELLED") {
-    return "Consultation cancelled.";
-  }
-
-  return "Consultation updated.";
+const getStatusHint = (status: string, t: Translate) => {
+  if (status === "PENDING") return t("consultations.hintPending");
+  if (status === "ACCEPTED") return t("consultations.hintAccepted");
+  if (status === "IN_PROGRESS") return t("consultations.hintInProgress");
+  if (status === "COMPLETED") return t("consultations.hintCompleted");
+  if (status === "REJECTED") return t("consultations.hintRejected");
+  if (status === "CANCELLED") return t("consultations.hintCancelled");
+  return t("consultations.hintUpdated");
 };
 
 const getStatusTone = (
@@ -307,45 +253,49 @@ const getStatusTone = (
   };
 };
 
-const getConsultationTypeLabel = (
-  type: string
-) => {
-  if (type === "EMERGENCY") {
-    return "Emergency consultation";
-  }
+const getConsultationTypeLabel = (type: string, t: Translate) => type === "EMERGENCY" ? t("consultations.typeEmergency") : t("consultations.typeManual");
 
-  return "Manual consultation";
-};
+const canJoinConsultation = (status: string) => status === "ACCEPTED" || status === "IN_PROGRESS";
 
-const canJoinConsultation = (
-  status: string
-) => {
-  return (
-    status === "ACCEPTED" ||
-    status === "IN_PROGRESS"
-  );
-};
-
-const getDropdownTitle = (
-  activeDropdown: DropdownType | null
-) => {
-  if (activeDropdown === "doctor") {
-    return "Select assigned doctor";
-  }
-
-  if (activeDropdown === "reason") {
-    return "Select reason";
-  }
-
-  if (activeDropdown === "date") {
-    return "Select preferred date";
-  }
-
-  if (activeDropdown === "time") {
-    return "Select preferred time";
-  }
-
+const getDropdownTitle = (activeDropdown: DropdownType | null, t: Translate) => {
+  if (activeDropdown === "doctor") return t("consultations.selectAssignedDoctor");
+  if (activeDropdown === "reason") return t("consultations.selectReason");
+  if (activeDropdown === "date") return t("consultations.selectPreferredDate");
+  if (activeDropdown === "time") return t("consultations.selectPreferredTime");
   return "";
+};
+
+const getReasonLabel = (option: string, t: Translate) => {
+  if (option === "High blood pressure") return t("consultations.reasonHighBP");
+  if (option === "Chest discomfort") return t("consultations.reasonChest");
+  if (option === "Dizziness") return t("consultations.reasonDizziness");
+  if (option === "Breathing difficulty") return t("consultations.reasonBreathing");
+  if (option === "Medication question") return t("consultations.reasonMedication");
+  if (option === "General consultation") return t("consultations.reasonGeneral");
+  return option;
+};
+
+const getDateOptionLabel = (option: string, t: Translate) => {
+  if (option === "Today") return t("common.today");
+  if (option === "Tomorrow") return t("common.tomorrow");
+  if (option === "Next available date") return t("consultations.nextAvailable");
+  if (option === "This week") return t("medicines.thisWeek");
+  return option;
+};
+
+const getTimeOptionLabel = (option: string, t: Translate) => {
+  if (option === "As soon as possible") return t("consultations.asap");
+  if (option === "Morning") return t("common.morning");
+  if (option === "Afternoon") return t("common.afternoon");
+  if (option === "Evening") return t("common.evening");
+  return option;
+};
+
+const getDropdownOptionLabel = (activeDropdown: DropdownType | null, option: string, t: Translate) => {
+  if (activeDropdown === "reason") return getReasonLabel(option, t);
+  if (activeDropdown === "date") return getDateOptionLabel(option, t);
+  if (activeDropdown === "time") return getTimeOptionLabel(option, t);
+  return option;
 };
 
 const getDropdownIcon = (
@@ -404,6 +354,7 @@ const ConsultationsScreen = ({
   navigation,
 }: Props) => {
   const insets = useSafeAreaInsets();
+  const { t, locale } = useLanguage();
   const rootNavigation =
     navigation.getParent<any>();
 
@@ -518,10 +469,8 @@ const ConsultationsScreen = ({
 
   const dropdownTitle = useMemo(
     () =>
-      getDropdownTitle(
-        activeDropdown
-      ),
-    [activeDropdown]
+      getDropdownTitle(activeDropdown, t),
+    [activeDropdown, t]
   );
 
   const loadScreenData = useCallback(
@@ -586,14 +535,14 @@ const ConsultationsScreen = ({
         setScreenError(
           error instanceof Error
             ? error.message
-            : "Unable to load consultations."
+            : t("consultations.unableLoad")
         );
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    []
+    [t]
   );
 
   useFocusEffect(
@@ -712,10 +661,7 @@ const ConsultationsScreen = ({
       }
 
       if (!selectedDoctorId) {
-        Alert.alert(
-          "Select a doctor",
-          "Please assign and select a doctor before sending a consultation request."
-        );
+        Alert.alert(t("consultations.selectDoctorTitle"), t("consultations.selectDoctorText"));
         return;
       }
 
@@ -761,13 +707,10 @@ const ConsultationsScreen = ({
         );
 
         Alert.alert(
-          "Request sent",
+          t("consultations.requestSent"),
           selectedDoctor
-            ? `Your consultation request has been sent to ${formatDoctorName(
-                selectedDoctor.doctor
-                  .fullName
-              )}.`
-            : "Your consultation request has been sent."
+            ? t("consultations.requestSentDoctor", { doctor: formatDoctorName(selectedDoctor.doctor.fullName) })
+            : t("consultations.requestSentGeneric")
         );
 
         await loadScreenData(
@@ -777,14 +720,11 @@ const ConsultationsScreen = ({
         const message =
           error instanceof Error
             ? error.message
-            : "Unable to send consultation request.";
+            : t("consultations.unableSend");
 
         setScreenError(message);
 
-        Alert.alert(
-          "Request failed",
-          message
-        );
+        Alert.alert(t("consultations.requestFailed"), message);
       } finally {
         setIsSendingRequest(false);
       }
@@ -796,19 +736,17 @@ const ConsultationsScreen = ({
       selectedDoctor,
       selectedDoctorId,
       selectedReason,
+      t,
     ]);
 
   const openActiveCallsScreen = useCallback(() => {
     if (!rootNavigation) {
-      Alert.alert(
-        "Unable to open calls",
-        "Active Calls screen is not available right now."
-      );
+      Alert.alert(t("consultations.unableOpenCalls"), t("consultations.activeCallsUnavailable"));
       return;
     }
 
     rootNavigation.navigate("PatientActiveCalls");
-  }, [rootNavigation]);
+  }, [rootNavigation, t]);
 
   return (
     <SafeAreaView
@@ -830,7 +768,7 @@ const ConsultationsScreen = ({
                 styles.appBarTitle
               }
             >
-              Consultations
+              {t("consultations.title")}
             </Text>
 
             <Text
@@ -838,8 +776,7 @@ const ConsultationsScreen = ({
                 styles.appBarSubtitle
               }
             >
-              Request and manage
-              doctor calls
+              {t("consultations.subtitle")}
             </Text>
           </View>
         </View>
@@ -905,7 +842,7 @@ const ConsultationsScreen = ({
                     styles.summaryTitle
                   }
                 >
-                  Doctor consultation
+                  {t("consultations.summaryTitle")}
                 </Text>
 
                 <Text
@@ -913,9 +850,7 @@ const ConsultationsScreen = ({
                     styles.summarySubtitle
                   }
                 >
-                  Select an assigned
-                  doctor and send a
-                  consultation request.
+                  {t("consultations.summaryText")}
                 </Text>
               </View>
             </View>
@@ -926,17 +861,17 @@ const ConsultationsScreen = ({
               }
             >
               <SummaryStat
-                label="Active"
+                label={t("consultations.active")}
                 value={`${activeConsultations.length}`}
               />
 
               <SummaryStat
-                label="Past"
+                label={t("consultations.past")}
                 value={`${pastConsultations.length}`}
               />
 
               <SummaryStat
-                label="Doctors"
+                label={t("consultations.doctors")}
                 value={`${assignedDoctors.length}`}
               />
             </View>
@@ -953,8 +888,8 @@ const ConsultationsScreen = ({
                   strokeWidth={2.6}
                 />
               }
-              title="Request consultation"
-              subtitle="Choose an assigned doctor and describe what help you need"
+              title={t("consultations.requestTitle")}
+              subtitle={t("consultations.requestSubtitle")}
             />
 
             {assignedDoctors.length ===
@@ -986,7 +921,7 @@ const ConsultationsScreen = ({
                       styles.noDoctorTitle
                     }
                   >
-                    No assigned doctors
+                    {t("consultations.noDoctors")}
                   </Text>
 
                   <Text
@@ -994,9 +929,7 @@ const ConsultationsScreen = ({
                       styles.noDoctorText
                     }
                   >
-                    Add an approved doctor
-                    before requesting a
-                    consultation.
+                    {t("consultations.noDoctorsText")}
                   </Text>
                 </View>
 
@@ -1020,7 +953,7 @@ const ConsultationsScreen = ({
               </View>
             ) : (
               <SelectField
-                label="Assigned doctor"
+                label={t("consultations.assignedDoctor")}
                 value={
                   selectedDoctor
                     ? formatDoctorName(
@@ -1028,7 +961,7 @@ const ConsultationsScreen = ({
                           .doctor
                           .fullName
                       )
-                    : "Select doctor"
+                    : t("consultations.selectDoctor")
                 }
                 helperText={
                   selectedDoctor
@@ -1055,10 +988,8 @@ const ConsultationsScreen = ({
             )}
 
             <SelectField
-              label="Reason"
-              value={
-                selectedReason
-              }
+              label={t("consultations.reason")}
+              value={getReasonLabel(selectedReason, t)}
               icon={
                 <MessageSquareText
                   size={19}
@@ -1075,10 +1006,8 @@ const ConsultationsScreen = ({
             />
 
             <SelectField
-              label="Preferred date"
-              value={
-                preferredDate
-              }
+              label={t("consultations.preferredDate")}
+              value={getDateOptionLabel(preferredDate, t)}
               icon={
                 <CalendarDays
                   size={19}
@@ -1095,10 +1024,8 @@ const ConsultationsScreen = ({
             />
 
             <SelectField
-              label="Preferred time"
-              value={
-                preferredTime
-              }
+              label={t("consultations.preferredTime")}
+              value={getTimeOptionLabel(preferredTime, t)}
               icon={
                 <Clock3
                   size={19}
@@ -1119,7 +1046,7 @@ const ConsultationsScreen = ({
                 styles.inputLabel
               }
             >
-              Notes optional
+              {t("consultations.notesOptional")}
             </Text>
 
             <TextInput
@@ -1128,7 +1055,7 @@ const ConsultationsScreen = ({
               }
               value={notes}
               onChangeText={setNotes}
-              placeholder="Add symptoms, questions, or medicine concerns..."
+              placeholder={t("consultations.notesPlaceholder")}
               placeholderTextColor="#A8B0C2"
               multiline
               textAlignVertical="top"
@@ -1169,7 +1096,7 @@ const ConsultationsScreen = ({
                       styles.primaryButtonText
                     }
                   >
-                    Send Request
+                    {t("common.sendRequest")}
                   </Text>
                 </>
               )}
@@ -1209,7 +1136,7 @@ const ConsultationsScreen = ({
                   styles.sectionTitle
                 }
               >
-                Active requests
+                {t("consultations.activeRequests")}
               </Text>
 
               <Text
@@ -1217,15 +1144,11 @@ const ConsultationsScreen = ({
                   styles.sectionSubtitle
                 }
               >
-                {activeConsultations.length >
-                0
-                  ? `${activeConsultations.length} active consultation${
-                      activeConsultations.length ===
-                      1
-                        ? ""
-                        : "s"
-                    }`
-                  : "No active consultation right now"}
+                {activeConsultations.length === 1
+                  ? t("consultations.oneActive")
+                  : activeConsultations.length > 1
+                    ? t("consultations.manyActive", { count: activeConsultations.length })
+                    : t("consultations.noActiveNow")}
               </Text>
             </View>
 
@@ -1247,7 +1170,7 @@ const ConsultationsScreen = ({
           </View>
 
           {isLoading ? (
-            <LoadingRow title="Loading consultations..." />
+            <LoadingRow title={t("consultations.loadingConsultations")} />
           ) : activeConsultations.length ===
             0 ? (
             <EmptyRow
@@ -1258,8 +1181,8 @@ const ConsultationsScreen = ({
                   strokeWidth={2.6}
                 />
               }
-              title="No active requests"
-              subtitle="Send a request to start a doctor consultation."
+              title={t("consultations.noActiveRequests")}
+              subtitle={t("consultations.noActiveText")}
             />
           ) : (
             <View
@@ -1304,7 +1227,7 @@ const ConsultationsScreen = ({
                   styles.sectionTitle
                 }
               >
-                Past consultations
+                {t("consultations.pastTitle")}
               </Text>
 
               <Text
@@ -1312,8 +1235,7 @@ const ConsultationsScreen = ({
                   styles.sectionSubtitle
                 }
               >
-                Completed, cancelled and
-                rejected requests
+                {t("consultations.pastSubtitle")}
               </Text>
             </View>
 
@@ -1331,7 +1253,7 @@ const ConsultationsScreen = ({
           </View>
 
           {isLoading ? (
-            <LoadingRow title="Loading history..." />
+            <LoadingRow title={t("consultations.loadingHistory")} />
           ) : pastConsultations.length ===
             0 ? (
             <EmptyRow
@@ -1342,8 +1264,8 @@ const ConsultationsScreen = ({
                   strokeWidth={2.6}
                 />
               }
-              title="No past consultations"
-              subtitle="Completed consultations will appear here."
+              title={t("consultations.noPast")}
+              subtitle={t("consultations.noPastText")}
             />
           ) : (
             <View
@@ -1557,8 +1479,8 @@ const ConsultationsScreen = ({
                                 .specialization ||
                                 (assignment.assignmentType ===
                                 "PRIMARY"
-                                  ? "Primary doctor"
-                                  : "Specialist doctor")}
+                                  ? t("consultations.primaryDoctor")
+                                  : t("consultations.specialistDoctor"))}
                             </Text>
                           </View>
 
@@ -1619,7 +1541,7 @@ const ConsultationsScreen = ({
                                 : undefined,
                             ]}
                           >
-                            {option}
+                            {getDropdownOptionLabel(activeDropdown, option, t)}
                           </Text>
 
                           {isSelected ? (
@@ -1801,6 +1723,7 @@ const ConsultationRow = ({
   isLast: boolean;
   onOpenActiveCalls: () => void;
 }) => {
+  const { t, locale } = useLanguage();
   const tone = getStatusTone(
     consultation.status
   );
@@ -1867,9 +1790,7 @@ const ConsultationRow = ({
           }
           numberOfLines={1}
         >
-          {getConsultationTypeLabel(
-            consultation.type
-          )}
+          {getConsultationTypeLabel(consultation.type, t)}
         </Text>
 
         {doctorName ? (
@@ -1891,10 +1812,7 @@ const ConsultationRow = ({
           }
           numberOfLines={1}
         >
-          {formatConsultationDate(
-            consultation.preferredAt ||
-              consultation.createdAt
-          )}
+          {formatConsultationDate(consultation.preferredAt || consultation.createdAt, t, locale)}
         </Text>
 
         <Text
@@ -1904,10 +1822,8 @@ const ConsultationRow = ({
           numberOfLines={2}
         >
           {canOpenActiveCall
-            ? "Tap to open the active call screen."
-            : getStatusHint(
-                consultation.status
-              )}
+            ? t("consultations.tapActiveCall")
+            : getStatusHint(consultation.status, t)}
         </Text>
 
         {consultation.reason ? (
@@ -1954,9 +1870,7 @@ const ConsultationRow = ({
               },
             ]}
           >
-            {getStatusLabel(
-              consultation.status
-            )}
+            {getStatusLabel(consultation.status, t)}
           </Text>
         </View>
 
@@ -1971,7 +1885,7 @@ const ConsultationRow = ({
                 styles.openCallText
               }
             >
-              Open
+              {t("common.open")}
             </Text>
 
             <ChevronRight
@@ -1991,6 +1905,7 @@ const LoadingRow = ({
 }: {
   title: string;
 }) => {
+  const { t } = useLanguage();
   return (
     <View
       style={styles.emptyPanel}
@@ -2009,7 +1924,7 @@ const LoadingRow = ({
       <Text
         style={styles.emptyText}
       >
-        Please wait a moment.
+        {t("consultations.waitMoment")}
       </Text>
     </View>
   );

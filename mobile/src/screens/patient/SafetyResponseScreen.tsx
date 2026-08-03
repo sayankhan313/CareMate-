@@ -1,61 +1,30 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  type DimensionValue,
-  View,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { ActivityIndicator, Platform, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import {
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  HeartPulse,
-  ShieldAlert,
-  Stethoscope,
-  UserRound,
-  Video,
-} from "lucide-react-native";
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock, HeartPulse, ShieldAlert, Stethoscope, UserRound, Video } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import type { RootStackParamList } from "../../types/navigation";
 import type { VitalReading } from "../../types/vitals";
 import { safetyApi, type SafetyAlert } from "../../services/safetyApi";
+import { patientSettingsApi } from "../../services/patientSettingsApi";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SafetyResponse">;
 
 const DEFAULT_TIMER_SECONDS = 30;
-
-
 const BACKGROUND = "#FBF1F1";
 const SURFACE = "#FFFFFF";
 const TEXT = "#1B1D2A";
 const MUTED = "#5F6270";
 const SOFT_MUTED = "#7B7E8C";
-
-const RED = "#D9483F"; // M3-style error, slightly desaturated vs pure #EF4444
+const RED = "#D9483F";
 const RED_DARK = "#A6332C";
-const RED_DEEP = "#7A241F";
-const RED_CONTAINER = "#F9DAD7"; // M3 error container
+const RED_CONTAINER = "#F9DAD7";
 const ON_RED_CONTAINER = "#7A241F";
 const RED_SOFT = "#FCEBE9";
-const RED_BORDER = "#F0B4AE";
-
-const SURFACE_VARIANT = "#F2E4E2";
-const PANEL = "#FDF3F2";
-
 const DEFAULT_SOURCE_TEXT = "CareMate+";
-
 
 const elevate = (level: number) => ({
   elevation: level,
@@ -66,34 +35,36 @@ const elevate = (level: number) => ({
 });
 
 const formatReadingTime = (value?: string | null) => {
-  if (!value) {
-    return "Just now";
-  }
+  if (!value) return "Just now";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "Just now";
-  }
+  if (Number.isNaN(date.getTime())) return "Just now";
 
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
-const getTimeLeftFromTimerEnd = (timerEndsAt?: string | null) => {
-  if (!timerEndsAt) {
-    return DEFAULT_TIMER_SECONDS;
-  }
+const getTimeLeftFromTimerEnd = (timerEndsAt?: string | null, fallbackSeconds = DEFAULT_TIMER_SECONDS) => {
+  if (!timerEndsAt) return fallbackSeconds;
 
   const endTime = new Date(timerEndsAt).getTime();
 
-  if (Number.isNaN(endTime)) {
-    return DEFAULT_TIMER_SECONDS;
-  }
+  if (Number.isNaN(endTime)) return fallbackSeconds;
 
   return Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+};
+
+const getTimerDurationFromAlert = (alert: SafetyAlert, fallbackSeconds: number) => {
+  const startTime = new Date(alert.createdAt).getTime();
+  const endTime = new Date(alert.timerEndsAt).getTime();
+
+  if (Number.isNaN(startTime) || Number.isNaN(endTime)) return fallbackSeconds;
+
+  const duration = Math.round((endTime - startTime) / 1000);
+
+  if (duration < 1 || duration > 300) return fallbackSeconds;
+
+  return duration;
 };
 
 const getCriticalVitalInfo = (reading: VitalReading) => {
@@ -105,11 +76,7 @@ const getCriticalVitalInfo = (reading: VitalReading) => {
     };
   }
 
-  if (
-    reading.heartRate !== null &&
-    reading.heartRate !== undefined &&
-    (reading.heartRate < 40 || reading.heartRate >= 130)
-  ) {
+  if (reading.heartRate !== null && reading.heartRate !== undefined && (reading.heartRate < 40 || reading.heartRate >= 130)) {
     return {
       title: "Critical Heart Rate Reading",
       value: `HR ${reading.heartRate} bpm`,
@@ -131,11 +98,7 @@ const getCriticalVitalInfo = (reading: VitalReading) => {
     };
   }
 
-  if (
-    reading.glucose !== null &&
-    reading.glucose !== undefined &&
-    (reading.glucose < 54 || reading.glucose >= 250)
-  ) {
+  if (reading.glucose !== null && reading.glucose !== undefined && (reading.glucose < 54 || reading.glucose >= 250)) {
     return {
       title: "Critical Glucose Reading",
       value: `Glucose ${reading.glucose}`,
@@ -143,11 +106,7 @@ const getCriticalVitalInfo = (reading: VitalReading) => {
     };
   }
 
-  if (
-    reading.temperature !== null &&
-    reading.temperature !== undefined &&
-    reading.temperature >= 39
-  ) {
+  if (reading.temperature !== null && reading.temperature !== undefined && reading.temperature >= 39) {
     return {
       title: "Critical Temperature Reading",
       value: `Temp ${reading.temperature}°C`,
@@ -167,6 +126,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
   const { vitalReading, triggerSource, manualCriticalInfo } = route.params;
 
   const [safetyAlert, setSafetyAlert] = useState<SafetyAlert | null>(null);
+  const [timerDuration, setTimerDuration] = useState(DEFAULT_TIMER_SECONDS);
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER_SECONDS);
   const [isCreatingAlert, setIsCreatingAlert] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -175,25 +135,19 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
   const hasEscalatedRef = useRef(false);
 
-  const vitalInfo = useMemo(() => {
-    return manualCriticalInfo || getCriticalVitalInfo(vitalReading);
-  }, [manualCriticalInfo, vitalReading]);
+  const vitalInfo = useMemo(() => manualCriticalInfo || getCriticalVitalInfo(vitalReading), [manualCriticalInfo, vitalReading]);
 
-  const progressWidth = useMemo<DimensionValue>(() => {
-    const percentage = Math.max(
-      0,
-      Math.min(100, (timeLeft / DEFAULT_TIMER_SECONDS) * 100)
-    );
+  const progressWidth = useMemo<`${number}%`>(() => {
+    const safeDuration = Math.max(1, timerDuration);
+    const percentage = Math.max(0, Math.min(100, (timeLeft / safeDuration) * 100));
 
-    return `${percentage}%` as DimensionValue;
-  }, [timeLeft]);
+    return `${percentage}%` as `${number}%`;
+  }, [timeLeft, timerDuration]);
 
   const sourceText = triggerSource || vitalReading.source || DEFAULT_SOURCE_TEXT;
 
   const goBackToVitals = () => {
-    navigation.navigate("PatientTabs", {
-      screen: "Vitals",
-    });
+    navigation.navigate("PatientTabs", { screen: "Vitals" });
   };
 
   const createSafetyAlert = async () => {
@@ -201,18 +155,27 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
       setIsCreatingAlert(true);
       setErrorMessage("");
 
+      let configuredDuration = DEFAULT_TIMER_SECONDS;
+
+      try {
+        const settingsResult = await patientSettingsApi.getSafetySettings();
+        configuredDuration = settingsResult.settings.countdownSeconds;
+      } catch {
+        configuredDuration = DEFAULT_TIMER_SECONDS;
+      }
+
       const createdAlert = await safetyApi.createSafetyAlert({
         vitalReadingId: vitalReading.id,
         reason: vitalInfo.reason,
       });
 
+      const actualDuration = getTimerDurationFromAlert(createdAlert, configuredDuration);
+
       setSafetyAlert(createdAlert);
-      setTimeLeft(getTimeLeftFromTimerEnd(createdAlert.timerEndsAt));
+      setTimerDuration(actualDuration);
+      setTimeLeft(getTimeLeftFromTimerEnd(createdAlert.timerEndsAt, actualDuration));
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to start safety response.";
+      const message = error instanceof Error ? error.message : "Unable to start safety response.";
 
       setErrorMessage(message);
       Alert.alert("Safety Response", message);
@@ -222,18 +185,13 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
   };
 
   const cancelSafetyAlert = async () => {
-    if (!safetyAlert || isCancelling || isEscalating) {
-      return;
-    }
+    if (!safetyAlert || isCancelling || isEscalating) return;
 
     Alert.alert(
       "Cancel safety alert?",
       "Only cancel if this was a false alarm or the device was worn incorrectly.",
       [
-        {
-          text: "Keep alert active",
-          style: "cancel",
-        },
+        { text: "Keep alert active", style: "cancel" },
         {
           text: "I am okay",
           style: "destructive",
@@ -243,21 +201,11 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
               await safetyApi.cancelSafetyAlert(safetyAlert.id);
 
-              Alert.alert(
-                "Alert cancelled",
-                "Safety response has been cancelled.",
-                [
-                  {
-                    text: "OK",
-                    onPress: goBackToVitals,
-                  },
-                ]
-              );
+              Alert.alert("Alert cancelled", "Safety response has been cancelled.", [
+                { text: "OK", onPress: goBackToVitals },
+              ]);
             } catch (error) {
-              const message =
-                error instanceof Error
-                  ? error.message
-                  : "Unable to cancel safety alert.";
+              const message = error instanceof Error ? error.message : "Unable to cancel safety alert.";
 
               Alert.alert("Safety Response", message);
             } finally {
@@ -265,14 +213,12 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const escalateSafetyAlert = async (isAutomatic = false) => {
-    if (!safetyAlert || hasEscalatedRef.current || isEscalating) {
-      return;
-    }
+    if (!safetyAlert || hasEscalatedRef.current || isEscalating) return;
 
     try {
       hasEscalatedRef.current = true;
@@ -291,42 +237,38 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
     } catch (error) {
       hasEscalatedRef.current = false;
 
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to escalate safety alert.";
+      const message = error instanceof Error ? error.message : "Unable to escalate safety alert.";
 
-      Alert.alert(
-        isAutomatic ? "Auto-escalation failed" : "Safety Response",
-        message
-      );
+      Alert.alert(isAutomatic ? "Auto-escalation failed" : "Safety Response", message);
     } finally {
       setIsEscalating(false);
     }
   };
 
   useEffect(() => {
-    createSafetyAlert();
+    void createSafetyAlert();
   }, []);
 
   useEffect(() => {
-    if (!safetyAlert || safetyAlert.status !== "ACTIVE") {
-      return;
-    }
+    if (!safetyAlert || safetyAlert.status !== "ACTIVE") return;
 
     const interval = setInterval(() => {
-      const updatedTimeLeft = getTimeLeftFromTimerEnd(safetyAlert.timerEndsAt);
+      const updatedTimeLeft = getTimeLeftFromTimerEnd(safetyAlert.timerEndsAt, timerDuration);
 
       setTimeLeft(updatedTimeLeft);
 
       if (updatedTimeLeft <= 0) {
         clearInterval(interval);
-        escalateSafetyAlert(true);
+        void escalateSafetyAlert(true);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [safetyAlert]);
+  }, [safetyAlert, timerDuration]);
+
+  const formattedTimer = timeLeft >= 60
+    ? `${String(Math.floor(timeLeft / 60)).padStart(2, "0")}:${String(timeLeft % 60).padStart(2, "0")}`
+    : `00:${String(timeLeft).padStart(2, "0")}`;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -334,12 +276,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
       <View style={styles.screen}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.85}
-            onPress={goBackToVitals}
-            disabled={isEscalating}
-          >
+          <TouchableOpacity style={styles.backButton} activeOpacity={0.85} onPress={goBackToVitals} disabled={isEscalating}>
             <ArrowLeft size={22} color={SURFACE} strokeWidth={2.2} />
           </TouchableOpacity>
 
@@ -351,12 +288,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
         <ScrollView
           style={styles.content}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: Math.max(34, insets.bottom + 34),
-            },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(34, insets.bottom + 34) }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.emergencyPanel}>
@@ -372,9 +304,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 <Text style={styles.emergencyTitle}>{vitalInfo.title}</Text>
-                <Text style={styles.emergencySubtitle}>
-                  Please respond before the timer ends.
-                </Text>
+                <Text style={styles.emergencySubtitle}>Please respond before the timer ends.</Text>
               </View>
             </View>
 
@@ -386,9 +316,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
 
               <View style={styles.metaRow}>
                 <Clock size={15} color={MUTED} strokeWidth={2} />
-                <Text style={styles.metaText}>
-                  {formatReadingTime(vitalReading.recordedAt)}
-                </Text>
+                <Text style={styles.metaText}>{formatReadingTime(vitalReading.recordedAt)}</Text>
               </View>
 
               <Text style={styles.sourceText}>Source: {sourceText}</Text>
@@ -399,24 +327,17 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
             {isCreatingAlert ? (
               <>
                 <ActivityIndicator size="large" color={RED} />
-
                 <Text style={styles.timerTitle}>Starting safety response...</Text>
-                <Text style={styles.timerSubtitle}>
-                  Creating safety alert on CareMate+ backend
-                </Text>
+                <Text style={styles.timerSubtitle}>Creating safety alert on CareMate+ backend</Text>
               </>
             ) : (
               <>
                 <View style={styles.timerCircle}>
-                  <Text style={styles.timerText}>
-                    00:{String(timeLeft).padStart(2, "0")}
-                  </Text>
+                  <Text style={styles.timerText}>{formattedTimer}</Text>
                 </View>
 
                 <Text style={styles.timerTitle}>Auto-escalation timer</Text>
-                <Text style={styles.timerSubtitle}>
-                  Respond now to prevent automatic escalation
-                </Text>
+                <Text style={styles.timerSubtitle}>Configured for {timerDuration} seconds</Text>
 
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: progressWidth }]} />
@@ -433,38 +354,25 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
           ) : null}
 
           <View style={styles.actionCard}>
-            <Text style={styles.questionText}>
-              Are you okay? Is your device worn correctly?
-            </Text>
+            <Text style={styles.questionText}>Are you okay? Is your device worn correctly?</Text>
 
             <TouchableOpacity
-              style={[
-                styles.cancelButton,
-                (isCreatingAlert || isCancelling || isEscalating) &&
-                  styles.disabledButton,
-              ]}
+              style={[styles.cancelButton, isCreatingAlert || isCancelling || isEscalating ? styles.disabledButton : undefined]}
               activeOpacity={0.85}
               onPress={cancelSafetyAlert}
               disabled={isCreatingAlert || isCancelling || isEscalating}
             >
-              <Text style={styles.cancelButtonText}>
-                {isCancelling ? "Cancelling..." : "I am okay / Cancel Alert"}
-              </Text>
+              <Text style={styles.cancelButtonText}>{isCancelling ? "Cancelling..." : "I am okay / Cancel Alert"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.startButton,
-                (isCreatingAlert || isEscalating) && styles.disabledStartButton,
-              ]}
+              style={[styles.startButton, isCreatingAlert || isEscalating ? styles.disabledStartButton : undefined]}
               activeOpacity={0.85}
-              onPress={() => escalateSafetyAlert(false)}
+              onPress={() => void escalateSafetyAlert(false)}
               disabled={isCreatingAlert || isEscalating}
             >
               <Text style={styles.startButtonText}>
-                {isEscalating
-                  ? "Starting emergency consultation..."
-                  : "Start Safety Response Now"}
+                {isEscalating ? "Starting emergency consultation..." : "Start Safety Response Now"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -525,8 +433,7 @@ export const SafetyResponseScreen = ({ navigation, route }: Props) => {
           <View style={styles.warningBox}>
             <AlertCircle size={18} color={RED_DARK} strokeWidth={2.2} />
             <Text style={styles.warningText}>
-              If the timer ends, CareMate+ will automatically escalate this
-              critical alert and create an emergency video consultation.
+              If the timer ends, CareMate+ will automatically escalate this critical alert and create an emergency video consultation.
             </Text>
           </View>
         </ScrollView>
@@ -568,354 +475,63 @@ const WorkflowStep = ({
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: RED,
-  },
-  screen: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: RED,
-    ...elevate(2),
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  headerTextBlock: {
-    flex: 1,
-  },
-  headerTitle: {
-    color: SURFACE,
-    fontSize: 22,
-    fontWeight: "700",
-    letterSpacing: 0,
-  },
-  headerSubtitle: {
-    color: SURFACE,
-    fontSize: 13,
-    fontWeight: "500",
-    marginTop: 3,
-    opacity: 0.9,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  emergencyPanel: {
-    backgroundColor: RED,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
-    overflow: "hidden",
-    ...elevate(2),
-  },
-  emergencyTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  emergencyIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 13,
-  },
-  emergencyTextBlock: {
-    flex: 1,
-  },
-  emergencyBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: SURFACE,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  emergencyBadgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: RED,
-    marginRight: 7,
-  },
-  emergencyBadgeText: {
-    color: RED_DARK,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  emergencyTitle: {
-    color: SURFACE,
-    fontSize: 22,
-    fontWeight: "700",
-    letterSpacing: 0,
-    marginTop: 13,
-  },
-  emergencySubtitle: {
-    color: "#FCE6E4",
-    fontSize: 13,
-    fontWeight: "500",
-    lineHeight: 19,
-    marginTop: 6,
-  },
-  emergencyValuePanel: {
-    backgroundColor: SURFACE,
-    borderRadius: 14,
-    padding: 15,
-    marginTop: 18,
-  },
-  vitalValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  vitalValue: {
-    color: RED,
-    fontSize: 22,
-    fontWeight: "700",
-    marginLeft: 8,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  metaText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  sourceText: {
-    color: SOFT_MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 8,
-  },
-  timerCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 22,
-    alignItems: "center",
-    marginBottom: 14,
-    ...elevate(1),
-  },
-  timerCircle: {
-    width: 136,
-    height: 136,
-    borderRadius: 68,
-    backgroundColor: RED_CONTAINER,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-  },
-  timerText: {
-    color: RED_DARK,
-    fontSize: 34,
-    fontWeight: "700",
-  },
-  timerTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 12,
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  timerSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "500",
-    textAlign: "center",
-    marginBottom: 14,
-  },
-  progressTrack: {
-    width: "100%",
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: RED_CONTAINER,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 3,
-    backgroundColor: RED,
-  },
-  errorBox: {
-    backgroundColor: RED_SOFT,
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 14,
-    ...elevate(0.5),
-  },
-  errorText: {
-    flex: 1,
-    color: RED_DARK,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginLeft: 10,
-  },
-  actionCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    ...elevate(1),
-  },
-  questionText: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "600",
-    lineHeight: 22,
-    marginBottom: 18,
-  },
-  cancelButton: {
-    backgroundColor: RED_CONTAINER,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  cancelButtonText: {
-    color: ON_RED_CONTAINER,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  startButton: {
-    backgroundColor: RED,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    ...elevate(1),
-  },
-  startButtonText: {
-    color: SURFACE,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  disabledButton: {
-    opacity: 0.55,
-  },
-  disabledStartButton: {
-    opacity: 0.7,
-  },
-  workflowCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    ...elevate(1),
-  },
-  workflowTitle: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 18,
-  },
-  workflowStep: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  workflowLeft: {
-    alignItems: "center",
-    marginRight: 14,
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepLine: {
-    width: 2,
-    height: 30,
-    backgroundColor: RED_CONTAINER,
-    marginVertical: 5,
-  },
-  completedStepCircle: {
-    backgroundColor: RED,
-  },
-  activeStepCircle: {
-    backgroundColor: RED_DARK,
-  },
-  pendingStepCircle: {
-    backgroundColor: RED_CONTAINER,
-  },
-  workflowTextBlock: {
-    flex: 1,
-    paddingBottom: 15,
-  },
-  workflowStepTitle: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  workflowStepSubtitle: {
-    color: SOFT_MUTED,
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  activeStepTitle: {
-    color: RED_DARK,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  activeStepSubtitle: {
-    color: RED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  pendingStepTitle: {
-    color: RED_DARK,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  pendingStepSubtitle: {
-    color: SOFT_MUTED,
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  warningBox: {
-    backgroundColor: RED_SOFT,
-    borderRadius: 14,
-    padding: 15,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    ...elevate(0.5),
-  },
-  warningText: {
-    flex: 1,
-    color: RED_DARK,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginLeft: 10,
-  },
+  safeArea: { flex: 1, backgroundColor: RED },
+  screen: { flex: 1, backgroundColor: BACKGROUND },
+  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 22, flexDirection: "row", alignItems: "center", backgroundColor: RED, ...elevate(2) },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center", marginRight: 14, overflow: "hidden" },
+  headerTextBlock: { flex: 1 },
+  headerTitle: { color: SURFACE, fontSize: 22, fontWeight: "700" },
+  headerSubtitle: { color: SURFACE, fontSize: 13, fontWeight: "500", marginTop: 3, opacity: 0.9 },
+  content: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  emergencyPanel: { backgroundColor: RED, borderRadius: 18, padding: 18, marginBottom: 14, overflow: "hidden", ...elevate(2) },
+  emergencyTopRow: { flexDirection: "row", alignItems: "flex-start" },
+  emergencyIconCircle: { width: 50, height: 50, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center", marginRight: 13 },
+  emergencyTextBlock: { flex: 1 },
+  emergencyBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", backgroundColor: SURFACE, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  emergencyBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: RED, marginRight: 7 },
+  emergencyBadgeText: { color: RED_DARK, fontSize: 11, fontWeight: "700" },
+  emergencyTitle: { color: SURFACE, fontSize: 22, fontWeight: "700", marginTop: 13 },
+  emergencySubtitle: { color: "#FCE6E4", fontSize: 13, fontWeight: "500", lineHeight: 19, marginTop: 6 },
+  emergencyValuePanel: { backgroundColor: SURFACE, borderRadius: 14, padding: 15, marginTop: 18 },
+  vitalValueRow: { flexDirection: "row", alignItems: "center" },
+  vitalValue: { color: RED, fontSize: 22, fontWeight: "700", marginLeft: 8 },
+  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  metaText: { color: MUTED, fontSize: 12, fontWeight: "600", marginLeft: 6 },
+  sourceText: { color: SOFT_MUTED, fontSize: 11, fontWeight: "600", marginTop: 8 },
+  timerCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 22, alignItems: "center", marginBottom: 14, ...elevate(1) },
+  timerCircle: { width: 136, height: 136, borderRadius: 68, backgroundColor: RED_CONTAINER, alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  timerText: { color: RED_DARK, fontSize: 34, fontWeight: "700" },
+  timerTitle: { color: TEXT, fontSize: 16, fontWeight: "700", marginTop: 12, marginBottom: 6, textAlign: "center" },
+  timerSubtitle: { color: MUTED, fontSize: 12, fontWeight: "500", textAlign: "center", marginBottom: 14 },
+  progressTrack: { width: "100%", height: 6, borderRadius: 3, backgroundColor: RED_CONTAINER, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 3, backgroundColor: RED },
+  errorBox: { backgroundColor: RED_SOFT, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "flex-start", marginBottom: 14, ...elevate(0.5) },
+  errorText: { flex: 1, color: RED_DARK, fontSize: 12, fontWeight: "600", lineHeight: 18, marginLeft: 10 },
+  actionCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginBottom: 14, ...elevate(1) },
+  questionText: { color: TEXT, fontSize: 15, fontWeight: "600", lineHeight: 22, marginBottom: 18 },
+  cancelButton: { backgroundColor: RED_CONTAINER, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 12, overflow: "hidden" },
+  cancelButtonText: { color: ON_RED_CONTAINER, fontSize: 14, fontWeight: "700" },
+  startButton: { backgroundColor: RED, borderRadius: 12, paddingVertical: 14, alignItems: "center", overflow: "hidden", ...elevate(1) },
+  startButtonText: { color: SURFACE, fontSize: 14, fontWeight: "700" },
+  disabledButton: { opacity: 0.55 },
+  disabledStartButton: { opacity: 0.7 },
+  workflowCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginBottom: 14, ...elevate(1) },
+  workflowTitle: { color: TEXT, fontSize: 17, fontWeight: "700", marginBottom: 18 },
+  workflowStep: { flexDirection: "row", alignItems: "flex-start" },
+  workflowLeft: { alignItems: "center", marginRight: 14 },
+  stepCircle: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  stepLine: { width: 2, height: 30, backgroundColor: RED_CONTAINER, marginVertical: 5 },
+  completedStepCircle: { backgroundColor: RED },
+  activeStepCircle: { backgroundColor: RED_DARK },
+  pendingStepCircle: { backgroundColor: RED_CONTAINER },
+  workflowTextBlock: { flex: 1, paddingBottom: 15 },
+  workflowStepTitle: { color: TEXT, fontSize: 13, fontWeight: "700" },
+  workflowStepSubtitle: { color: SOFT_MUTED, fontSize: 12, fontWeight: "500", marginTop: 4, lineHeight: 17 },
+  activeStepTitle: { color: RED_DARK, fontSize: 13, fontWeight: "700" },
+  activeStepSubtitle: { color: RED, fontSize: 12, fontWeight: "600", marginTop: 4, lineHeight: 17 },
+  pendingStepTitle: { color: RED_DARK, fontSize: 13, fontWeight: "700" },
+  pendingStepSubtitle: { color: SOFT_MUTED, fontSize: 12, fontWeight: "500", marginTop: 4, lineHeight: 17 },
+  warningBox: { backgroundColor: RED_SOFT, borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "flex-start", ...elevate(0.5) },
+  warningText: { flex: 1, color: RED_DARK, fontSize: 12, fontWeight: "600", lineHeight: 18, marginLeft: 10 },
 });

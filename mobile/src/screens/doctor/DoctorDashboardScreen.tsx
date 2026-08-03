@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -22,6 +23,7 @@ import {
   FileText,
   HeartPulse,
   LogOut,
+  MessageSquareText,
   Pill,
   RefreshCw,
   ShieldCheck,
@@ -42,24 +44,26 @@ import {
 import { doctorReportsApi } from "../../services/doctor/doctorReportsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
-type DoctorDashboardScreenProps = BottomTabScreenProps<
-  DoctorTabParamList,
-  "Home"
->;
+type DoctorDashboardScreenProps = BottomTabScreenProps<DoctorTabParamList, "Home">;
+
+type DoctorQuickAction = {
+  key: string;
+  title: string;
+  icon: ReactNode;
+  badgeCount?: number;
+  onPress: () => void;
+};
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
-
 const DOCTOR_PRIMARY = "#0F766E";
 const DOCTOR_SECONDARY = "#14B8A6";
 const DOCTOR_DARK = "#134E4A";
 const DOCTOR_LIGHT = "#E6FFFA";
-
 const SUCCESS = "#42B883";
 const SUCCESS_LIGHT = "#EAF8F2";
-
 const WARNING = "#F6A545";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
@@ -79,57 +83,35 @@ const elevate = (level: 1 | 2 | 3 = 2) => {
 const getGreetingText = () => {
   const currentHour = new Date().getHours();
 
-  if (currentHour < 12) {
-    return "Good morning";
-  }
-
-  if (currentHour < 18) {
-    return "Good afternoon";
-  }
+  if (currentHour < 12) return "Good morning";
+  if (currentHour < 18) return "Good afternoon";
 
   return "Good evening";
 };
 
 const getFirstName = (fullName?: string | null) => {
-  if (!fullName) {
-    return "Doctor";
-  }
+  if (!fullName) return "Doctor";
 
   return fullName.replace(/^Dr\.?\s*/i, "").trim().split(" ")[0] || "Doctor";
 };
 
 const getInitials = (name?: string | null) => {
-  if (!name) {
-    return "DR";
-  }
+  if (!name) return "DR";
 
-  const parts = name
-    .replace(/^Dr\.?\s*/i, "")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
+  const parts = name.replace(/^Dr\.?\s*/i, "").trim().split(" ").filter(Boolean);
 
-  if (parts.length === 0) {
-    return "DR";
-  }
-
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
+  if (parts.length === 0) return "DR";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
 
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
 };
 
 const formatDateTime = (value?: string | null) => {
-  if (!value) {
-    return "Not scheduled";
-  }
+  if (!value) return "Not scheduled";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
   return date.toLocaleString([], {
     day: "2-digit",
@@ -220,7 +202,6 @@ export const DoctorDashboardScreen = ({
 
         const [dashboardData, reportQueue] = await Promise.all([
           doctorDashboardApi.getDashboard(),
-
           doctorReportsApi.listReportQueue("PENDING").catch(() => null),
         ]);
 
@@ -266,9 +247,10 @@ export const DoctorDashboardScreen = ({
     ]);
   };
 
-  const openPatients = () => {
-    navigation.navigate("Patients");
-  };
+  const openPatients = () => navigation.navigate("Patients");
+  const openConsultations = () => navigation.navigate("Consultations");
+  const openMedicineReviews = () => navigation.navigate("Reviews");
+  const openAlerts = () => navigation.navigate("Alerts");
 
   const openPrescriptionPatients = () => {
     const rootNavigation = navigation.getParent();
@@ -278,6 +260,7 @@ export const DoctorDashboardScreen = ({
         "Unable to open prescriptions",
         "The prescription patient selector is not available right now."
       );
+
       return;
     }
 
@@ -288,16 +271,23 @@ export const DoctorDashboardScreen = ({
     );
   };
 
-  const openConsultations = () => {
-    navigation.navigate("Consultations");
-  };
+  const openNotePatients = () => {
+    const rootNavigation = navigation.getParent();
 
-  const openMedicineReviews = () => {
-    navigation.navigate("Reviews");
-  };
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to add note",
+        "The note patient selector is not available right now."
+      );
 
-  const openAlerts = () => {
-    navigation.navigate("Alerts");
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorSelectNotePatient",
+      })
+    );
   };
 
   const openReportReviews = () => {
@@ -308,6 +298,7 @@ export const DoctorDashboardScreen = ({
         "Unable to open reports",
         "The central report review queue is not available right now."
       );
+
       return;
     }
 
@@ -337,9 +328,92 @@ export const DoctorDashboardScreen = ({
     );
   };
 
+  const quickActions: DoctorQuickAction[] = [
+    {
+      key: "patients",
+      title: "Patients",
+      icon: (
+        <UsersRound
+          size={23}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.6}
+        />
+      ),
+      onPress: openPatients,
+    },
+    {
+      key: "consultations",
+      title: "Consults",
+      icon: (
+        <Video
+          size={23}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.6}
+        />
+      ),
+      onPress: openConsultations,
+    },
+    {
+      key: "reviews",
+      title: "Reviews",
+      icon: (
+        <Pill
+          size={23}
+          color={WARNING}
+          strokeWidth={2.6}
+        />
+      ),
+      badgeCount: dashboard?.stats.pendingMedicineReviews,
+      onPress: openMedicineReviews,
+    },
+    {
+      key: "reports",
+      title: "Reports",
+      icon: (
+        <FileText
+          size={23}
+          color={DANGER}
+          strokeWidth={2.6}
+        />
+      ),
+      badgeCount: pendingReportReviews,
+      onPress: openReportReviews,
+    },
+    {
+      key: "prescribe",
+      title: "Prescribe",
+      icon: (
+        <ClipboardList
+          size={23}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.6}
+        />
+      ),
+      onPress: openPrescriptionPatients,
+    },
+    {
+      key: "add-note",
+      title: "Add Note",
+      icon: (
+        <MessageSquareText
+          size={23}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.6}
+        />
+      ),
+      onPress: openNotePatients,
+    },
+  ];
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top"]}
+    >
+      <StatusBar
+        backgroundColor={BACKGROUND}
+        barStyle="dark-content"
+      />
 
       <View style={styles.screen}>
         <View style={styles.header}>
@@ -356,7 +430,9 @@ export const DoctorDashboardScreen = ({
 
           <View style={styles.headerActions}>
             <View style={styles.profileCircle}>
-              <Text style={styles.profileInitial}>{initials}</Text>
+              <Text style={styles.profileInitial}>
+                {initials}
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -364,7 +440,11 @@ export const DoctorDashboardScreen = ({
               activeOpacity={0.86}
               onPress={handleLogout}
             >
-              <LogOut size={19} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
+              <LogOut
+                size={19}
+                color={DOCTOR_PRIMARY}
+                strokeWidth={2.6}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -374,7 +454,10 @@ export const DoctorDashboardScreen = ({
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(insets.bottom + 108, 132),
+              paddingBottom: Math.max(
+                insets.bottom + 108,
+                132
+              ),
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -390,26 +473,47 @@ export const DoctorDashboardScreen = ({
           {isLoading ? (
             <View style={styles.stateCard}>
               <ActivityIndicator color={DOCTOR_PRIMARY} />
-              <Text style={styles.stateText}>Loading doctor dashboard...</Text>
+
+              <Text style={styles.stateText}>
+                Loading doctor dashboard...
+              </Text>
             </View>
           ) : null}
 
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
               <View style={styles.errorIcon}>
-                <RefreshCw size={26} color={DANGER} strokeWidth={2.7} />
+                <RefreshCw
+                  size={26}
+                  color={DANGER}
+                  strokeWidth={2.7}
+                />
               </View>
 
-              <Text style={styles.errorTitle}>Unable to load dashboard</Text>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <Text style={styles.errorTitle}>
+                Unable to load dashboard
+              </Text>
+
+              <Text style={styles.errorText}>
+                {errorMessage}
+              </Text>
 
               <TouchableOpacity
                 style={styles.retryButton}
                 activeOpacity={0.86}
-                onPress={() => void loadDashboard("initial")}
+                onPress={() =>
+                  void loadDashboard("initial")
+                }
               >
-                <RefreshCw size={17} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <RefreshCw
+                  size={17}
+                  color="#FFFFFF"
+                  strokeWidth={2.5}
+                />
+
+                <Text style={styles.retryButtonText}>
+                  Retry
+                </Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -417,7 +521,10 @@ export const DoctorDashboardScreen = ({
           {!isLoading && !errorMessage && dashboard ? (
             <>
               <LinearGradient
-                colors={[DOCTOR_PRIMARY, DOCTOR_SECONDARY]}
+                colors={[
+                  DOCTOR_PRIMARY,
+                  DOCTOR_SECONDARY,
+                ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.heroCard}
@@ -444,11 +551,15 @@ export const DoctorDashboardScreen = ({
                   </View>
                 </View>
 
-                <Text style={styles.heroTitle}>Doctor Dashboard</Text>
+                <Text style={styles.heroTitle}>
+                  Doctor Dashboard
+                </Text>
 
                 <Text style={styles.heroText}>
-                  Monitor assigned patients, reports, prescriptions, safety
-                  alerts, consultations and medicine reviews from one place.
+                  Monitor assigned patients, reports,
+                  prescriptions, safety alerts,
+                  consultations and medicine reviews from
+                  one place.
                 </Text>
 
                 <View style={styles.heroStatsRow}>
@@ -456,7 +567,10 @@ export const DoctorDashboardScreen = ({
                     <Text style={styles.heroStatValue}>
                       {dashboard.stats.assignedPatients}
                     </Text>
-                    <Text style={styles.heroStatLabel}>Patients</Text>
+
+                    <Text style={styles.heroStatLabel}>
+                      Patients
+                    </Text>
                   </View>
 
                   <View style={styles.heroStatDivider} />
@@ -465,7 +579,10 @@ export const DoctorDashboardScreen = ({
                     <Text style={styles.heroStatValue}>
                       {dashboard.stats.activeAlerts}
                     </Text>
-                    <Text style={styles.heroStatLabel}>Active alerts</Text>
+
+                    <Text style={styles.heroStatLabel}>
+                      Active alerts
+                    </Text>
                   </View>
 
                   <View style={styles.heroStatDivider} />
@@ -474,73 +591,57 @@ export const DoctorDashboardScreen = ({
                     <Text style={styles.heroStatValue}>
                       {pendingReportReviews}
                     </Text>
-                    <Text style={styles.heroStatLabel}>Reports</Text>
+
+                    <Text style={styles.heroStatLabel}>
+                      Reports
+                    </Text>
                   </View>
                 </View>
               </LinearGradient>
 
-              <View style={styles.quickActionsRow}>
-                <QuickAction
-                  title="Patients"
-                  icon={
-                    <UsersRound
-                      size={23}
-                      color={DOCTOR_PRIMARY}
-                      strokeWidth={2.6}
-                    />
-                  }
-                  onPress={openPatients}
-                />
-
-                <QuickAction
-                  title="Consults"
-                  icon={
-                    <Video
-                      size={23}
-                      color={DOCTOR_PRIMARY}
-                      strokeWidth={2.6}
-                    />
-                  }
-                  onPress={openConsultations}
-                />
-
-                <QuickAction
-                  title="Reviews"
-                  icon={<Pill size={23} color={WARNING} strokeWidth={2.6} />}
-                  badgeCount={dashboard.stats.pendingMedicineReviews}
-                  onPress={openMedicineReviews}
-                />
-
-                <QuickAction
-                  title="Reports"
-                  icon={<FileText size={23} color={DANGER} strokeWidth={2.6} />}
-                  badgeCount={pendingReportReviews}
-                  onPress={openReportReviews}
-                />
-
-                <QuickAction
-                  title="Prescribe"
-                  icon={
-                    <ClipboardList
-                      size={23}
-                      color={DOCTOR_PRIMARY}
-                      strokeWidth={2.6}
-                    />
-                  }
-                  onPress={openPrescriptionPatients}
-                />
-              </View>
+              <FlatList
+                horizontal
+                data={quickActions}
+                keyExtractor={(item) => item.key}
+                renderItem={({ item }) => (
+                  <QuickAction
+                    title={item.title}
+                    icon={item.icon}
+                    badgeCount={item.badgeCount}
+                    onPress={item.onPress}
+                  />
+                )}
+                ItemSeparatorComponent={() => (
+                  <View
+                    style={styles.quickActionSeparator}
+                  />
+                )}
+                contentContainerStyle={
+                  styles.quickActionsContent
+                }
+                style={styles.quickActionsList}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+              />
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>Safety Response</Text>
+                  <Text style={styles.sectionTitle}>
+                    Safety Response
+                  </Text>
+
                   <Text style={styles.sectionSubtitle}>
                     Escalated alerts from assigned patients
                   </Text>
                 </View>
 
-                <TouchableOpacity activeOpacity={0.8} onPress={openAlerts}>
-                  <Text style={styles.sectionLink}>View all</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={openAlerts}
+                >
+                  <Text style={styles.sectionLink}>
+                    View all
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -570,14 +671,21 @@ export const DoctorDashboardScreen = ({
                   </View>
 
                   <View style={styles.safePanelTextBlock}>
-                    <Text style={styles.safePanelTitle}>No active alerts</Text>
+                    <Text style={styles.safePanelTitle}>
+                      No active alerts
+                    </Text>
+
                     <Text style={styles.safePanelText}>
-                      Critical Safety Response alerts will appear here when a
-                      patient escalates.
+                      Critical Safety Response alerts will
+                      appear here when a patient escalates.
                     </Text>
                   </View>
 
-                  <ChevronRight size={19} color={MUTED} strokeWidth={2.5} />
+                  <ChevronRight
+                    size={19}
+                    color={MUTED}
+                    strokeWidth={2.5}
+                  />
                 </TouchableOpacity>
               )}
 
@@ -586,8 +694,10 @@ export const DoctorDashboardScreen = ({
                   <Text style={styles.sectionTitle}>
                     Upcoming Consultations
                   </Text>
+
                   <Text style={styles.sectionSubtitle}>
-                    Manual and emergency consultation requests
+                    Manual and emergency consultation
+                    requests
                   </Text>
                 </View>
 
@@ -595,19 +705,24 @@ export const DoctorDashboardScreen = ({
                   activeOpacity={0.8}
                   onPress={openConsultations}
                 >
-                  <Text style={styles.sectionLink}>View all</Text>
+                  <Text style={styles.sectionLink}>
+                    View all
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.cardStack}>
-                {dashboard.upcomingConsultations.length > 0 ? (
-                  dashboard.upcomingConsultations.map((consultation) => (
-                    <ConsultationCard
-                      key={consultation.id}
-                      consultation={consultation}
-                      onPress={openConsultations}
-                    />
-                  ))
+                {dashboard.upcomingConsultations.length >
+                0 ? (
+                  dashboard.upcomingConsultations.map(
+                    (consultation) => (
+                      <ConsultationCard
+                        key={consultation.id}
+                        consultation={consultation}
+                        onPress={openConsultations}
+                      />
+                    )
+                  )
                 ) : (
                   <EmptyCard
                     icon={
@@ -625,26 +740,38 @@ export const DoctorDashboardScreen = ({
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>Recent Patients</Text>
+                  <Text style={styles.sectionTitle}>
+                    Recent Patients
+                  </Text>
+
                   <Text style={styles.sectionSubtitle}>
                     Latest assigned patient records
                   </Text>
                 </View>
 
-                <TouchableOpacity activeOpacity={0.8} onPress={openPatients}>
-                  <Text style={styles.sectionLink}>View all</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={openPatients}
+                >
+                  <Text style={styles.sectionLink}>
+                    View all
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.cardStack}>
                 {dashboard.recentPatients.length > 0 ? (
-                  dashboard.recentPatients.map((patient) => (
-                    <PatientCard
-                      key={patient.assignmentId}
-                      patient={patient}
-                      onPress={() => openPatientDetail(patient)}
-                    />
-                  ))
+                  dashboard.recentPatients.map(
+                    (patient) => (
+                      <PatientCard
+                        key={patient.assignmentId}
+                        patient={patient}
+                        onPress={() =>
+                          openPatientDetail(patient)
+                        }
+                      />
+                    )
+                  )
                 ) : (
                   <EmptyCard
                     icon={
@@ -696,7 +823,10 @@ const QuickAction = ({
         ) : null}
       </View>
 
-      <Text style={styles.quickActionText} numberOfLines={1}>
+      <Text
+        style={styles.quickActionText}
+        numberOfLines={1}
+      >
         {title}
       </Text>
     </TouchableOpacity>
@@ -712,27 +842,43 @@ const UrgentAlertPanel = ({
   onOpen: () => void;
   onJoin: () => void;
 }) => {
-  const patientName = alert.patient?.fullName || "Assigned patient";
+  const patientName =
+    alert.patient?.fullName || "Assigned patient";
 
   return (
     <View style={styles.urgentAlertCard}>
       <View style={styles.urgentHeader}>
         <View style={styles.urgentIconBox}>
-          <AlertTriangle size={23} color={DANGER} strokeWidth={2.7} />
+          <AlertTriangle
+            size={23}
+            color={DANGER}
+            strokeWidth={2.7}
+          />
         </View>
 
         <View style={styles.urgentTitleBlock}>
-          <Text style={styles.urgentTitle}>Critical Safety Alert</Text>
-          <Text style={styles.urgentPatient}>{patientName}</Text>
+          <Text style={styles.urgentTitle}>
+            Critical Safety Alert
+          </Text>
+
+          <Text style={styles.urgentPatient}>
+            {patientName}
+          </Text>
         </View>
 
         <View style={styles.urgentBadge}>
-          <Text style={styles.urgentBadgeText}>{alert.status}</Text>
+          <Text style={styles.urgentBadgeText}>
+            {alert.status}
+          </Text>
         </View>
       </View>
 
       <View style={styles.alertMetricBox}>
-        <HeartPulse size={17} color={DANGER} strokeWidth={2.5} />
+        <HeartPulse
+          size={17}
+          color={DANGER}
+          strokeWidth={2.5}
+        />
 
         <Text style={styles.alertMetricText}>
           {alert.vitalSummary
@@ -741,13 +887,21 @@ const UrgentAlertPanel = ({
         </Text>
       </View>
 
-      <Text style={styles.urgentReason} numberOfLines={2}>
+      <Text
+        style={styles.urgentReason}
+        numberOfLines={2}
+      >
         {alert.reason}
       </Text>
 
       <View style={styles.alertFooter}>
         <View style={styles.timeRow}>
-          <Clock3 size={14} color={MUTED} strokeWidth={2.4} />
+          <Clock3
+            size={14}
+            color={MUTED}
+            strokeWidth={2.4}
+          />
+
           <Text style={styles.alertTime}>
             {formatDateTime(alert.createdAt)}
           </Text>
@@ -759,13 +913,17 @@ const UrgentAlertPanel = ({
             activeOpacity={0.86}
             onPress={onOpen}
           >
-            <Text style={styles.alertSecondaryText}>View</Text>
+            <Text style={styles.alertSecondaryText}>
+              View
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.alertPrimaryButton,
-              !alert.canJoinCall ? styles.alertButtonDisabled : undefined,
+              !alert.canJoinCall
+                ? styles.alertButtonDisabled
+                : undefined,
             ]}
             activeOpacity={0.86}
             onPress={onJoin}
@@ -788,8 +946,12 @@ const ConsultationCard = ({
   consultation: DoctorUpcomingConsultation;
   onPress: () => void;
 }) => {
-  const isEmergency = consultation.type === "EMERGENCY";
-  const patientName = consultation.patient?.fullName || "Assigned patient";
+  const isEmergency =
+    consultation.type === "EMERGENCY";
+
+  const patientName =
+    consultation.patient?.fullName ||
+    "Assigned patient";
 
   return (
     <TouchableOpacity
@@ -800,25 +962,32 @@ const ConsultationCard = ({
       <View
         style={[
           styles.listIconBox,
-          isEmergency ? styles.listIconDanger : undefined,
+          isEmergency
+            ? styles.listIconDanger
+            : undefined,
         ]}
       >
         <Video
           size={21}
-          color={isEmergency ? DANGER : DOCTOR_PRIMARY}
+          color={
+            isEmergency ? DANGER : DOCTOR_PRIMARY
+          }
           strokeWidth={2.6}
         />
       </View>
 
       <View style={styles.listTextBlock}>
         <Text style={styles.listTitle}>
-          {isEmergency ? "Emergency Consultation" : "Manual Consultation"}
+          {isEmergency
+            ? "Emergency Consultation"
+            : "Manual Consultation"}
         </Text>
 
         <Text style={styles.listSubtitle}>
           {patientName} •{" "}
           {formatDateTime(
-            consultation.preferredAt || consultation.createdAt
+            consultation.preferredAt ||
+              consultation.createdAt
           )}
         </Text>
       </View>
@@ -839,7 +1008,9 @@ const PatientCard = ({
   patient: DoctorDashboardPatient;
   onPress: () => void;
 }) => {
-  const tone = getVitalTone(patient.latestVital?.status);
+  const tone = getVitalTone(
+    patient.latestVital?.status
+  );
 
   return (
     <TouchableOpacity
@@ -854,7 +1025,9 @@ const PatientCard = ({
       </View>
 
       <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>{patient.patient.fullName}</Text>
+        <Text style={styles.listTitle}>
+          {patient.patient.fullName}
+        </Text>
 
         <Text style={styles.listSubtitle}>
           {patient.activeMedicineCount} active medicine
@@ -882,7 +1055,11 @@ const PatientCard = ({
         </Text>
       </View>
 
-      <ChevronRight size={18} color={MUTED} strokeWidth={2.5} />
+      <ChevronRight
+        size={18}
+        color={MUTED}
+        strokeWidth={2.5}
+      />
     </TouchableOpacity>
   );
 };
@@ -898,9 +1075,17 @@ const EmptyCard = ({
 }) => {
   return (
     <View style={styles.emptyCard}>
-      <View style={styles.emptyIcon}>{icon}</View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyText}>{text}</Text>
+      <View style={styles.emptyIcon}>
+        {icon}
+      </View>
+
+      <Text style={styles.emptyTitle}>
+        {title}
+      </Text>
+
+      <Text style={styles.emptyText}>
+        {text}
+      </Text>
     </View>
   );
 };
@@ -1137,17 +1322,27 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.25)",
   },
 
-  quickActionsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginTop: 18,
-    marginBottom: 2,
+  quickActionsList: {
+    marginTop: 12,
+    marginHorizontal: -16,
+    overflow: "visible",
+  },
+
+  quickActionsContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+
+  quickActionSeparator: {
+    width: 10,
   },
 
   quickAction: {
-    flex: 1,
+    width: 76,
     alignItems: "center",
+    paddingTop: 2,
+    overflow: "visible",
   },
 
   quickActionIcon: {
@@ -1158,6 +1353,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+    overflow: "visible",
   },
 
   quickActionBadge: {
@@ -1173,6 +1369,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
+    zIndex: 10,
+    elevation: 10,
   },
 
   quickActionBadgeText: {
