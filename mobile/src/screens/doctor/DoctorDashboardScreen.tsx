@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import {
   AlertTriangle,
+  Bell,
   ChevronRight,
   ClipboardList,
   Clock3,
@@ -34,6 +35,8 @@ import {
 } from "lucide-react-native";
 
 import { tokenStorage } from "../../services/tokenStorage";
+import { notificationApi } from "../../services/notificationApi";
+import { notificationEvents } from "../../services/notificationEvents";
 import {
   doctorDashboardApi,
   type DoctorDashboardData,
@@ -161,6 +164,7 @@ export const DoctorDashboardScreen = ({
 
   const [dashboard, setDashboard] = useState<DoctorDashboardData | null>(null);
   const [pendingReportReviews, setPendingReportReviews] = useState(0);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -194,19 +198,30 @@ export const DoctorDashboardScreen = ({
     );
   }, [navigation]);
 
+  const loadNotificationUnreadCount = useCallback(async () => {
+    try {
+      const result = await notificationApi.getUnreadCount();
+      setNotificationUnreadCount(result.unreadCount || 0);
+    } catch {
+      setNotificationUnreadCount(0);
+    }
+  }, []);
+
   const loadDashboard = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
       try {
         mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
         setErrorMessage("");
 
-        const [dashboardData, reportQueue] = await Promise.all([
+        const [dashboardData, reportQueue, notificationData] = await Promise.all([
           doctorDashboardApi.getDashboard(),
           doctorReportsApi.listReportQueue("PENDING").catch(() => null),
+          notificationApi.getUnreadCount().catch(() => ({ unreadCount: 0 })),
         ]);
 
         setDashboard(dashboardData);
         setPendingReportReviews(reportQueue?.summary?.pending || 0);
+        setNotificationUnreadCount(notificationData.unreadCount || 0);
       } catch (error) {
         const message =
           error instanceof Error
@@ -233,6 +248,12 @@ export const DoctorDashboardScreen = ({
     }, [loadDashboard])
   );
 
+  useEffect(() => {
+    return notificationEvents.subscribe(() => {
+      void loadNotificationUnreadCount();
+    });
+  }, [loadNotificationUnreadCount]);
+
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       {
@@ -251,6 +272,17 @@ export const DoctorDashboardScreen = ({
   const openConsultations = () => navigation.navigate("Consultations");
   const openMedicineReviews = () => navigation.navigate("Reviews");
   const openAlerts = () => navigation.navigate("Alerts");
+
+  const openNotifications = () => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      Alert.alert("Unable to open notifications", "The notification centre is not available right now.");
+      return;
+    }
+
+    rootNavigation.dispatch(CommonActions.navigate({ name: "Notifications" }));
+  };
 
   const openPrescriptionPatients = () => {
     const rootNavigation = navigation.getParent();
@@ -429,6 +461,15 @@ export const DoctorDashboardScreen = ({
           </View>
 
           <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.notificationCircle} activeOpacity={0.86} onPress={openNotifications}>
+              <Bell size={19} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
+              {notificationUnreadCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
             <View style={styles.profileCircle}>
               <Text style={styles.profileInitial}>
                 {initials}
@@ -1131,6 +1172,41 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginLeft: 12,
+  },
+
+  notificationCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    overflow: "visible",
+    ...elevate(1),
+  },
+
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 21,
+    height: 21,
+    borderRadius: 8,
+    backgroundColor: DANGER,
+    borderWidth: 2,
+    borderColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    zIndex: 10,
+    elevation: 10,
+  },
+
+  notificationBadgeText: {
+    color: SURFACE,
+    fontSize: 8,
+    fontWeight: "700",
   },
 
   profileCircle: {

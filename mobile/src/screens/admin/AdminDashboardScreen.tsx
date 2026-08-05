@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import { CommonActions, useFocusEffect } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
+  Bell,
   Building2,
   ChevronRight,
   Clock3,
@@ -40,6 +41,8 @@ import {
   type AdminPharmacyVerification,
 } from "../../services/adminApi";
 import { tokenStorage } from "../../services/tokenStorage";
+import { notificationApi } from "../../services/notificationApi";
+import { notificationEvents } from "../../services/notificationEvents";
 import type {
   AdminTabParamList,
   RootStackParamList,
@@ -184,6 +187,11 @@ export const AdminDashboardScreen = ({
     setErrorMessage,
   ] = useState("");
 
+  const [
+    notificationUnreadCount,
+    setNotificationUnreadCount,
+  ] = useState(0);
+
   const totalPendingApprovals =
     (stats?.pendingDoctors || 0) +
     (stats?.pendingPharmacies || 0);
@@ -307,6 +315,15 @@ export const AdminDashboardScreen = ({
       resetToLogin,
     ]);
 
+  const loadNotificationUnreadCount = useCallback(async () => {
+    try {
+      const result = await notificationApi.getUnreadCount();
+      setNotificationUnreadCount(result.unreadCount || 0);
+    } catch {
+      setNotificationUnreadCount(0);
+    }
+  }, []);
+
   const loadAdminData = useCallback(
     async (
       mode:
@@ -335,6 +352,7 @@ export const AdminDashboardScreen = ({
           dashboardData,
           doctorListData,
           pharmacyListData,
+          notificationData,
         ] = await Promise.all([
           adminApi.getDashboard(),
           adminApi.listDoctorVerifications(
@@ -343,6 +361,7 @@ export const AdminDashboardScreen = ({
           adminApi.listPharmacyVerifications(
             "PENDING_VERIFICATION"
           ),
+          notificationApi.getUnreadCount().catch(() => ({ unreadCount: 0 })),
         ]);
 
         setStats(
@@ -355,6 +374,10 @@ export const AdminDashboardScreen = ({
 
         setPendingPharmacies(
           pharmacyListData.pharmacies
+        );
+
+        setNotificationUnreadCount(
+          notificationData.unreadCount || 0
         );
       } catch (error) {
         setErrorMessage(
@@ -373,6 +396,16 @@ export const AdminDashboardScreen = ({
       loadAdminData("initial");
     }, [loadAdminData])
   );
+
+  useEffect(() => {
+    return notificationEvents.subscribe(() => {
+      void loadNotificationUnreadCount();
+    });
+  }, [loadNotificationUnreadCount]);
+
+  const openNotifications = () => {
+    navigation.navigate("Notifications");
+  };
 
   const logout = async () => {
     await resetToLogin();
@@ -906,17 +939,20 @@ export const AdminDashboardScreen = ({
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={confirmLogout}
-            activeOpacity={0.82}
-          >
-            <LogOut
-              size={20}
-              color={MUTED}
-              strokeWidth={2.4}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconButton} onPress={openNotifications} activeOpacity={0.82}>
+              <Bell size={20} color={ADMIN} strokeWidth={2.4} />
+              {notificationUnreadCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.iconButton, styles.logoutButton]} onPress={confirmLogout} activeOpacity={0.82}>
+              <LogOut size={20} color={MUTED} strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -1580,6 +1616,34 @@ const styles =
     title: {
       color: TEXT,
       fontSize: 21,
+      fontWeight: "700",
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    logoutButton: {
+      marginLeft: 8,
+    },
+    notificationBadge: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      minWidth: 21,
+      height: 21,
+      borderRadius: 8,
+      backgroundColor: ON_DANGER_CONTAINER,
+      borderWidth: 2,
+      borderColor: BACKGROUND,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      zIndex: 10,
+      elevation: 10,
+    },
+    notificationBadgeText: {
+      color: SURFACE,
+      fontSize: 8,
       fontWeight: "700",
     },
     iconButton: {

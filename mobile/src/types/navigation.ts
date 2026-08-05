@@ -72,6 +72,7 @@ export type RootStackParamList = {
   DoctorTabs: (NavigatorScreenParams<DoctorTabParamList> & { user?: any }) | undefined;
   AdminTabs: (NavigatorScreenParams<AdminTabParamList> & { user?: any }) | undefined;
   PharmacyDashboard: { user?: any } | undefined;
+  Notifications: undefined;
   AdminDashboard: undefined;
   AdminDoctorVerificationDetail: { doctorId: string };
   AdminPharmacyVerificationDetail: { pharmacyId: string };

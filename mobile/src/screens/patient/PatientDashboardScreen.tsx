@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -54,6 +55,8 @@ import { useLanguage } from "../../context/LanguageContext";
 import { consultationsApi } from "../../services/consultationsApi";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
 import { patientReportsApi } from "../../services/patientReportsApi";
+import { notificationApi } from "../../services/notificationApi";
+import { notificationEvents } from "../../services/notificationEvents";
 import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
@@ -316,6 +319,11 @@ export const PatientDashboardScreen = ({
   ] = useState(0);
 
   const [
+    notificationUnreadCount,
+    setNotificationUnreadCount,
+  ] = useState(0);
+
+  const [
     actionLoadingReminderId,
     setActionLoadingReminderId,
   ] = useState<string | null>(
@@ -404,6 +412,20 @@ export const PatientDashboardScreen = ({
         );
       } catch {
         setReportUnreadCount(0);
+      }
+    }, []);
+
+  const loadNotificationUnreadCount =
+    useCallback(async () => {
+      try {
+        const result =
+          await notificationApi.getUnreadCount();
+
+        setNotificationUnreadCount(
+          result.unreadCount || 0
+        );
+      } catch {
+        setNotificationUnreadCount(0);
       }
     }, []);
 
@@ -523,6 +545,8 @@ export const PatientDashboardScreen = ({
 
       void loadReportUnreadCount();
 
+      void loadNotificationUnreadCount();
+
       const intervalId =
         setInterval(() => {
           void loadDashboard(
@@ -534,6 +558,8 @@ export const PatientDashboardScreen = ({
           void loadMedicineReviewUnreadCount();
 
           void loadReportUnreadCount();
+
+          void loadNotificationUnreadCount();
         }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
@@ -545,9 +571,16 @@ export const PatientDashboardScreen = ({
       loadActiveCallCount,
       loadDashboard,
       loadMedicineReviewUnreadCount,
+      loadNotificationUnreadCount,
       loadReportUnreadCount,
     ])
   );
+
+  useEffect(() => {
+    return notificationEvents.subscribe(() => {
+      void loadNotificationUnreadCount();
+    });
+  }, [loadNotificationUnreadCount]);
 
   const removeMedicineFromDashboardCard = (
     reminderId: string
@@ -920,6 +953,21 @@ export const PatientDashboardScreen = ({
       );
     };
 
+  const openNotificationsScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
+
+      if (!rootNavigation) {
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.notifications") }));
+        return;
+      }
+
+      rootNavigation.navigate(
+        "Notifications"
+      );
+    };
+
   const openOrdersScreen =
     () => {
       navigation.navigate(
@@ -1056,8 +1104,8 @@ export const PatientDashboardScreen = ({
                 styles.iconButton
               }
               activeOpacity={0.84}
-              onPress={() =>
-                showComingSoon(t("dashboard.notifications"))
+              onPress={
+                openNotificationsScreen
               }
             >
               <Bell
@@ -1066,11 +1114,21 @@ export const PatientDashboardScreen = ({
                 strokeWidth={2}
               />
 
-              <View
-                style={
-                  styles.notificationDot
-                }
-              />
+              {notificationUnreadCount > 0 ? (
+                <View
+                  style={
+                    styles.notificationBadge
+                  }
+                >
+                  <Text
+                    style={
+                      styles.notificationBadgeText
+                    }
+                  >
+                    {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1129,6 +1187,8 @@ export const PatientDashboardScreen = ({
                 void loadMedicineReviewUnreadCount();
 
                 void loadReportUnreadCount();
+
+                void loadNotificationUnreadCount();
               }}
               tintColor={PRIMARY}
               colors={[PRIMARY]}
@@ -2344,17 +2404,25 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  notificationDot: {
+  notificationBadge: {
     position: "absolute",
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 2,
+    right: 1,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 8,
     backgroundColor: DANGER,
-    borderWidth: 1.5,
-    borderColor:
-      BACKGROUND,
+    borderWidth: 2,
+    borderColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+
+  notificationBadgeText: {
+    color: SURFACE,
+    fontSize: 8,
+    fontWeight: "700",
   },
 
   avatar: {

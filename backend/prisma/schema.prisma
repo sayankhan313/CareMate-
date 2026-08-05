@@ -179,6 +179,72 @@ enum AuditOutcome {
   FAILURE
 }
 
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+enum NotificationPriority {
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum NotificationPushStatus {
+  PENDING
+  SENT
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationType {
+  SYSTEM_TEST
+  ACCOUNT_APPROVED
+  ACCOUNT_REJECTED
+  ACCOUNT_SUSPENDED
+  ACCOUNT_REACTIVATED
+  DOCTOR_VERIFICATION_REQUESTED
+  PHARMACY_VERIFICATION_REQUESTED
+  SAFETY_ALERT_CREATED
+  SAFETY_ALERT_ESCALATED
+  SAFETY_ALERT_RESOLVED
+  CRITICAL_VITAL_DETECTED
+  EMERGENCY_CONSULTATION_REQUESTED
+  MANUAL_CONSULTATION_REQUESTED
+  CONSULTATION_ACCEPTED
+  CONSULTATION_REJECTED
+  CONSULTATION_COMPLETED
+  CONSULTATION_CANCELLED
+  PATIENT_JOINED_CALL
+  MEDICINE_REVIEW_REQUESTED
+  MEDICINE_REVIEW_APPROVED
+  MEDICINE_REVIEW_REJECTED
+  NEW_PRESCRIPTION
+  PATIENT_REPORT_UPLOADED
+  REPORT_REVIEWED
+  PATIENT_ASSIGNED
+  PATIENT_UNASSIGNED
+  PRIMARY_DOCTOR_CHANGED
+  MEDICINE_REMINDER_DUE
+  MEDICINE_REMINDER_SNOOZED
+  MISSED_DOSE_ALERT
+  REPEATED_MISSED_DOSE
+  NEW_MEDICINE_ORDER
+  ORDER_RECEIVED
+  ORDER_PREPARING
+  ORDER_READY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -232,6 +298,9 @@ model User {
 
   actorAuditLogs   AuditLog[] @relation("ActorAuditLogs")
   patientAuditLogs AuditLog[] @relation("PatientAuditLogs")
+
+  deviceTokens  DeviceToken[]
+  notifications UserNotification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -781,4 +850,74 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([outcome, createdAt])
   @@index([createdAt])
+}
+
+model DeviceToken {
+  id         String         @id @default(uuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform
+  deviceId   String?
+  deviceName String?
+  appVersion String?
+  isActive   Boolean        @default(true)
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, isActive])
+  @@index([userId, platform])
+  @@index([lastSeenAt])
+}
+
+model UserNotification {
+  id            String                 @id @default(uuid())
+  userId        String
+  type          NotificationType
+  title         String
+  body          String
+  priority      NotificationPriority   @default(NORMAL)
+  entityType    String?
+  entityId      String?
+  targetScreen  String?
+  data          Json?
+  isRead        Boolean                @default(false)
+  readAt        DateTime?
+  pushStatus    NotificationPushStatus @default(PENDING)
+  sentAt        DateTime?
+  failureReason String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+  @@index([entityType, entityId])
+  @@index([pushStatus, createdAt])
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(uuid())
+  notificationId    String
+  deviceTokenId     String
+  status            NotificationDeliveryStatus @default(PENDING)
+  firebaseMessageId String?
+  failureCode       String?
+  failureReason     String?
+  sentAt            DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  notification UserNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  deviceToken  DeviceToken      @relation(fields: [deviceTokenId], references: [id], onDelete: Restrict)
+
+  @@unique([notificationId, deviceTokenId])
+  @@index([deviceTokenId, createdAt])
+  @@index([status, createdAt])
 }
