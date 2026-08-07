@@ -1,16 +1,8 @@
 import { API_BASE_URL } from "../constants/api";
 import { tokenStorage } from "./tokenStorage";
+import type { Consultation, MeetingConfig } from "./safetyApi";
 
-import type {
-  Consultation,
-  MeetingConfig,
-} from "./safetyApi";
-
-type ApiResponse<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-};
+type ApiResponse<T> = { success: boolean; message: string; data: T };
 
 export type CreateManualConsultationPayload = {
   doctorId: string;
@@ -20,152 +12,87 @@ export type CreateManualConsultationPayload = {
   notes?: string;
 };
 
-export type CreateConsultationResult = {
-  consultation: Consultation;
-  patientMeeting: MeetingConfig;
-  doctorMeeting: MeetingConfig;
+export type CreateConsultationResult = { consultation: Consultation; patientMeeting: MeetingConfig; doctorMeeting: MeetingConfig };
+export type PatientJoinConfigResult = { consultation: Consultation; patientMeeting: MeetingConfig };
+
+export type PatientAppointmentSlot = {
+  time: string;
+  startsAt: string;
+  durationMinutes: number;
 };
 
-export type PatientJoinConfigResult = {
-  consultation: Consultation;
-  patientMeeting: MeetingConfig;
+export type PatientCalendarDate = {
+  date: string;
+  isAvailable: boolean;
+  availableSlotCount: number;
+};
+
+export type PatientDoctorAvailability = {
+  month: string;
+  doctor: {
+    id: string;
+    fullName: string;
+    specialization: string | null;
+    clinicName: string | null;
+  };
+  dates: PatientCalendarDate[];
+};
+
+export type PatientDoctorSlots = {
+  date: string;
+  isAvailable: boolean;
+  doctor: {
+    id: string;
+    fullName: string;
+    specialization: string | null;
+    clinicName: string | null;
+  };
+  slots: PatientAppointmentSlot[];
 };
 
 const getErrorMessage = (result: any) => {
-  if (typeof result?.message === "string") {
-    return result.message;
-  }
-
-  if (Array.isArray(result?.message)) {
-    return (
-      result.message[0]?.message ||
-      "Request failed."
-    );
-  }
-
-  if (Array.isArray(result?.errors)) {
-    return (
-      result.errors[0]?.message ||
-      "Request failed."
-    );
-  }
-
-  if (Array.isArray(result?.issues)) {
-    return (
-      result.issues[0]?.message ||
-      "Request failed."
-    );
-  }
-
+  if (typeof result?.message === "string") return result.message;
+  if (Array.isArray(result?.message)) return result.message[0]?.message || "Request failed.";
+  if (Array.isArray(result?.errors)) return result.errors[0]?.message || "Request failed.";
+  if (Array.isArray(result?.issues)) return result.issues[0]?.message || "Request failed.";
   return "Request failed.";
 };
 
 const getAuthHeaders = async () => {
   const token = await tokenStorage.getToken();
+  if (!token) throw new Error("Please login again.");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+};
 
-  if (!token) {
-    throw new Error("Please login again.");
-  }
-
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
+const requestPatientApi = async <T>(path: string, options: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: { ...(await getAuthHeaders()), ...(options.headers || {}) } });
+  const result: ApiResponse<T> | any = await response.json();
+  if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
+  return result.data as T;
 };
 
 export const consultationsApi = {
-  async createManualConsultation(
-    payload: CreateManualConsultationPayload
-  ) {
-    const response = await fetch(
-      `${API_BASE_URL}/patient/consultations/manual`,
-      {
-        method: "POST",
-        headers: await getAuthHeaders(),
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const result:
-      | ApiResponse<CreateConsultationResult>
-      | any = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        getErrorMessage(result)
-      );
-    }
-
-    return result.data as CreateConsultationResult;
+  async getDoctorMonthlyAvailability(doctorId: string, month: string): Promise<PatientDoctorAvailability> {
+    return requestPatientApi<PatientDoctorAvailability>(`/patient/doctors/${doctorId}/availability?month=${encodeURIComponent(month)}`, { method: "GET" });
   },
 
-  async listConsultations() {
-    const response = await fetch(
-      `${API_BASE_URL}/patient/consultations`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
-
-    const result:
-      | ApiResponse<Consultation[]>
-      | any = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        getErrorMessage(result)
-      );
-    }
-
-    return result.data as Consultation[];
+  async getDoctorAvailableSlots(doctorId: string, date: string): Promise<PatientDoctorSlots> {
+    return requestPatientApi<PatientDoctorSlots>(`/patient/doctors/${doctorId}/availability/slots?date=${encodeURIComponent(date)}`, { method: "GET" });
   },
 
-  async getConsultationById(
-    consultationId: string
-  ) {
-    const response = await fetch(
-      `${API_BASE_URL}/patient/consultations/${consultationId}`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
-
-    const result:
-      | ApiResponse<Consultation>
-      | any = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        getErrorMessage(result)
-      );
-    }
-
-    return result.data as Consultation;
+  async createManualConsultation(payload: CreateManualConsultationPayload): Promise<CreateConsultationResult> {
+    return requestPatientApi<CreateConsultationResult>("/patient/consultations/manual", { method: "POST", body: JSON.stringify(payload) });
   },
 
-  async getPatientJoinConfig(
-    consultationId: string
-  ) {
-    const response = await fetch(
-      `${API_BASE_URL}/patient/consultations/${consultationId}/join`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
+  async listConsultations(): Promise<Consultation[]> {
+    return requestPatientApi<Consultation[]>("/patient/consultations", { method: "GET" });
+  },
 
-    const result:
-      | ApiResponse<PatientJoinConfigResult>
-      | any = await response.json();
+  async getConsultationById(consultationId: string): Promise<Consultation> {
+    return requestPatientApi<Consultation>(`/patient/consultations/${consultationId}`, { method: "GET" });
+  },
 
-    if (!response.ok || !result.success) {
-      throw new Error(
-        getErrorMessage(result)
-      );
-    }
-
-    return result.data as PatientJoinConfigResult;
+  async getPatientJoinConfig(consultationId: string): Promise<PatientJoinConfigResult> {
+    return requestPatientApi<PatientJoinConfigResult>(`/patient/consultations/${consultationId}/join`, { method: "GET" });
   },
 };

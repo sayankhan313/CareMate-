@@ -37,7 +37,10 @@ router.get("/settings/privacy", settingsController.getPrivacySettings);
 router.patch("/settings/privacy", settingsController.updatePrivacySettings);
 
 router.get("/doctors/specialties", doctorAssignmentController.listDoctorSpecialties);
+router.get("/doctors/:doctorId/availability/slots", consultationController.getDoctorAvailableSlots);
+router.get("/doctors/:doctorId/availability", consultationController.getDoctorMonthlyAvailability);
 router.get("/doctors", doctorAssignmentController.listApprovedDoctors);
+
 router.get("/doctor-assignments", doctorAssignmentController.listAssignedDoctors);
 router.post("/doctor-assignment", doctorAssignmentController.assignDoctor);
 router.post("/doctor-assignments", doctorAssignmentController.assignDoctor);
