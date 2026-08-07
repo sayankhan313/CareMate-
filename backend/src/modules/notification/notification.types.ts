@@ -49,3 +49,25 @@ export type SendTestNotificationInput = {
   title?: string;
   body?: string;
 };
+
+export type UpdatePatientNotificationPreferencesInput = {
+  medicineReminders?: boolean;
+  missedDoseAlerts?: boolean;
+  consultationUpdates?: boolean;
+  medicineReviewUpdates?: boolean;
+  reportReviewUpdates?: boolean;
+  criticalVitalAlerts?: boolean;
+  safetyResponseAlerts?: boolean;
+  careTeamUpdates?: boolean;
+  emailNotifications?: boolean;
+  pushNotifications?: boolean;
+};
+
+export type UpdatePatientReminderPreferencesInput = {
+  defaultSnoozeMinutes?: number;
+  missedDoseReminder?: boolean;
+  repeatMissedDoseAlert?: boolean;
+  repeatIntervalMinutes?: number;
+  vibrationEnabled?: boolean;
+  soundEnabled?: boolean;
+};

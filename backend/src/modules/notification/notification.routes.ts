@@ -7,6 +7,9 @@ const router = Router();
 
 router.use(authMiddleware);
 
+router.get("/preferences", notificationController.getPatientPreferences);
+router.patch("/preferences", notificationController.updatePatientNotificationPreferences);
+router.patch("/reminder-preferences", notificationController.updatePatientReminderPreferences);
 router.post("/devices", notificationController.registerDeviceToken);
 router.delete("/devices", notificationController.deactivateDeviceToken);
 router.get("/unread-count", notificationController.getUnreadCount);

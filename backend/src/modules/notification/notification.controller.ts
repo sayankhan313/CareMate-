@@ -8,6 +8,8 @@ import {
   notificationListQuerySchema,
   registerDeviceTokenSchema,
   testNotificationSchema,
+  updatePatientNotificationPreferencesSchema,
+  updatePatientReminderPreferencesSchema,
 } from "./notification.validation.js";
 
 const getUserId = (req: Request) => {
@@ -25,6 +27,58 @@ const getValidationMessage = (error: unknown) => {
 };
 
 export const notificationController = {
+
+  async getPatientPreferences(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = getUserId(req);
+      const result = await notificationService.getPatientPreferences(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Notification preferences fetched successfully.",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async updatePatientNotificationPreferences(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = getUserId(req);
+      const parsed = updatePatientNotificationPreferencesSchema.safeParse(req.body);
+      if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
+
+      const result = await notificationService.updatePatientNotificationPreferences(userId, parsed.data);
+
+      return res.status(200).json({
+        success: true,
+        message: "Notification preferences updated successfully.",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async updatePatientReminderPreferences(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = getUserId(req);
+      const parsed = updatePatientReminderPreferencesSchema.safeParse(req.body);
+      if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
+
+      const result = await notificationService.updatePatientReminderPreferences(userId, parsed.data);
+
+      return res.status(200).json({
+        success: true,
+        message: "Reminder preferences updated successfully.",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async registerDeviceToken(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserId(req);

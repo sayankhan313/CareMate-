@@ -126,4 +126,5 @@ export type RootStackParamList = {
   DoctorPrescription: { patientId: string; patientName: string };
   DoctorSelectNotePatient: undefined;
   DoctorAddNote: { patientId: string; patientName: string };
+  DoctorAvailability: undefined;
 };

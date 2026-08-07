@@ -29,3 +29,25 @@ export const testNotificationSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
   body: z.string().trim().min(1).max(240).optional(),
 });
+
+export const updatePatientNotificationPreferencesSchema = z.object({
+  medicineReminders: z.boolean().optional(),
+  missedDoseAlerts: z.boolean().optional(),
+  consultationUpdates: z.boolean().optional(),
+  medicineReviewUpdates: z.boolean().optional(),
+  reportReviewUpdates: z.boolean().optional(),
+  criticalVitalAlerts: z.boolean().optional(),
+  safetyResponseAlerts: z.boolean().optional(),
+  careTeamUpdates: z.boolean().optional(),
+  emailNotifications: z.boolean().optional(),
+  pushNotifications: z.boolean().optional(),
+}).strict().refine(value => Object.keys(value).length > 0, "At least one notification preference is required.");
+
+export const updatePatientReminderPreferencesSchema = z.object({
+  defaultSnoozeMinutes: z.number().int().min(5).max(120).optional(),
+  missedDoseReminder: z.boolean().optional(),
+  repeatMissedDoseAlert: z.boolean().optional(),
+  repeatIntervalMinutes: z.number().int().min(5).max(1440).optional(),
+  vibrationEnabled: z.boolean().optional(),
+  soundEnabled: z.boolean().optional(),
+}).strict().refine(value => Object.keys(value).length > 0, "At least one reminder preference is required.");

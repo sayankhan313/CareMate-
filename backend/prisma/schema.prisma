@@ -142,6 +142,18 @@ enum DoctorAssignmentType {
   SPECIALIST
 }
 
+enum DoctorOperationalStatus {
+  AVAILABLE
+  OUT_OF_OFFICE
+  UNAVAILABLE
+}
+
+enum DoctorAvailabilityStatus {
+  AVAILABLE
+  OUT_OF_OFFICE
+  UNAVAILABLE
+}
+
 enum PrescriptionSource {
   MANUAL
   SCANNED
@@ -267,6 +279,7 @@ model User {
   accessibilityPreferences PatientAccessibilityPreference?
   privacyPreferences       PatientPrivacyPreference?
   doctorProfile            DoctorProfile?
+  doctorAvailabilities     DoctorAvailability[]            @relation("DoctorAvailabilities")
 
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
@@ -435,6 +448,11 @@ model DoctorProfile {
   verificationCheckedAt DateTime?
   verificationNotes     String?
 
+  operationalStatus DoctorOperationalStatus @default(AVAILABLE)
+  statusFrom        DateTime?
+  statusUntil       DateTime?
+  statusNote        String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -442,6 +460,26 @@ model DoctorProfile {
 
   @@index([gmcNumber])
   @@index([specialization])
+  @@index([operationalStatus])
+}
+
+model DoctorAvailability {
+  id                  String                   @id @default(uuid())
+  doctorId            String
+  date                DateTime                 @db.Date
+  status              DoctorAvailabilityStatus @default(AVAILABLE)
+  startTime           String?
+  endTime             String?
+  slotDurationMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor User @relation("DoctorAvailabilities", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, date])
+  @@index([doctorId, date])
+  @@index([doctorId, status])
 }
 
 model PatientDoctorAssignment {

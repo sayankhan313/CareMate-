@@ -44,13 +44,14 @@ import DoctorAddNoteScreen from "../screens/doctor/DoctorAddNoteScreen";
 import DoctorPatientReportsScreen from "../screens/doctor/DoctorPatientReportsScreen";
 import DoctorReportReviewsScreen from "../screens/doctor/DoctorReportReviewsScreen";
 import DoctorReportReviewScreen from "../screens/doctor/DoctorReportReviewScreen";
+import DoctorAvailabilityScreen from "../screens/doctor/DoctorAvailabilityScreen";
 import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
 import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
 import { AdminAuditLogsScreen } from "../screens/admin/AdminAuditLogsScreen";
 import { AdminAuditLogDetailScreen } from "../screens/admin/AdminAuditLogDetailScreen";
 import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
 import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
-import { NotificationsScreen } from "../screens/common /NotificationsScreen";
+import { NotificationsScreen } from "../screens/common/NotificationsScreen";
 import { FCMInitializer } from "../components/common/FCMInitializer";
 import { PatientTabNavigator } from "./PatientTabNavigator";
 import { DoctorTabNavigator } from "./DoctorTabNavigator";
@@ -79,6 +80,7 @@ const DoctorSelectPrescriptionPatientStackScreen = DoctorSelectPrescriptionPatie
 const DoctorPrescriptionStackScreen = DoctorPrescriptionScreen as ComponentType<any>;
 const DoctorSelectNotePatientStackScreen = DoctorSelectNotePatientScreen as ComponentType<any>;
 const DoctorAddNoteStackScreen = DoctorAddNoteScreen as ComponentType<any>;
+const DoctorAvailabilityStackScreen = DoctorAvailabilityScreen as ComponentType<any>;
 const ReminderSettingsStackScreen = ReminderSettingsScreen as ComponentType<any>;
 const SafetyResponseSettingsStackScreen = SafetyResponseSettingsScreen as ComponentType<any>;
 const LanguageAccessibilityStackScreen = LanguageAccessibilityScreen as ComponentType<any>;
@@ -146,6 +148,7 @@ export const AppNavigator = () => {
               <Stack.Screen name="DoctorPrescription" component={DoctorPrescriptionStackScreen} />
               <Stack.Screen name="DoctorSelectNotePatient" component={DoctorSelectNotePatientStackScreen} />
               <Stack.Screen name="DoctorAddNote" component={DoctorAddNoteStackScreen} />
+              <Stack.Screen name="DoctorAvailability" component={DoctorAvailabilityStackScreen} />
 
               <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
               <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />

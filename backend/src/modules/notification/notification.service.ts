@@ -10,6 +10,8 @@ import type {
   RegisterDeviceTokenInput,
   SendNotificationInput,
   SendTestNotificationInput,
+  UpdatePatientNotificationPreferencesInput,
+  UpdatePatientReminderPreferencesInput,
 } from "./notification.types.js";
 
 const INVALID_TOKEN_ERROR_CODES = new Set([
@@ -115,6 +117,30 @@ const getPushPermission = async (input: SendNotificationInput) => {
   return { allowed: true, reason: null };
 };
 
+
+const REMINDER_NOTIFICATION_TYPES = new Set([
+  "MEDICINE_REMINDER_DUE",
+  "MEDICINE_REMINDER_SNOOZED",
+  "MISSED_DOSE_ALERT",
+  "REPEATED_MISSED_DOSE",
+]);
+
+const getNotificationPresentation = async (input: SendNotificationInput) => {
+  if (!REMINDER_NOTIFICATION_TYPES.has(input.type)) return { soundEnabled: true, vibrationEnabled: true };
+
+  const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
+  if (user?.role !== "PATIENT") return { soundEnabled: true, vibrationEnabled: true };
+
+  const preferences = await prisma.patientReminderPreference.upsert({
+    where: { patientId: input.userId },
+    create: { patientId: input.userId },
+    update: {},
+    select: { soundEnabled: true, vibrationEnabled: true },
+  });
+
+  return preferences;
+};
+
 const updateFailedBatch = async (notificationId: string, reason: string) => {
   await prisma.$transaction([
     prisma.notificationDelivery.updateMany({
@@ -200,7 +226,105 @@ const saveBatchResult = async (
   });
 };
 
+
+const notificationPreferenceSelect = {
+  medicineReminders: true,
+  missedDoseAlerts: true,
+  consultationUpdates: true,
+  medicineReviewUpdates: true,
+  reportReviewUpdates: true,
+  criticalVitalAlerts: true,
+  safetyResponseAlerts: true,
+  careTeamUpdates: true,
+  emailNotifications: true,
+  pushNotifications: true,
+  updatedAt: true,
+} as const;
+
+const reminderPreferenceSelect = {
+  defaultSnoozeMinutes: true,
+  missedDoseReminder: true,
+  repeatMissedDoseAlert: true,
+  repeatIntervalMinutes: true,
+  vibrationEnabled: true,
+  soundEnabled: true,
+  updatedAt: true,
+} as const;
+
+const ensurePatient = async (userId: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+  if (!user) throw new AppError("Patient account was not found.", 404);
+  if (user.role !== "PATIENT") throw new AppError("Only patients can manage notification preferences.", 403);
+  return user;
+};
+
+const getOrCreatePatientPreferences = async (patientId: string) => {
+  await ensurePatient(patientId);
+
+  const [notifications, reminders] = await prisma.$transaction([
+    prisma.patientNotificationPreference.upsert({
+      where: { patientId },
+      create: { patientId },
+      update: {},
+      select: notificationPreferenceSelect,
+    }),
+    prisma.patientReminderPreference.upsert({
+      where: { patientId },
+      create: { patientId },
+      update: {},
+      select: reminderPreferenceSelect,
+    }),
+  ]);
+
+  return { notifications, reminders };
+};
+
 export const notificationService = {
+
+  async getPatientPreferences(patientId: string) {
+    return getOrCreatePatientPreferences(patientId);
+  },
+
+  async updatePatientNotificationPreferences(patientId: string, input: UpdatePatientNotificationPreferencesInput) {
+    await ensurePatient(patientId);
+
+    const notifications = await prisma.patientNotificationPreference.upsert({
+      where: { patientId },
+      create: { patientId, ...input },
+      update: input,
+      select: notificationPreferenceSelect,
+    });
+
+    const reminders = await prisma.patientReminderPreference.upsert({
+      where: { patientId },
+      create: { patientId },
+      update: {},
+      select: reminderPreferenceSelect,
+    });
+
+    return { notifications, reminders };
+  },
+
+  async updatePatientReminderPreferences(patientId: string, input: UpdatePatientReminderPreferencesInput) {
+    await ensurePatient(patientId);
+
+    const reminders = await prisma.patientReminderPreference.upsert({
+      where: { patientId },
+      create: { patientId, ...input },
+      update: input,
+      select: reminderPreferenceSelect,
+    });
+
+    const notifications = await prisma.patientNotificationPreference.upsert({
+      where: { patientId },
+      create: { patientId },
+      update: {},
+      select: notificationPreferenceSelect,
+    });
+
+    return { notifications, reminders };
+  },
+
   async registerDeviceToken(userId: string, input: RegisterDeviceTokenInput) {
     return prisma.deviceToken.upsert({
       where: { token: input.token },
@@ -339,6 +463,8 @@ export const notificationService = {
     });
 
     try {
+      const presentation = await getNotificationPresentation(input);
+
       const response = await firebaseMessaging.sendEachForMulticast({
         tokens: tokens.map(token => token.token),
         notification: {
@@ -349,14 +475,15 @@ export const notificationService = {
         android: {
           priority: input.priority === "NORMAL" || !input.priority ? "normal" : "high",
           notification: {
-            sound: "default",
+            sound: presentation.soundEnabled ? "default" : undefined,
+            defaultVibrateTimings: presentation.vibrationEnabled,
             visibility: "private",
           },
         },
         apns: {
           payload: {
             aps: {
-              sound: "default",
+              sound: presentation.soundEnabled ? "default" : undefined,
             },
           },
         },
