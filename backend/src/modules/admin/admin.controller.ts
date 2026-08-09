@@ -387,4 +387,33 @@ export const adminController = {
       next(error);
     }
   },
+
+  async reactivateUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminId = getAuthenticatedAdminId(req);
+      const userId = getParamAsString(req, "userId");
+
+      const result = await adminService.reactivateUser(userId, adminId);
+      const auditData = getUserAuditData(result);
+
+      await auditService.safeRecord({
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "USER_ACCOUNT_REACTIVATED",
+        entityType: "USER_ACCOUNT",
+        entityId: userId,
+        outcome: "SUCCESS",
+        description: "Administrator reactivated a disabled user account.",
+        metadata: {
+          targetRole: auditData.role,
+          accountStatus: auditData.accountStatus,
+        },
+        requestContext: getAuditRequestContext(req),
+      });
+
+      return res.status(200).json({ success: true, message: "User reactivated successfully", data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
 };

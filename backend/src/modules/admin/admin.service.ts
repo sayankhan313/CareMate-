@@ -1804,12 +1804,29 @@ export const adminService = {
       );
     }
 
+    if (user.role === "ADMIN") {
+      throw new AppError(
+        "Admin accounts cannot be suspended using this workflow",
+        400
+      );
+    }
+
     if (
       user.accountStatus ===
       "DISABLED"
     ) {
       throw new AppError(
         "User is already disabled",
+        400
+      );
+    }
+
+    if (
+      user.accountStatus !== "ACTIVE" &&
+      user.accountStatus !== "APPROVED"
+    ) {
+      throw new AppError(
+        "Only active accounts can be suspended",
         400
       );
     }
@@ -1821,6 +1838,65 @@ export const adminService = {
         },
         data: {
           accountStatus: "DISABLED",
+        },
+        select: userListSelect,
+      });
+
+    return {
+      user: updatedUser,
+    };
+  },
+
+  async reactivateUser(
+    userId: string,
+    adminId: string
+  ) {
+    if (userId === adminId) {
+      throw new AppError(
+        "Your admin account is already active",
+        400
+      );
+    }
+
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: userListSelect,
+      });
+
+    if (!user) {
+      throw new AppError(
+        "User not found",
+        404
+      );
+    }
+
+    if (user.role === "ADMIN") {
+      throw new AppError(
+        "Admin accounts cannot be reactivated using this workflow",
+        400
+      );
+    }
+
+    if (
+      user.accountStatus !==
+      "DISABLED"
+    ) {
+      throw new AppError(
+        "Only disabled accounts can be reactivated",
+        400
+      );
+    }
+
+    const updatedUser =
+      await prisma.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          accountStatus: "ACTIVE",
         },
         select: userListSelect,
       });

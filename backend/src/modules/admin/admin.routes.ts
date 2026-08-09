@@ -25,6 +25,7 @@ router.get("/audit-logs/:auditLogId", adminAuditController.getAuditLogDetail);
 
 router.get("/users", adminController.listUsers);
 router.patch("/users/:userId/suspend", adminController.suspendUser);
+router.patch("/users/:userId/reactivate", adminController.reactivateUser);
 
 router.get("/verifications/doctors", adminController.listDoctorVerifications);
 router.get("/verifications/doctors/:userId", adminController.getDoctorVerification);

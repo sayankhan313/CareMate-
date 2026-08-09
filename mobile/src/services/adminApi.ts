@@ -238,6 +238,7 @@ export type AdminMedicineReviewPoolReleaseResult = {
 
 export type UserListResult = { users: AdminUser[] };
 export type UserSuspendResult = { user: AdminUser };
+export type UserReactivateResult = { user: AdminUser };
 
 export type DoctorVerificationListResult = {
   status: AdminAccountStatus;
@@ -514,6 +515,19 @@ export const adminApi = {
     if (!response.ok) throw new Error(getErrorMessage(result));
 
     return result.data as UserSuspendResult;
+  },
+
+  async reactivateUser(userId: string) {
+    const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/reactivate`, {
+      method: "PATCH",
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({}),
+    });
+
+    const result: ApiResponse<UserReactivateResult> | any = await response.json();
+    if (!response.ok) throw new Error(getErrorMessage(result));
+
+    return result.data as UserReactivateResult;
   },
 
   async listDoctorVerifications(status: AdminAccountStatus = "PENDING_VERIFICATION") {
