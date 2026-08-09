@@ -50,6 +50,7 @@ import {
 import { API_BASE_URL } from "../../constants/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
+import { patientSettingsApi, type ReminderSettings } from "../../services/patientSettingsApi";
 import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
@@ -858,6 +859,13 @@ export const MedicinesScreen =
     const { t } = useLanguage();
 
     const [
+      defaultSnoozeMinutes,
+      setDefaultSnoozeMinutes,
+    ] = useState<
+      ReminderSettings["defaultSnoozeMinutes"]
+    >(10);
+
+    const [
       selectedTab,
       setSelectedTab,
     ] =
@@ -1014,6 +1022,23 @@ export const MedicinesScreen =
         []
       );
 
+    const loadReminderSettings =
+      useCallback(
+        async () => {
+          try {
+            const result =
+              await patientSettingsApi.getReminderSettings();
+
+            setDefaultSnoozeMinutes(
+              result.settings.defaultSnoozeMinutes
+            );
+          } catch {
+            return;
+          }
+        },
+        []
+      );
+
     const fetchMedicines =
       useCallback(
         async (
@@ -1135,9 +1160,12 @@ export const MedicinesScreen =
         );
 
         void loadReviewSummary();
+
+        void loadReminderSettings();
       }, [
         fetchMedicines,
         loadReviewSummary,
+        loadReminderSettings,
       ])
     );
 
@@ -1149,11 +1177,13 @@ export const MedicinesScreen =
               "refresh"
             ),
             loadReviewSummary(),
+            loadReminderSettings(),
           ]);
         },
         [
           fetchMedicines,
           loadReviewSummary,
+          loadReminderSettings,
         ]
       );
 
@@ -1299,7 +1329,7 @@ export const MedicinesScreen =
           const snoozedUntil =
             new Date(
               Date.now() +
-                30 *
+                defaultSnoozeMinutes *
                   60 *
                   1000
             ).toISOString();

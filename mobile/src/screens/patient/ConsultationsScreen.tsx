@@ -32,6 +32,7 @@ import {
   UserPlus,
   Video,
   X,
+  XCircle,
 } from "lucide-react-native";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -40,6 +41,7 @@ import {
   type CreateManualConsultationPayload,
   type PatientAppointmentSlot,
   type PatientCalendarDate,
+  type RescheduleConsultationPayload,
 } from "../../services/consultationsApi";
 import { doctorAssignmentApi, type AssignedDoctor } from "../../services/doctorAssignmentApi";
 import type { Consultation } from "../../services/safetyApi";
@@ -188,6 +190,10 @@ const canJoinConsultation = (status: string) => {
   return status === "ACCEPTED" || status === "IN_PROGRESS";
 };
 
+const canManageAppointment = (consultation: Consultation) => {
+  return consultation.type === "MANUAL" && (consultation.status === "PENDING" || consultation.status === "ACCEPTED");
+};
+
 const getReasonLabel = (option: string, t: Translate) => {
   if (option === "High blood pressure") return t("consultations.reasonHighBP");
   if (option === "Chest discomfort") return t("consultations.reasonChest");
@@ -203,6 +209,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   const { t, locale } = useLanguage();
   const rootNavigation = navigation.getParent<any>();
   const slotRequestIdRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
 
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [assignedDoctors, setAssignedDoctors] = useState<AssignedDoctor[]>([]);
@@ -219,6 +226,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [cancellingConsultationId, setCancellingConsultationId] = useState<string | null>(null);
 
   const [screenError, setScreenError] = useState("");
   const [availabilityError, setAvailabilityError] = useState("");
@@ -226,6 +234,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
   const [selectedReason, setSelectedReason] = useState(REASON_OPTIONS[0]);
   const [notes, setNotes] = useState("");
   const [activeDropdown, setActiveDropdown] = useState<DropdownType | null>(null);
+  const [reschedulingConsultation, setReschedulingConsultation] = useState<Consultation | null>(null);
 
   const selectedDoctor = useMemo(() => {
     return assignedDoctors.find((assignment) => assignment.doctor.id === selectedDoctorId);
@@ -385,6 +394,11 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
   const selectDoctor = useCallback(
     (doctorId: string) => {
+      if (reschedulingConsultation) {
+        setActiveDropdown(null);
+        return;
+      }
+
       if (doctorId !== selectedDoctorId) {
         slotRequestIdRef.current += 1;
         setCurrentMonth(getMonthString());
@@ -396,7 +410,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
       setActiveDropdown(null);
     },
-    [selectedDoctorId]
+    [reschedulingConsultation, selectedDoctorId]
   );
 
   const handleMonthChange = useCallback(
@@ -457,36 +471,113 @@ const ConsultationsScreen = ({ navigation }: Props) => {
     [availabilityByDate, selectedDoctorId]
   );
 
+  const stopRescheduling = useCallback(() => {
+    slotRequestIdRef.current += 1;
+    setReschedulingConsultation(null);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    setAvailableSlots([]);
+    setAvailabilityError("");
+    setCurrentMonth(getMonthString());
+  }, []);
+
+  const startRescheduling = useCallback(
+    (consultation: Consultation) => {
+      if (!canManageAppointment(consultation)) return;
+
+      if (!consultation.doctorId) {
+        Alert.alert("Unable to reschedule", "This consultation no longer has an assigned doctor.");
+        return;
+      }
+
+      const assignment = assignedDoctors.find((item) => item.doctor.id === consultation.doctorId);
+
+      if (!assignment) {
+        Alert.alert(
+          "Unable to reschedule",
+          "This doctor is no longer assigned to your account. Please create a new consultation request."
+        );
+        return;
+      }
+
+      const existingDate = consultation.preferredAt ? new Date(consultation.preferredAt) : null;
+
+      slotRequestIdRef.current += 1;
+      setReschedulingConsultation(consultation);
+      setSelectedDoctorId(consultation.doctorId);
+      setSelectedDate(null);
+      setSelectedSlot(null);
+      setAvailableSlots([]);
+      setAvailabilityError("");
+      setActiveDropdown(null);
+
+      if (existingDate && !Number.isNaN(existingDate.getTime())) setCurrentMonth(getMonthString(existingDate));
+      else setCurrentMonth(getMonthString());
+
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 170, animated: true });
+      });
+    },
+    [assignedDoctors]
+  );
+
   const sendConsultationRequest = useCallback(async () => {
     if (isSendingRequest) return;
 
     if (!selectedDoctorId) {
-      Alert.alert(
-        t("consultations.selectDoctorTitle"),
-        t("consultations.selectDoctorText")
-      );
+      Alert.alert(t("consultations.selectDoctorTitle"), t("consultations.selectDoctorText"));
       return;
     }
 
     if (!selectedDate) {
-      Alert.alert(
-        t("consultations.selectPreferredDate"),
-        t("consultations.selectPreferredDate")
-      );
+      Alert.alert(t("consultations.selectPreferredDate"), t("consultations.selectPreferredDate"));
       return;
     }
 
     if (!selectedSlot) {
-      Alert.alert(
-        t("consultations.selectPreferredTime"),
-        t("consultations.selectPreferredTime")
-      );
+      Alert.alert(t("consultations.selectPreferredTime"), t("consultations.selectPreferredTime"));
       return;
     }
 
     try {
       setIsSendingRequest(true);
       setScreenError("");
+
+      if (reschedulingConsultation) {
+        const payload: RescheduleConsultationPayload = {
+          preferredDate: formatDateForBackend(selectedDate),
+          preferredTime: selectedSlot.time,
+        };
+
+        const result = await consultationsApi.rescheduleConsultation(reschedulingConsultation.id, payload);
+
+        setConsultations((currentConsultations) =>
+          currentConsultations.map((consultation) =>
+            consultation.id === result.consultation.id ? result.consultation : consultation
+          )
+        );
+
+        const doctorDisplayName = selectedDoctor?.doctor.fullName || result.consultation.doctorName;
+
+        Alert.alert(
+          "Appointment rescheduled",
+          doctorDisplayName
+            ? `${formatDoctorName(doctorDisplayName)} will need to review the updated appointment time again.`
+            : "Your doctor will need to review the updated appointment time again."
+        );
+
+        setReschedulingConsultation(null);
+        setSelectedDate(null);
+        setSelectedSlot(null);
+        setAvailableSlots([]);
+
+        await Promise.all([
+          loadScreenData("refresh"),
+          loadDoctorAvailability(selectedDoctorId, currentMonth),
+        ]);
+
+        return;
+      }
 
       const payload: CreateManualConsultationPayload = {
         doctorId: selectedDoctorId,
@@ -500,9 +591,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
       setConsultations((currentConsultations) => [
         result.consultation,
-        ...currentConsultations.filter(
-          (consultation) => consultation.id !== result.consultation.id
-        ),
+        ...currentConsultations.filter((consultation) => consultation.id !== result.consultation.id),
       ]);
 
       setNotes("");
@@ -514,9 +603,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
       Alert.alert(
         t("consultations.requestSent"),
         selectedDoctor
-          ? t("consultations.requestSentDoctor", {
-              doctor: formatDoctorName(selectedDoctor.doctor.fullName),
-            })
+          ? t("consultations.requestSentDoctor", { doctor: formatDoctorName(selectedDoctor.doctor.fullName) })
           : t("consultations.requestSentGeneric")
       );
 
@@ -526,18 +613,20 @@ const ConsultationsScreen = ({ navigation }: Props) => {
       ]);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : t("consultations.unableSend");
+        error instanceof Error
+          ? error.message
+          : reschedulingConsultation
+            ? "Unable to reschedule appointment."
+            : t("consultations.unableSend");
 
       setScreenError(message);
 
       Alert.alert(
-        t("consultations.requestFailed"),
+        reschedulingConsultation ? "Reschedule failed" : t("consultations.requestFailed"),
         message
       );
 
-      if (selectedDoctorId) {
-        await loadDoctorAvailability(selectedDoctorId, currentMonth);
-      }
+      if (selectedDoctorId) await loadDoctorAvailability(selectedDoctorId, currentMonth);
     } finally {
       setIsSendingRequest(false);
     }
@@ -547,6 +636,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
     loadDoctorAvailability,
     loadScreenData,
     notes,
+    reschedulingConsultation,
     selectedDate,
     selectedDoctor,
     selectedDoctorId,
@@ -554,6 +644,59 @@ const ConsultationsScreen = ({ navigation }: Props) => {
     selectedSlot,
     t,
   ]);
+
+  const cancelConsultation = useCallback(
+    async (consultation: Consultation) => {
+      if (cancellingConsultationId || !canManageAppointment(consultation)) return;
+
+      try {
+        setCancellingConsultationId(consultation.id);
+
+        const result = await consultationsApi.cancelConsultation(consultation.id);
+
+        setConsultations((current) =>
+          current.map((item) => item.id === result.consultation.id ? result.consultation : item)
+        );
+
+        if (reschedulingConsultation?.id === consultation.id) stopRescheduling();
+
+        Alert.alert(
+          "Appointment cancelled",
+          "Your appointment has been cancelled and the doctor has been notified."
+        );
+
+        await refreshScreen();
+      } catch (error) {
+        Alert.alert(
+          "Unable to cancel appointment",
+          error instanceof Error ? error.message : "The appointment could not be cancelled."
+        );
+      } finally {
+        setCancellingConsultationId(null);
+      }
+    },
+    [cancellingConsultationId, refreshScreen, reschedulingConsultation?.id, stopRescheduling]
+  );
+
+  const confirmCancelConsultation = useCallback(
+    (consultation: Consultation) => {
+      const doctorName = consultation.doctorName ? formatDoctorName(consultation.doctorName) : "your doctor";
+
+      Alert.alert(
+        "Cancel appointment?",
+        `Cancel this consultation with ${doctorName}? The appointment slot will become available again.`,
+        [
+          { text: "Keep appointment", style: "cancel" },
+          {
+            text: "Cancel appointment",
+            style: "destructive",
+            onPress: () => void cancelConsultation(consultation),
+          },
+        ]
+      );
+    },
+    [cancelConsultation]
+  );
 
   const openActiveCallsScreen = useCallback(() => {
     if (!rootNavigation) {
@@ -578,6 +721,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
@@ -632,9 +776,47 @@ const ConsultationsScreen = ({ navigation }: Props) => {
           <View style={styles.formPanel}>
             <SectionHeader
               icon={<Stethoscope size={21} color={PRIMARY} strokeWidth={2.6} />}
-              title={t("consultations.requestTitle")}
-              subtitle={t("consultations.requestSubtitle")}
+              title={reschedulingConsultation ? "Reschedule appointment" : t("consultations.requestTitle")}
+              subtitle={
+                reschedulingConsultation
+                  ? "Choose a new available date and time with the same doctor."
+                  : t("consultations.requestSubtitle")
+              }
             />
+
+            {reschedulingConsultation ? (
+              <View style={styles.rescheduleBanner}>
+                <View style={styles.rescheduleBannerIcon}>
+                  <CalendarDays size={20} color={PRIMARY} strokeWidth={2.6} />
+                </View>
+
+                <View style={styles.rescheduleBannerText}>
+                  <Text style={styles.rescheduleBannerTitle}>Updating existing appointment</Text>
+                  <Text style={styles.rescheduleBannerSubtitle}>
+                    {reschedulingConsultation.doctorName
+                      ? formatDoctorName(reschedulingConsultation.doctorName)
+                      : "Assigned doctor"}
+                    {" • "}
+                    {formatConsultationDate(reschedulingConsultation.preferredAt, t, locale)}
+                  </Text>
+
+                  {reschedulingConsultation.status === "ACCEPTED" ? (
+                    <Text style={styles.rescheduleWarningText}>
+                      The doctor previously accepted this appointment. After rescheduling, the updated time returns to Requested and must be accepted again.
+                    </Text>
+                  ) : null}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.stopRescheduleButton}
+                  activeOpacity={0.85}
+                  onPress={stopRescheduling}
+                  disabled={isSendingRequest}
+                >
+                  <X size={18} color={PRIMARY_DARK} strokeWidth={2.6} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {assignedDoctors.length === 0 ? (
               <View style={styles.noDoctorPanel}>
@@ -643,13 +825,8 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                 </View>
 
                 <View style={styles.noDoctorTextBlock}>
-                  <Text style={styles.noDoctorTitle}>
-                    {t("consultations.noDoctors")}
-                  </Text>
-
-                  <Text style={styles.noDoctorText}>
-                    {t("consultations.noDoctorsText")}
-                  </Text>
+                  <Text style={styles.noDoctorTitle}>{t("consultations.noDoctors")}</Text>
+                  <Text style={styles.noDoctorText}>{t("consultations.noDoctorsText")}</Text>
                 </View>
 
                 <TouchableOpacity
@@ -659,6 +836,29 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                 >
                   <UserPlus size={17} color={SURFACE} strokeWidth={2.5} />
                 </TouchableOpacity>
+              </View>
+            ) : reschedulingConsultation ? (
+              <View style={styles.lockedFieldBlock}>
+                <Text style={styles.inputLabel}>{t("consultations.assignedDoctor")}</Text>
+
+                <View style={styles.lockedField}>
+                  <View style={styles.selectIcon}>
+                    <Stethoscope size={19} color={PRIMARY} strokeWidth={2.6} />
+                  </View>
+
+                  <View style={styles.selectTextBlock}>
+                    <Text style={styles.selectText}>
+                      {selectedDoctor
+                        ? formatDoctorName(selectedDoctor.doctor.fullName)
+                        : reschedulingConsultation.doctorName
+                          ? formatDoctorName(reschedulingConsultation.doctorName)
+                          : "Assigned doctor"}
+                    </Text>
+                    <Text style={styles.selectHelperText}>Doctor remains unchanged for rescheduling</Text>
+                  </View>
+
+                  <CheckCircle2 size={20} color={SUCCESS} strokeWidth={2.6} />
+                </View>
               </View>
             ) : (
               <SelectField
@@ -675,13 +875,27 @@ const ConsultationsScreen = ({ navigation }: Props) => {
               />
             )}
 
-            <SelectField
-              label={t("consultations.reason")}
-              value={getReasonLabel(selectedReason, t)}
-              icon={<MessageSquareText size={19} color={PRIMARY} strokeWidth={2.6} />}
-              placeholder={false}
-              onPress={() => setActiveDropdown("reason")}
-            />
+            {reschedulingConsultation ? (
+              <View style={styles.lockedFieldBlock}>
+                <Text style={styles.inputLabel}>{t("consultations.reason")}</Text>
+
+                <View style={styles.lockedReasonPanel}>
+                  <MessageSquareText size={18} color={PRIMARY} strokeWidth={2.6} />
+                  <View style={styles.lockedReasonText}>
+                    <Text style={styles.lockedReasonValue}>{getReasonLabel(reschedulingConsultation.reason, t)}</Text>
+                    <Text style={styles.lockedReasonHelper}>Reason and notes remain unchanged</Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <SelectField
+                label={t("consultations.reason")}
+                value={getReasonLabel(selectedReason, t)}
+                icon={<MessageSquareText size={19} color={PRIMARY} strokeWidth={2.6} />}
+                placeholder={false}
+                onPress={() => setActiveDropdown("reason")}
+              />
+            )}
 
             <View style={styles.calendarSection}>
               <View style={styles.calendarSectionHeader}>
@@ -691,11 +905,11 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
                 <View style={styles.calendarSectionText}>
                   <Text style={styles.inputLabelNoMargin}>
-                    {t("consultations.preferredDate")}
+                    {reschedulingConsultation ? "New appointment date" : t("consultations.preferredDate")}
                   </Text>
 
                   <Text style={styles.calendarHelper}>
-                    Select an available appointment date
+                    {reschedulingConsultation ? "Select a different available appointment slot" : "Select an available appointment date"}
                   </Text>
                 </View>
               </View>
@@ -767,7 +981,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                         </Text>
 
                         <Text style={styles.noAvailabilityText}>
-                          Try another month or choose another assigned doctor.
+                          {reschedulingConsultation ? "Try another month." : "Try another month or choose another assigned doctor."}
                         </Text>
                       </View>
                     </View>
@@ -784,7 +998,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
                     <View style={styles.selectedDateTextBlock}>
                       <Text style={styles.selectedDateLabel}>
-                        {t("consultations.preferredDate")}
+                        {reschedulingConsultation ? "New appointment date" : t("consultations.preferredDate")}
                       </Text>
 
                       <Text style={styles.selectedDateValue}>
@@ -799,7 +1013,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                   </View>
 
                   <Text style={styles.timeHeading}>
-                    {t("consultations.preferredTime")}
+                    {reschedulingConsultation ? "New appointment time" : t("consultations.preferredTime")}
                   </Text>
 
                   {isLoadingSlots ? (
@@ -865,19 +1079,21 @@ const ConsultationsScreen = ({ navigation }: Props) => {
               ) : null}
             </View>
 
-            <Text style={styles.inputLabel}>
-              {t("consultations.notesOptional")}
-            </Text>
+            {!reschedulingConsultation ? (
+              <>
+                <Text style={styles.inputLabel}>{t("consultations.notesOptional")}</Text>
 
-            <TextInput
-              style={styles.notesInput}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder={t("consultations.notesPlaceholder")}
-              placeholderTextColor="#A8B0C2"
-              multiline
-              textAlignVertical="top"
-            />
+                <TextInput
+                  style={styles.notesInput}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder={t("consultations.notesPlaceholder")}
+                  placeholderTextColor="#A8B0C2"
+                  multiline
+                  textAlignVertical="top"
+                />
+              </>
+            ) : null}
 
             <TouchableOpacity
               style={[
@@ -902,13 +1118,30 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                 <ActivityIndicator size="small" color={SURFACE} />
               ) : (
                 <>
-                  <Send size={19} color={SURFACE} strokeWidth={2.6} />
+                  {reschedulingConsultation ? (
+                    <CalendarDays size={19} color={SURFACE} strokeWidth={2.6} />
+                  ) : (
+                    <Send size={19} color={SURFACE} strokeWidth={2.6} />
+                  )}
+
                   <Text style={styles.primaryButtonText}>
-                    {t("common.sendRequest")}
+                    {reschedulingConsultation ? "Confirm new appointment" : t("common.sendRequest")}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
+
+            {reschedulingConsultation ? (
+              <TouchableOpacity
+                style={styles.cancelRescheduleButton}
+                activeOpacity={0.85}
+                disabled={isSendingRequest}
+                onPress={stopRescheduling}
+              >
+                <X size={17} color={PRIMARY_DARK} strokeWidth={2.6} />
+                <Text style={styles.cancelRescheduleText}>Keep current appointment</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {screenError ? (
@@ -959,7 +1192,11 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                   key={consultation.id}
                   consultation={consultation}
                   isLast={index === activeConsultations.length - 1}
+                  isCancelling={cancellingConsultationId === consultation.id}
+                  isBeingRescheduled={reschedulingConsultation?.id === consultation.id}
                   onOpenActiveCalls={openActiveCallsScreen}
+                  onReschedule={() => startRescheduling(consultation)}
+                  onCancel={() => confirmCancelConsultation(consultation)}
                 />
               ))}
             </View>
@@ -996,7 +1233,11 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                   key={consultation.id}
                   consultation={consultation}
                   isLast={index === pastConsultations.length - 1}
+                  isCancelling={false}
+                  isBeingRescheduled={false}
                   onOpenActiveCalls={() => undefined}
+                  onReschedule={() => undefined}
+                  onCancel={() => undefined}
                 />
               ))}
             </View>
@@ -1247,102 +1488,108 @@ const SelectField = ({
 const ConsultationRow = ({
   consultation,
   isLast,
+  isCancelling,
+  isBeingRescheduled,
   onOpenActiveCalls,
+  onReschedule,
+  onCancel,
 }: {
   consultation: Consultation;
   isLast: boolean;
+  isCancelling: boolean;
+  isBeingRescheduled: boolean;
   onOpenActiveCalls: () => void;
+  onReschedule: () => void;
+  onCancel: () => void;
 }) => {
   const { t, locale } = useLanguage();
   const tone = getStatusTone(consultation.status);
   const canOpenActiveCall = canJoinConsultation(consultation.status);
+  const canManage = canManageAppointment(consultation);
   const doctorName = consultation.doctorName;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.consultationRow,
-        isLast ? styles.rowLast : undefined,
-      ]}
-      activeOpacity={canOpenActiveCall ? 0.84 : 1}
-      onPress={canOpenActiveCall ? onOpenActiveCalls : undefined}
-      disabled={!canOpenActiveCall}
-    >
-      <View
-        style={[
-          styles.statusIconCircle,
-          { backgroundColor: tone.background },
-        ]}
-      >
-        <Text style={[styles.statusIconText, { color: tone.text }]}>
-          {tone.icon}
-        </Text>
-      </View>
-
-      <View style={styles.consultationInfo}>
-        <Text style={styles.consultationTitle} numberOfLines={1}>
-          {getConsultationTypeLabel(consultation.type, t)}
-        </Text>
-
-        {doctorName ? (
-          <Text style={styles.consultationDoctor} numberOfLines={1}>
-            {formatDoctorName(doctorName)}
-          </Text>
-        ) : null}
-
-        <Text style={styles.consultationSubtitle} numberOfLines={1}>
-          {formatConsultationDate(
-            consultation.preferredAt || consultation.createdAt,
-            t,
-            locale
-          )}
-        </Text>
-
-        <Text style={styles.consultationHint} numberOfLines={2}>
-          {canOpenActiveCall
-            ? t("consultations.tapActiveCall")
-            : getStatusHint(consultation.status, t)}
-        </Text>
-
-        {consultation.reason ? (
-          <Text style={styles.consultationReason} numberOfLines={2}>
-            {consultation.reason}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.consultationActionColumn}>
-        <View
-          style={[
-            styles.consultationBadge,
-            { backgroundColor: tone.background },
-          ]}
-        >
-          <View
-            style={[
-              styles.consultationBadgeDot,
-              { backgroundColor: tone.dot },
-            ]}
-          />
-
-          <Text
-            style={[
-              styles.consultationBadgeText,
-              { color: tone.text },
-            ]}
-          >
-            {getStatusLabel(consultation.status, t)}
-          </Text>
+    <View style={[styles.consultationRow, isLast ? styles.rowLast : undefined]}>
+      <View style={styles.consultationMainRow}>
+        <View style={[styles.statusIconCircle, { backgroundColor: tone.background }]}>
+          <Text style={[styles.statusIconText, { color: tone.text }]}>{tone.icon}</Text>
         </View>
 
-        {canOpenActiveCall ? (
-          <View style={styles.openCallIndicator}>
-            <Text style={styles.openCallText}>{t("common.open")}</Text>
-            <ChevronRight size={17} color={PRIMARY} strokeWidth={2.7} />
+        <View style={styles.consultationInfo}>
+          <Text style={styles.consultationTitle} numberOfLines={1}>
+            {getConsultationTypeLabel(consultation.type, t)}
+          </Text>
+
+          {doctorName ? (
+            <Text style={styles.consultationDoctor} numberOfLines={1}>
+              {formatDoctorName(doctorName)}
+            </Text>
+          ) : null}
+
+          <Text style={styles.consultationSubtitle} numberOfLines={1}>
+            {formatConsultationDate(consultation.preferredAt || consultation.createdAt, t, locale)}
+          </Text>
+
+          <Text style={styles.consultationHint} numberOfLines={2}>
+            {canOpenActiveCall ? t("consultations.tapActiveCall") : getStatusHint(consultation.status, t)}
+          </Text>
+
+          {consultation.reason ? (
+            <Text style={styles.consultationReason} numberOfLines={2}>
+              {consultation.reason}
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.consultationActionColumn}>
+          <View style={[styles.consultationBadge, { backgroundColor: tone.background }]}>
+            <View style={[styles.consultationBadgeDot, { backgroundColor: tone.dot }]} />
+            <Text style={[styles.consultationBadgeText, { color: tone.text }]}>
+              {getStatusLabel(consultation.status, t)}
+            </Text>
           </View>
-        ) : null}
+        </View>
       </View>
-    </TouchableOpacity>
+
+      {canOpenActiveCall || canManage ? (
+        <View style={styles.appointmentActions}>
+          {canOpenActiveCall ? (
+            <TouchableOpacity style={styles.openCallButton} activeOpacity={0.85} onPress={onOpenActiveCalls}>
+              <Video size={16} color={PRIMARY} strokeWidth={2.6} />
+              <Text style={styles.openCallButtonText}>{t("common.open")}</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {canManage ? (
+            <TouchableOpacity
+              style={[styles.rescheduleButton, isBeingRescheduled ? styles.rescheduleButtonActive : undefined]}
+              activeOpacity={0.85}
+              onPress={onReschedule}
+              disabled={isCancelling}
+            >
+              <CalendarDays size={16} color={PRIMARY_DARK} strokeWidth={2.6} />
+              <Text style={styles.rescheduleButtonText}>{isBeingRescheduled ? "Rescheduling" : "Reschedule"}</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {canManage ? (
+            <TouchableOpacity
+              style={[styles.cancelAppointmentButton, isCancelling ? styles.disabledButton : undefined]}
+              activeOpacity={0.85}
+              onPress={onCancel}
+              disabled={isCancelling}
+            >
+              {isCancelling ? (
+                <ActivityIndicator size="small" color={DANGER} />
+              ) : (
+                <XCircle size={16} color={DANGER} strokeWidth={2.6} />
+              )}
+              <Text style={styles.cancelAppointmentButtonText}>{isCancelling ? "Cancelling" : "Cancel"}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
   );
 };
 
@@ -1462,6 +1709,40 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  rescheduleBanner: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 12,
+  },
+
+  rescheduleBannerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  rescheduleBannerText: { flex: 1 },
+  rescheduleBannerTitle: { color: PRIMARY_DARK, fontSize: 13, fontWeight: "700" },
+  rescheduleBannerSubtitle: { color: TEXT, fontSize: 11, fontWeight: "600", lineHeight: 16, marginTop: 3 },
+  rescheduleWarningText: { color: "#A85A13", fontSize: 10, fontWeight: "600", lineHeight: 15, marginTop: 6 },
+
+  stopRescheduleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+
   noDoctorPanel: {
     backgroundColor: PRIMARY_LIGHT,
     borderRadius: 13,
@@ -1503,6 +1784,7 @@ const styles = StyleSheet.create({
   },
 
   selectFieldBlock: { marginTop: 13 },
+  lockedFieldBlock: { marginTop: 13 },
 
   inputLabel: {
     color: TEXT,
@@ -1526,6 +1808,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+
+  lockedField: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  lockedReasonPanel: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  lockedReasonText: { flex: 1, marginLeft: 10 },
+  lockedReasonValue: { color: TEXT, fontSize: 14, fontWeight: "700" },
+  lockedReasonHelper: { color: MUTED, fontSize: 10, fontWeight: "600", marginTop: 3 },
 
   selectLeft: {
     flex: 1,
@@ -1866,6 +2170,23 @@ const styles = StyleSheet.create({
     marginLeft: 9,
   },
 
+  cancelRescheduleButton: {
+    backgroundColor: PRIMARY_LIGHT,
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    marginTop: 9,
+  },
+
+  cancelRescheduleText: {
+    color: PRIMARY_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
   disabledButton: { opacity: 0.55 },
 
   errorPanel: {
@@ -1934,11 +2255,14 @@ const styles = StyleSheet.create({
   },
 
   consultationRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
     paddingVertical: 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
+  },
+
+  consultationMainRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
 
   rowLast: { borderBottomWidth: 0 },
@@ -2021,18 +2345,73 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  openCallIndicator: {
+  appointmentActions: {
     flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    paddingVertical: 3,
+    flexWrap: "wrap",
+    marginTop: 11,
+    marginHorizontal: -3,
   },
 
-  openCallText: {
+  openCallButton: {
+    flexGrow: 1,
+    minWidth: "29%",
+    minHeight: 40,
+    borderRadius: 11,
+    backgroundColor: PRIMARY_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 3,
+    paddingHorizontal: 8,
+  },
+
+  openCallButtonText: {
     color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "700",
-    marginRight: 2,
+    marginLeft: 5,
+  },
+
+  rescheduleButton: {
+    flexGrow: 1,
+    minWidth: "29%",
+    minHeight: 40,
+    borderRadius: 11,
+    backgroundColor: PRIMARY_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 3,
+    paddingHorizontal: 8,
+  },
+
+  rescheduleButtonActive: { backgroundColor: "#DDE8FF" },
+
+  rescheduleButtonText: {
+    color: PRIMARY_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 5,
+  },
+
+  cancelAppointmentButton: {
+    flexGrow: 1,
+    minWidth: "29%",
+    minHeight: 40,
+    borderRadius: 11,
+    backgroundColor: DANGER_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 3,
+    paddingHorizontal: 8,
+  },
+
+  cancelAppointmentButtonText: {
+    color: DANGER,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 5,
   },
 
   emptyPanel: {

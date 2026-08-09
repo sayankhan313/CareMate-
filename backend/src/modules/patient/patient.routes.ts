@@ -64,8 +64,10 @@ router.post("/safety-alerts/:alertId/escalate", safetyController.escalateSafetyA
 
 router.post("/consultations/manual", consultationController.createManualConsultation);
 router.get("/consultations", consultationController.listConsultations);
-router.get("/consultations/:consultationId", consultationController.getConsultationById);
+router.post("/consultations/:consultationId/cancel", consultationController.cancelConsultation);
+router.patch("/consultations/:consultationId/reschedule", consultationController.rescheduleConsultation);
 router.get("/consultations/:consultationId/join", consultationController.getPatientJoinConfig);
+router.get("/consultations/:consultationId", consultationController.getConsultationById);
 
 router.post("/medicines", medicineController.createMedicine);
 router.get("/medicines", medicineController.listMedicines);

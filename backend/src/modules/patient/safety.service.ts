@@ -33,33 +33,41 @@ const formatSafetyAlert = (alert: any) => ({
 
 const getActivePrimaryDoctor = async (patientId: string) => {
   const assignment = await prisma.patientDoctorAssignment.findFirst({
-    where: { patientId, status: "ACTIVE", assignmentType: "PRIMARY", doctor: { is: { role: "DOCTOR", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } } },
+    where: {
+      patientId,
+      status: "ACTIVE",
+      assignmentType: "PRIMARY",
+      doctor: {
+        is: {
+          role: "DOCTOR",
+          isEmailVerified: true,
+          accountStatus: { in: ["ACTIVE", "APPROVED"] },
+        },
+      },
+    },
     include: { doctor: true },
   });
 
   return assignment?.doctor || null;
 };
 
-const getActiveAssignedDoctors = async (patientId: string) => {
-  const assignments = await prisma.patientDoctorAssignment.findMany({
-    where: { patientId, status: "ACTIVE", doctor: { is: { role: "DOCTOR", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } } },
-    select: { doctor: { select: { id: true, fullName: true, email: true } } },
-  });
-
-  const uniqueDoctors = new Map(assignments.map(assignment => [assignment.doctor.id, assignment.doctor]));
-
-  return [...uniqueDoctors.values()];
-};
-
 const getSafetyPreferences = async (patientId: string) => prisma.patientSafetyPreference.upsert({
   where: { patientId },
   create: { patientId },
   update: {},
-  select: { countdownSeconds: true, notifyAssignedDoctors: true, shareLatestVitalsOnEscalation: true, notifyEmergencyContact: true },
+  select: {
+    countdownSeconds: true,
+    notifyAssignedDoctors: true,
+    shareLatestVitalsOnEscalation: true,
+    notifyEmergencyContact: true,
+  },
 });
 
 const getSafetyAlertForPatient = async (patientId: string, alertId: string) => {
-  const alert = await prisma.safetyAlert.findFirst({ where: { id: alertId, patientId }, include: safetyAlertInclude });
+  const alert = await prisma.safetyAlert.findFirst({
+    where: { id: alertId, patientId },
+    include: safetyAlertInclude,
+  });
 
   if (!alert) throw new AppError("Safety alert not found.", 404);
 
@@ -84,68 +92,68 @@ const buildVitalData = (vitalReading: any) => {
   };
 };
 
-const notifyAssignedDoctorsOfEscalation = async ({
+const notifyPrimaryDoctorOfEscalation = async ({
   patientId,
+  primaryDoctor,
   alert,
   consultationId,
   shareLatestVitals,
 }: {
   patientId: string;
+  primaryDoctor: { id: string; fullName: string; email: string };
   alert: any;
   consultationId?: string | null;
   shareLatestVitals: boolean;
 }) => {
   try {
-    const [patient, doctors] = await Promise.all([
-      prisma.user.findFirst({ where: { id: patientId, role: "PATIENT" }, select: { id: true, fullName: true } }),
-      getActiveAssignedDoctors(patientId),
-    ]);
+    const patient = await prisma.user.findFirst({
+      where: { id: patientId, role: "PATIENT" },
+      select: { id: true, fullName: true },
+    });
 
-    if (!patient || doctors.length === 0) return;
+    if (!patient) return;
+
+    const existingNotification = await prisma.userNotification.findFirst({
+      where: {
+        userId: primaryDoctor.id,
+        type: "SAFETY_ALERT_ESCALATED",
+        entityType: "SAFETY_ALERT",
+        entityId: alert.id,
+      },
+      select: { id: true },
+    });
+
+    if (existingNotification) return;
 
     const vitalData = shareLatestVitals ? buildVitalData(alert.vitalReading) : null;
 
-    const results = await Promise.allSettled(
-      doctors.map(async doctor => {
-        const existingNotification = await prisma.userNotification.findFirst({
-          where: { userId: doctor.id, type: "SAFETY_ALERT_ESCALATED", entityType: "SAFETY_ALERT", entityId: alert.id },
-          select: { id: true },
-        });
-
-        if (existingNotification) return existingNotification;
-
-        return notificationService.createAndSend({
-          userId: doctor.id,
-          type: "SAFETY_ALERT_ESCALATED",
-          title: "Critical Safety Alert",
-          body: `${patient.fullName} has escalated a Safety Response. Immediate review is required.`,
-          priority: "CRITICAL",
-          entityType: "SAFETY_ALERT",
-          entityId: alert.id,
-          targetScreen: "DoctorAlerts",
-          data: {
-            alertId: alert.id,
-            patientId: patient.id,
-            patientName: patient.fullName,
-            doctorId: doctor.id,
-            consultationId: consultationId || null,
-            vitalReadingId: alert.vitalReadingId || null,
-            vitalReading: vitalData,
-            reason: alert.reason,
-            escalatedAt: alert.escalatedAt,
-            source: "SAFETY_RESPONSE",
-          },
-        });
-      })
-    );
-
-    const failedCount = results.filter(result => result.status === "rejected").length;
-
-    if (failedCount > 0) {
-      console.warn(`${failedCount} assigned doctor Safety Response notification(s) could not be processed.`);
-    }
+    await notificationService.createAndSend({
+      userId: primaryDoctor.id,
+      type: "SAFETY_ALERT_ESCALATED",
+      title: "Critical Safety Alert",
+      body: `${patient.fullName} has escalated a Safety Response. Immediate review is required.`,
+      priority: "CRITICAL",
+      entityType: "SAFETY_ALERT",
+      entityId: alert.id,
+      targetScreen: "DoctorAlerts",
+      data: {
+        alertId: alert.id,
+        patientId: patient.id,
+        patientName: patient.fullName,
+        doctorId: primaryDoctor.id,
+        consultationId: consultationId || null,
+        vitalReadingId: alert.vitalReadingId || null,
+        vitalReading: vitalData,
+        reason: alert.reason,
+        escalatedAt: alert.escalatedAt,
+        source: "SAFETY_RESPONSE",
+      },
+    });
   } catch (error) {
-    console.warn("Unable to notify assigned doctors about Safety Response escalation:", error instanceof Error ? error.message : error);
+    console.warn(
+      "Unable to notify primary doctor about Safety Response escalation:",
+      error instanceof Error ? error.message : error,
+    );
   }
 };
 
@@ -227,7 +235,10 @@ export const safetyService = {
 
     const updatedAlert = await prisma.safetyAlert.update({
       where: { id: alert.id },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+      },
       include: safetyAlertInclude,
     });
 
@@ -251,7 +262,10 @@ export const safetyService = {
     ]);
 
     if (!primaryDoctor) {
-      throw new AppError("No active primary doctor is assigned. Please assign a primary doctor before escalation.", 400);
+      throw new AppError(
+        "No active primary doctor is assigned. Please assign a primary doctor before escalation.",
+        400,
+      );
     }
 
     const updatedAlert = await prisma.safetyAlert.update({
@@ -267,12 +281,13 @@ export const safetyService = {
     const consultationResult = await consultationService.createEmergencyConsultationFromAlert(
       patientId,
       updatedAlert.id,
-      primaryDoctor.id
+      primaryDoctor.id,
     );
 
     if (safetyPreferences.notifyAssignedDoctors) {
-      await notifyAssignedDoctorsOfEscalation({
+      await notifyPrimaryDoctorOfEscalation({
         patientId,
+        primaryDoctor,
         alert: updatedAlert,
         consultationId: consultationResult.consultation?.id || null,
         shareLatestVitals: safetyPreferences.shareLatestVitalsOnEscalation,

@@ -22,6 +22,11 @@ export type CreateManualConsultationInput = {
   notes?: string;
 };
 
+export type RescheduleConsultationInput = {
+  preferredDate: string;
+  preferredTime: string;
+};
+
 export type PatientAppointmentSlot = {
   time: string;
   startsAt: string;

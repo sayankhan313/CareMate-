@@ -87,6 +87,7 @@ export type DoctorUrgentAlert = {
     reason: string;
     createdAt: string;
   } | null;
+  canAcceptConsultation: boolean;
   canJoinCall: boolean;
 };
 
@@ -133,31 +134,17 @@ export type DoctorDashboardData = {
 };
 
 const getErrorMessage = (result: any) => {
-  if (typeof result?.message === "string") {
-    return result.message;
-  }
-
-  if (Array.isArray(result?.message)) {
-    return result.message[0]?.message || "Request failed.";
-  }
-
-  if (Array.isArray(result?.errors)) {
-    return result.errors[0]?.message || "Request failed.";
-  }
-
-  if (Array.isArray(result?.issues)) {
-    return result.issues[0]?.message || "Request failed.";
-  }
-
+  if (typeof result?.message === "string") return result.message;
+  if (Array.isArray(result?.message)) return result.message[0]?.message || "Request failed.";
+  if (Array.isArray(result?.errors)) return result.errors[0]?.message || "Request failed.";
+  if (Array.isArray(result?.issues)) return result.issues[0]?.message || "Request failed.";
   return "Request failed.";
 };
 
 const getAuthHeaders = async () => {
   const token = await tokenStorage.getToken();
 
-  if (!token) {
-    throw new Error("Please login again.");
-  }
+  if (!token) throw new Error("Please login again.");
 
   return {
     "Content-Type": "application/json",
@@ -172,8 +159,7 @@ export const doctorDashboardApi = {
       headers: await getAuthHeaders(),
     });
 
-    const result: ApiResponse<DoctorDashboardData> | any =
-      await response.json();
+    const result: ApiResponse<DoctorDashboardData> | any = await response.json();
 
     if (!response.ok || !result.success) {
       throw new Error(getErrorMessage(result));

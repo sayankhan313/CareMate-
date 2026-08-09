@@ -1,52 +1,18 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { CommonActions, useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import {
-  AlertTriangle,
-  Bell,
-  CalendarDays,
-  ChevronRight,
-  ClipboardList,
-  Clock3,
-  FileText,
-  HeartPulse,
-  LogOut,
-  MessageSquareText,
-  Pill,
-  RefreshCw,
-  ShieldCheck,
-  Stethoscope,
-  UserRound,
-  UsersRound,
-  Video,
-} from "lucide-react-native";
+import { AlertTriangle, Bell, CalendarDays, ChevronRight, ClipboardList, Clock3, FileText, HeartPulse, MessageSquareText, Pill, RefreshCw, ShieldCheck, Stethoscope, UserRound, UsersRound, Video } from "lucide-react-native";
 
 import { tokenStorage } from "../../services/tokenStorage";
 import { notificationApi } from "../../services/notificationApi";
 import { notificationEvents } from "../../services/notificationEvents";
-import {
-  doctorDashboardApi,
-  type DoctorDashboardData,
-  type DoctorDashboardPatient,
-  type DoctorUpcomingConsultation,
-  type DoctorUrgentAlert,
-} from "../../services/doctor/doctorDashboardApi";
+import { doctorDashboardApi, type DoctorDashboardData, type DoctorDashboardPatient, type DoctorUpcomingConsultation, type DoctorUrgentAlert } from "../../services/doctor/doctorDashboardApi";
 import { doctorReportsApi } from "../../services/doctor/doctorReportsApi";
 import { doctorMedicineReviewsApi } from "../../services/doctor/doctorMedicineReviewsApi";
+import { doctorConsultationsApi } from "../../services/doctor/doctorConsultationsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
 type DoctorDashboardScreenProps = BottomTabScreenProps<DoctorTabParamList, "Home">;
@@ -139,6 +105,8 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [joiningAlertId, setJoiningAlertId] = useState<string | null>(null);
+  const [acceptingAlertId, setAcceptingAlertId] = useState<string | null>(null);
 
   const routeUser = route.params?.user;
   const doctorName = dashboard?.doctor.fullName || routeUser?.fullName || "";
@@ -167,56 +135,42 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
     }
   }, []);
 
-  const loadDashboard = useCallback(
-    async (mode: "initial" | "refresh" = "initial") => {
-      try {
-        mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
-        setErrorMessage("");
+  const loadDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    try {
+      mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
+      setErrorMessage("");
 
-        const [dashboardData, reportQueue, poolReviewQueue, notificationData] = await Promise.all([
-          doctorDashboardApi.getDashboard(),
-          doctorReportsApi.listReportQueue("PENDING").catch(() => null),
-          doctorMedicineReviewsApi.listPoolReviews().catch(() => null),
-          notificationApi.getUnreadCount().catch(() => ({ unreadCount: 0 })),
-        ]);
+      const [dashboardData, reportQueue, poolReviewQueue, notificationData] = await Promise.all([
+        doctorDashboardApi.getDashboard(),
+        doctorReportsApi.listReportQueue("PENDING").catch(() => null),
+        doctorMedicineReviewsApi.listPoolReviews().catch(() => null),
+        notificationApi.getUnreadCount().catch(() => ({ unreadCount: 0 })),
+      ]);
 
-        setDashboard(dashboardData);
-        setPendingReportReviews(reportQueue?.summary?.pending || 0);
-        setPendingPoolReviews(poolReviewQueue?.summary?.awaitingReview || 0);
-        setNotificationUnreadCount(notificationData.unreadCount || 0);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to load doctor dashboard.";
-        setErrorMessage(message);
-        setPendingReportReviews(0);
-        setPendingPoolReviews(0);
+      setDashboard(dashboardData);
+      setPendingReportReviews(reportQueue?.summary?.pending || 0);
+      setPendingPoolReviews(poolReviewQueue?.summary?.awaitingReview || 0);
+      setNotificationUnreadCount(notificationData.unreadCount || 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load doctor dashboard.";
+      setErrorMessage(message);
+      setPendingReportReviews(0);
+      setPendingPoolReviews(0);
 
-        if (message.toLowerCase().includes("login")) await resetToLogin();
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [resetToLogin],
-  );
+      if (message.toLowerCase().includes("login")) await resetToLogin();
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [resetToLogin]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadDashboard("initial");
-    }, [loadDashboard]),
-  );
+  useFocusEffect(useCallback(() => { void loadDashboard("initial"); }, [loadDashboard]));
 
   useEffect(() => {
     return notificationEvents.subscribe(() => {
       void loadNotificationUnreadCount();
     });
   }, [loadNotificationUnreadCount]);
-
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: resetToLogin },
-    ]);
-  };
 
   const openPatients = () => navigation.navigate("Patients");
   const openConsultations = () => navigation.navigate("Consultations");
@@ -235,6 +189,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
   };
 
   const openNotifications = () => openRootScreen("Notifications");
+  const openProfile = () => openRootScreen("DoctorProfile");
   const openAvailability = () => openRootScreen("DoctorAvailability");
   const openPrescriptionPatients = () => openRootScreen("DoctorSelectPrescriptionPatient");
   const openNotePatients = () => openRootScreen("DoctorSelectNotePatient");
@@ -260,58 +215,112 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
     );
   };
 
+  const openAlertDetail = (alert: DoctorUrgentAlert) => {
+    const rootNavigation = navigation.getParent();
+
+    if (!rootNavigation) {
+      navigation.navigate("Alerts");
+      return;
+    }
+
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: "DoctorAlertDetail",
+        params: { alertId: alert.id },
+      }),
+    );
+  };
+
+  const acceptAlertConsultation = async (alert: DoctorUrgentAlert) => {
+    if (!alert.consultation) {
+      Alert.alert("Consultation unavailable", "This Safety Response does not have a linked emergency consultation.");
+      return;
+    }
+
+    if (!alert.canAcceptConsultation || acceptingAlertId || joiningAlertId) return;
+
+    try {
+      setAcceptingAlertId(alert.id);
+
+      await doctorConsultationsApi.acceptConsultation(alert.consultation.id);
+      await loadDashboard("refresh");
+
+      Alert.alert(
+        "Consultation accepted",
+        "The emergency consultation is now ready for the doctor and patient to join.",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to accept the emergency consultation.";
+      Alert.alert("Unable to accept consultation", message);
+    } finally {
+      setAcceptingAlertId(null);
+    }
+  };
+
+  const confirmAcceptAlertConsultation = (alert: DoctorUrgentAlert) => {
+    Alert.alert(
+      "Accept emergency consultation",
+      `Accept the emergency request from ${alert.patient?.fullName || "this patient"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Accept", onPress: () => void acceptAlertConsultation(alert) },
+      ],
+    );
+  };
+
+  const joinAlertCall = async (alert: DoctorUrgentAlert) => {
+    if (!alert.consultation) {
+      Alert.alert("Call unavailable", "This Safety Response does not have a linked emergency consultation.");
+      return;
+    }
+
+    if (!alert.canJoinCall) {
+      Alert.alert("Call unavailable", "This emergency consultation is not currently available for you to join.");
+      return;
+    }
+
+    if (joiningAlertId || acceptingAlertId) return;
+
+    try {
+      setJoiningAlertId(alert.id);
+
+      const result = await doctorConsultationsApi.getDoctorJoinConfig(alert.consultation.id);
+      const doctorMeetingUrl = result.doctorMeeting?.webUrl;
+
+      if (!doctorMeetingUrl) throw new Error("Doctor meeting link was not returned.");
+
+      const rootNavigation = navigation.getParent();
+
+      if (!rootNavigation) throw new Error("Video consultation screen is not available.");
+
+      rootNavigation.dispatch(
+        CommonActions.navigate({
+          name: "VideoConsultation",
+          params: {
+            consultationId: result.consultation.id,
+            consultationType: result.consultation.type,
+            doctorMeeting: result.doctorMeeting,
+            doctorMeetingUrl,
+          },
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to join the emergency consultation.";
+      Alert.alert("Unable to join call", message);
+    } finally {
+      setJoiningAlertId(null);
+    }
+  };
+
   const quickActions: DoctorQuickAction[] = [
-    {
-      key: "patients",
-      title: "Patients",
-      icon: <UsersRound size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      onPress: openPatients,
-    },
-    {
-      key: "consultations",
-      title: "Consults",
-      icon: <Video size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      onPress: openConsultations,
-    },
-    {
-      key: "availability",
-      title: "Availability",
-      icon: <CalendarDays size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      onPress: openAvailability,
-    },
-    {
-      key: "reviews",
-      title: "Reviews",
-      icon: <Pill size={23} color={WARNING} strokeWidth={2.6} />,
-      badgeCount: dashboard?.stats.pendingMedicineReviews,
-      onPress: openMedicineReviews,
-    },
-    {
-      key: "pool-reviews",
-      title: "Pool Reviews",
-      icon: <ShieldCheck size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      badgeCount: pendingPoolReviews,
-      onPress: openPoolReviews,
-    },
-    {
-      key: "reports",
-      title: "Reports",
-      icon: <FileText size={23} color={DANGER} strokeWidth={2.6} />,
-      badgeCount: pendingReportReviews,
-      onPress: openReportReviews,
-    },
-    {
-      key: "prescribe",
-      title: "Prescribe",
-      icon: <ClipboardList size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      onPress: openPrescriptionPatients,
-    },
-    {
-      key: "add-note",
-      title: "Add Note",
-      icon: <MessageSquareText size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
-      onPress: openNotePatients,
-    },
+    { key: "patients", title: "Patients", icon: <UsersRound size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, onPress: openPatients },
+    { key: "consultations", title: "Consults", icon: <Video size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, onPress: openConsultations },
+    { key: "availability", title: "Availability", icon: <CalendarDays size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, onPress: openAvailability },
+    { key: "reviews", title: "Reviews", icon: <Pill size={23} color={WARNING} strokeWidth={2.6} />, badgeCount: dashboard?.stats.pendingMedicineReviews, onPress: openMedicineReviews },
+    { key: "pool-reviews", title: "Pool Reviews", icon: <ShieldCheck size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, badgeCount: pendingPoolReviews, onPress: openPoolReviews },
+    { key: "reports", title: "Reports", icon: <FileText size={23} color={DANGER} strokeWidth={2.6} />, badgeCount: pendingReportReviews, onPress: openReportReviews },
+    { key: "prescribe", title: "Prescribe", icon: <ClipboardList size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, onPress: openPrescriptionPatients },
+    { key: "add-note", title: "Add Note", icon: <MessageSquareText size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />, onPress: openNotePatients },
   ];
 
   return (
@@ -336,12 +345,8 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
               ) : null}
             </TouchableOpacity>
 
-            <View style={styles.profileCircle}>
+            <TouchableOpacity style={styles.profileCircle} activeOpacity={0.86} onPress={openProfile}>
               <Text style={styles.profileInitial}>{initials}</Text>
-            </View>
-
-            <TouchableOpacity style={styles.logoutCircle} activeOpacity={0.86} onPress={handleLogout}>
-              <LogOut size={19} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
             </TouchableOpacity>
           </View>
         </View>
@@ -350,14 +355,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 108, 132) }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void loadDashboard("refresh")}
-              tintColor={DOCTOR_PRIMARY}
-              colors={[DOCTOR_PRIMARY]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadDashboard("refresh")} tintColor={DOCTOR_PRIMARY} colors={[DOCTOR_PRIMARY]} />}
         >
           {isLoading ? (
             <View style={styles.stateCard}>
@@ -368,10 +366,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
-              <View style={styles.errorIcon}>
-                <RefreshCw size={26} color={DANGER} strokeWidth={2.7} />
-              </View>
-
+              <View style={styles.errorIcon}><RefreshCw size={26} color={DANGER} strokeWidth={2.7} /></View>
               <Text style={styles.errorTitle}>Unable to load dashboard</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
@@ -384,48 +379,21 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
           {!isLoading && !errorMessage && dashboard ? (
             <>
-              <LinearGradient
-                colors={[DOCTOR_PRIMARY, DOCTOR_SECONDARY]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroCard}
-              >
+              <LinearGradient colors={[DOCTOR_PRIMARY, DOCTOR_SECONDARY]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
                 <View style={styles.heroTopRow}>
-                  <View style={styles.heroIcon}>
-                    <Stethoscope size={25} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
-                  </View>
-
-                  <View style={styles.heroBadge}>
-                    <ShieldCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
-                    <Text style={styles.heroBadgeText}>Verified Workspace</Text>
-                  </View>
+                  <View style={styles.heroIcon}><Stethoscope size={25} color={DOCTOR_PRIMARY} strokeWidth={2.7} /></View>
+                  <View style={styles.heroBadge}><ShieldCheck size={14} color="#FFFFFF" strokeWidth={2.5} /><Text style={styles.heroBadgeText}>Verified Workspace</Text></View>
                 </View>
 
                 <Text style={styles.heroTitle}>Doctor Dashboard</Text>
-
-                <Text style={styles.heroText}>
-                  Monitor assigned patients, reports, prescriptions, safety alerts, consultations and medicine reviews from one place.
-                </Text>
+                <Text style={styles.heroText}>Monitor assigned patients, reports, prescriptions, safety alerts, consultations and medicine reviews from one place.</Text>
 
                 <View style={styles.heroStatsRow}>
-                  <View style={styles.heroStatBox}>
-                    <Text style={styles.heroStatValue}>{dashboard.stats.assignedPatients}</Text>
-                    <Text style={styles.heroStatLabel}>Patients</Text>
-                  </View>
-
+                  <View style={styles.heroStatBox}><Text style={styles.heroStatValue}>{dashboard.stats.assignedPatients}</Text><Text style={styles.heroStatLabel}>Patients</Text></View>
                   <View style={styles.heroStatDivider} />
-
-                  <View style={styles.heroStatBox}>
-                    <Text style={styles.heroStatValue}>{dashboard.stats.activeAlerts}</Text>
-                    <Text style={styles.heroStatLabel}>Active alerts</Text>
-                  </View>
-
+                  <View style={styles.heroStatBox}><Text style={styles.heroStatValue}>{dashboard.stats.activeAlerts}</Text><Text style={styles.heroStatLabel}>Active alerts</Text></View>
                   <View style={styles.heroStatDivider} />
-
-                  <View style={styles.heroStatBox}>
-                    <Text style={styles.heroStatValue}>{pendingPoolReviews}</Text>
-                    <Text style={styles.heroStatLabel}>Pool reviews</Text>
-                  </View>
+                  <View style={styles.heroStatBox}><Text style={styles.heroStatValue}>{pendingPoolReviews}</Text><Text style={styles.heroStatLabel}>Pool reviews</Text></View>
                 </View>
               </LinearGradient>
 
@@ -433,9 +401,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
                 horizontal
                 data={quickActions}
                 keyExtractor={item => item.key}
-                renderItem={({ item }) => (
-                  <QuickAction title={item.title} icon={item.icon} badgeCount={item.badgeCount} onPress={item.onPress} />
-                )}
+                renderItem={({ item }) => <QuickAction title={item.title} icon={item.icon} badgeCount={item.badgeCount} onPress={item.onPress} />}
                 ItemSeparatorComponent={() => <View style={styles.quickActionSeparator} />}
                 contentContainerStyle={styles.quickActionsContent}
                 style={styles.quickActionsList}
@@ -457,14 +423,20 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
               {dashboard.urgentAlerts.length > 0 ? (
                 <View style={styles.alertStack}>
                   {dashboard.urgentAlerts.map(alert => (
-                    <UrgentAlertPanel key={alert.id} alert={alert} onOpen={openAlerts} onJoin={openAlerts} />
+                    <UrgentAlertPanel
+                      key={alert.id}
+                      alert={alert}
+                      isAccepting={acceptingAlertId === alert.id}
+                      isJoining={joiningAlertId === alert.id}
+                      onOpen={() => openAlertDetail(alert)}
+                      onAccept={() => confirmAcceptAlertConsultation(alert)}
+                      onJoin={() => void joinAlertCall(alert)}
+                    />
                   ))}
                 </View>
               ) : (
                 <TouchableOpacity style={styles.safePanel} activeOpacity={0.86} onPress={openAlerts}>
-                  <View style={styles.safePanelIcon}>
-                    <ShieldCheck size={23} color={SUCCESS} strokeWidth={2.6} />
-                  </View>
+                  <View style={styles.safePanelIcon}><ShieldCheck size={23} color={SUCCESS} strokeWidth={2.6} /></View>
 
                   <View style={styles.safePanelTextBlock}>
                     <Text style={styles.safePanelTitle}>No active alerts</Text>
@@ -492,11 +464,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
                     <ConsultationCard key={consultation.id} consultation={consultation} onPress={openConsultations} />
                   ))
                 ) : (
-                  <EmptyCard
-                    icon={<Video size={24} color={DOCTOR_PRIMARY} strokeWidth={2.5} />}
-                    title="No consultations yet"
-                    text="Consultation requests from assigned patients will appear here."
-                  />
+                  <EmptyCard icon={<Video size={24} color={DOCTOR_PRIMARY} strokeWidth={2.5} />} title="No consultations yet" text="Consultation requests from assigned patients will appear here." />
                 )}
               </View>
 
@@ -517,11 +485,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
                     <PatientCard key={patient.assignmentId} patient={patient} onPress={() => openPatientDetail(patient)} />
                   ))
                 ) : (
-                  <EmptyCard
-                    icon={<UserRound size={24} color={DOCTOR_PRIMARY} strokeWidth={2.5} />}
-                    title="No assigned patients"
-                    text="Patients will appear here after they select you as their doctor."
-                  />
+                  <EmptyCard icon={<UserRound size={24} color={DOCTOR_PRIMARY} strokeWidth={2.5} />} title="No assigned patients" text="Patients will appear here after they select you as their doctor." />
                 )}
               </View>
             </>
@@ -536,27 +500,42 @@ const QuickAction = ({ title, icon, badgeCount, onPress }: { title: string; icon
   <TouchableOpacity style={styles.quickAction} activeOpacity={0.86} onPress={onPress}>
     <View style={styles.quickActionIcon}>
       {icon}
-
-      {badgeCount !== undefined && badgeCount > 0 ? (
-        <View style={styles.quickActionBadge}>
-          <Text style={styles.quickActionBadgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
-        </View>
-      ) : null}
+      {badgeCount !== undefined && badgeCount > 0 ? <View style={styles.quickActionBadge}><Text style={styles.quickActionBadgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text></View> : null}
     </View>
-
     <Text style={styles.quickActionText} numberOfLines={1}>{title}</Text>
   </TouchableOpacity>
 );
 
-const UrgentAlertPanel = ({ alert, onOpen, onJoin }: { alert: DoctorUrgentAlert; onOpen: () => void; onJoin: () => void }) => {
+const UrgentAlertPanel = ({
+  alert,
+  isAccepting,
+  isJoining,
+  onOpen,
+  onAccept,
+  onJoin,
+}: {
+  alert: DoctorUrgentAlert;
+  isAccepting: boolean;
+  isJoining: boolean;
+  onOpen: () => void;
+  onAccept: () => void;
+  onJoin: () => void;
+}) => {
   const patientName = alert.patient?.fullName || "Assigned patient";
+  const isBusy = isAccepting || isJoining;
+  const hasAction = alert.canAcceptConsultation || alert.canJoinCall;
+
+  const unavailableLabel =
+    alert.consultation?.status === "PENDING" ||
+    alert.consultation?.status === "ACCEPTED" ||
+    alert.consultation?.status === "IN_PROGRESS"
+      ? "Awaiting"
+      : "No action";
 
   return (
     <View style={styles.urgentAlertCard}>
       <View style={styles.urgentHeader}>
-        <View style={styles.urgentIconBox}>
-          <AlertTriangle size={23} color={DANGER} strokeWidth={2.7} />
-        </View>
+        <View style={styles.urgentIconBox}><AlertTriangle size={23} color={DANGER} strokeWidth={2.7} /></View>
 
         <View style={styles.urgentTitleBlock}>
           <Text style={styles.urgentTitle}>Critical Safety Alert</Text>
@@ -588,14 +567,29 @@ const UrgentAlertPanel = ({ alert, onOpen, onJoin }: { alert: DoctorUrgentAlert;
             <Text style={styles.alertSecondaryText}>View</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.alertPrimaryButton, !alert.canJoinCall ? styles.alertButtonDisabled : undefined]}
-            activeOpacity={0.86}
-            onPress={onJoin}
-            disabled={!alert.canJoinCall}
-          >
-            <Text style={styles.alertPrimaryText}>{alert.canJoinCall ? "Join" : "No call"}</Text>
-          </TouchableOpacity>
+          {alert.canAcceptConsultation ? (
+            <TouchableOpacity
+              style={[styles.alertPrimaryButton, styles.alertAcceptButton, isBusy ? styles.alertButtonDisabled : undefined]}
+              activeOpacity={0.86}
+              onPress={onAccept}
+              disabled={isBusy}
+            >
+              {isAccepting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.alertPrimaryText}>Accept</Text>}
+            </TouchableOpacity>
+          ) : alert.canJoinCall ? (
+            <TouchableOpacity
+              style={[styles.alertPrimaryButton, isBusy ? styles.alertButtonDisabled : undefined]}
+              activeOpacity={0.86}
+              onPress={onJoin}
+              disabled={isBusy}
+            >
+              {isJoining ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.alertPrimaryText}>Join</Text>}
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.alertPrimaryButton, styles.alertAwaitingButton]}>
+              <Text style={styles.alertAwaitingText}>{hasAction ? "Action" : unavailableLabel}</Text>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -629,9 +623,7 @@ const PatientCard = ({ patient, onPress }: { patient: DoctorDashboardPatient; on
 
   return (
     <TouchableOpacity style={styles.listCard} activeOpacity={0.86} onPress={onPress}>
-      <View style={styles.patientAvatar}>
-        <Text style={styles.patientAvatarText}>{getInitials(patient.patient.fullName)}</Text>
-      </View>
+      <View style={styles.patientAvatar}><Text style={styles.patientAvatarText}>{getInitials(patient.patient.fullName)}</Text></View>
 
       <View style={styles.listTextBlock}>
         <Text style={styles.listTitle}>{patient.patient.fullName}</Text>
@@ -666,9 +658,8 @@ const styles = StyleSheet.create({
   notificationCircle: { width: 46, height: 46, borderRadius: 15, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", marginRight: 8, overflow: "visible", ...elevate(1) },
   notificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 21, height: 21, borderRadius: 8, backgroundColor: DANGER, borderWidth: 2, borderColor: BACKGROUND, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, zIndex: 10, elevation: 10 },
   notificationBadgeText: { color: SURFACE, fontSize: 8, fontWeight: "700" },
-  profileCircle: { width: 46, height: 46, borderRadius: 15, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 8 },
+  profileCircle: { width: 46, height: 46, borderRadius: 15, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", overflow: "hidden", ...elevate(1) },
   profileInitial: { color: DOCTOR_PRIMARY, fontSize: 15, fontWeight: "800" },
-  logoutCircle: { width: 46, height: 46, borderRadius: 15, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", ...elevate(1) },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
   stateCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 22, alignItems: "center", marginTop: 12, ...elevate(1) },
@@ -721,7 +712,10 @@ const styles = StyleSheet.create({
   alertButtons: { flexDirection: "row", gap: 8 },
   alertSecondaryButton: { backgroundColor: DANGER_LIGHT, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9 },
   alertSecondaryText: { color: "#B42318", fontSize: 12, fontWeight: "700" },
-  alertPrimaryButton: { backgroundColor: DANGER, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9 },
+  alertPrimaryButton: { minWidth: 66, minHeight: 36, backgroundColor: DANGER, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9, alignItems: "center", justifyContent: "center" },
+  alertAcceptButton: { backgroundColor: DOCTOR_PRIMARY },
+  alertAwaitingButton: { backgroundColor: "#E8ECF3" },
+  alertAwaitingText: { color: MUTED, fontSize: 11, fontWeight: "700" },
   alertButtonDisabled: { opacity: 0.55 },
   alertPrimaryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   safePanel: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "center", ...elevate(1) },

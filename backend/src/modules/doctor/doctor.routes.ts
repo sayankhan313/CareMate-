@@ -10,6 +10,7 @@ import { doctorMedicineReviewsController } from "./doctor-medicine-reviews.contr
 import { doctorNotesController } from "./doctor-notes.controller.js";
 import { doctorPatientsController } from "./doctor-patients.controller.js";
 import { doctorPrescriptionsController } from "./doctor-prescriptions.controller.js";
+import { doctorProfileController } from "./doctor-profile.controller.js";
 import { doctorReportsController } from "./doctor-reports.controller.js";
 
 const router = Router();
@@ -18,6 +19,12 @@ router.use(authMiddleware);
 router.use(authorizeRoles("DOCTOR"));
 
 router.get("/dashboard", doctorController.getDashboard);
+router.get("/profile", doctorProfileController.getProfile);
+
+router.get("/availability", doctorController.getAvailability);
+router.put("/availability/month", doctorController.saveMonthlyAvailability);
+router.patch("/availability/status", doctorController.updateOperationalStatus);
+router.delete("/availability/:availabilityId", doctorController.deleteAvailability);
 
 router.get("/alerts", doctorAlertsController.listAlerts);
 router.get("/alerts/:alertId", doctorAlertsController.getAlertDetail);
@@ -37,12 +44,7 @@ router.get("/reports", doctorReportsController.listReportQueue);
 
 router.post("/prescription-scan/parse", doctorPrescriptionsController.parsePrescriptionScan);
 
-router.post(
-  "/patients/:patientId/prescriptions",
-  prescriptionImageUpload.single("prescriptionImage"),
-  doctorPrescriptionsController.createPrescription
-);
-
+router.post("/patients/:patientId/prescriptions", prescriptionImageUpload.single("prescriptionImage"), doctorPrescriptionsController.createPrescription);
 router.get("/patients/:patientId/prescriptions", doctorPrescriptionsController.listPatientPrescriptions);
 router.get("/prescriptions/:prescriptionId", doctorPrescriptionsController.getPrescriptionDetail);
 

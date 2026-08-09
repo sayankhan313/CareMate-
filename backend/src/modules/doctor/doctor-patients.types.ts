@@ -1,11 +1,12 @@
-export type DoctorVitalStatus =
-  | "STABLE"
-  | "WARNING"
-  | "CRITICAL";
+export type DoctorVitalStatus = "STABLE" | "WARNING" | "CRITICAL";
 
-export type DoctorAssignmentType =
-  | "PRIMARY"
-  | "SPECIALIST";
+export type DoctorAssignmentType = "PRIMARY" | "SPECIALIST";
+
+export type DoctorPatientPrivacyAccess = {
+  shareVitalsWithAssignedDoctors: boolean;
+  shareMedicinesWithAssignedDoctors: boolean;
+  shareReportsWithAssignedDoctors: boolean;
+};
 
 export type DoctorVitalReadingResponse = {
   id: string;
@@ -28,8 +29,15 @@ export type DoctorPatientBasicInfo = {
   phoneNumber: string | null;
   dateOfBirth: string | null;
   gender: string | null;
+  healthRecordNumber: string | null;
+  bloodGroup: string | null;
   medicalConditions: string | null;
+  allergies: string | null;
   emergencyContact: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  addressLine: string | null;
+  postcode: string | null;
 };
 
 export type DoctorPatientActiveAlert = {
@@ -45,13 +53,10 @@ export type DoctorAssignedPatient = {
   assignmentType: DoctorAssignmentType;
   assignedAt: Date;
   patient: DoctorPatientBasicInfo;
-  latestVital:
-    | DoctorVitalReadingResponse
-    | null;
+  privacy: DoctorPatientPrivacyAccess;
+  latestVital: DoctorVitalReadingResponse | null;
   activeMedicineCount: number;
-  activeAlert:
-    | DoctorPatientActiveAlert
-    | null;
+  activeAlert: DoctorPatientActiveAlert | null;
 };
 
 export type DoctorAssignedPatientsResponse = {
@@ -78,9 +83,7 @@ export type DoctorAlertResponse = {
     fullName: string;
     email: string;
   } | null;
-  vitalSummary:
-    | DoctorVitalSummary
-    | null;
+  vitalSummary: DoctorVitalSummary | null;
   consultation: {
     id: string;
     type: string;
@@ -164,6 +167,7 @@ export type DoctorPatientDetailResponse = {
     assignedAt: Date;
   };
   patient: DoctorPatientBasicInfo;
+  privacy: DoctorPatientPrivacyAccess;
   summary: {
     activeMedicineCount: number;
     todayDoseCount: number;
@@ -172,20 +176,11 @@ export type DoctorPatientDetailResponse = {
     pendingMedicineReviews: number;
     hasActiveAlert: boolean;
   };
-  latestVital:
-    | DoctorVitalReadingResponse
-    | null;
-  vitalsHistory:
-    DoctorVitalReadingResponse[];
-  activeMedicines:
-    DoctorPatientMedicineResponse[];
-  todayDoseLogs:
-    DoctorPatientDoseLogResponse[];
-  latestNotes:
-    DoctorPatientNoteResponse[];
-  activeAlert:
-    | DoctorAlertResponse
-    | null;
-  recentConsultations:
-    DoctorConsultationResponse[];
+  latestVital: DoctorVitalReadingResponse | null;
+  vitalsHistory: DoctorVitalReadingResponse[];
+  activeMedicines: DoctorPatientMedicineResponse[];
+  todayDoseLogs: DoctorPatientDoseLogResponse[];
+  latestNotes: DoctorPatientNoteResponse[];
+  activeAlert: DoctorAlertResponse | null;
+  recentConsultations: DoctorConsultationResponse[];
 };

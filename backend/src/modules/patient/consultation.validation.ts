@@ -53,3 +53,15 @@ export const createManualConsultationSchema = z
       path: ["preferredTime"],
     }
   );
+
+export const rescheduleConsultationSchema = z.object({
+  preferredDate: z
+    .string()
+    .trim()
+    .regex(/^\d{2}\/\d{2}\/\d{4}$/, "Date must be DD/MM/YYYY."),
+
+  preferredTime: z
+    .string()
+    .trim()
+    .regex(/^\d{2}:\d{2}$/, "Time must be HH:mm."),
+});

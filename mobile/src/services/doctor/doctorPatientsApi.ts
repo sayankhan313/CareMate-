@@ -1,4 +1,4 @@
- import { API_BASE_URL } from "../../constants/api";
+import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../tokenStorage";
 
 type ApiResponse<T> = {
@@ -8,6 +8,13 @@ type ApiResponse<T> = {
 };
 
 export type DoctorVitalStatus = "STABLE" | "WARNING" | "CRITICAL";
+export type DoctorAssignmentType = "PRIMARY" | "SPECIALIST";
+
+export type DoctorPatientPrivacyAccess = {
+  shareVitalsWithAssignedDoctors: boolean;
+  shareMedicinesWithAssignedDoctors: boolean;
+  shareReportsWithAssignedDoctors: boolean;
+};
 
 export type DoctorVitalReading = {
   id: string;
@@ -30,8 +37,15 @@ export type DoctorPatientBasicInfo = {
   phoneNumber: string | null;
   dateOfBirth: string | null;
   gender: string | null;
+  healthRecordNumber: string | null;
+  bloodGroup: string | null;
   medicalConditions: string | null;
+  allergies: string | null;
   emergencyContact: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  addressLine: string | null;
+  postcode: string | null;
 };
 
 export type DoctorPatientActiveAlert = {
@@ -44,8 +58,10 @@ export type DoctorPatientActiveAlert = {
 
 export type DoctorAssignedPatient = {
   assignmentId: string;
+  assignmentType: DoctorAssignmentType;
   assignedAt: string;
   patient: DoctorPatientBasicInfo;
+  privacy: DoctorPatientPrivacyAccess;
   latestVital: DoctorVitalReading | null;
   activeMedicineCount: number;
   activeAlert: DoctorPatientActiveAlert | null;
@@ -79,14 +95,7 @@ export type DoctorUrgentAlert = {
   consultation: {
     id: string;
     type: "EMERGENCY" | "MANUAL" | string;
-    status:
-      | "PENDING"
-      | "ACCEPTED"
-      | "REJECTED"
-      | "IN_PROGRESS"
-      | "COMPLETED"
-      | "CANCELLED"
-      | string;
+    status: "PENDING" | "ACCEPTED" | "REJECTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | string;
     reason: string;
     createdAt: string;
   } | null;
@@ -99,14 +108,7 @@ export type DoctorUpcomingConsultation = {
   doctorId: string | null;
   safetyAlertId: string | null;
   type: "EMERGENCY" | "MANUAL" | string;
-  status:
-    | "PENDING"
-    | "ACCEPTED"
-    | "REJECTED"
-    | "IN_PROGRESS"
-    | "COMPLETED"
-    | "CANCELLED"
-    | string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | string;
   reason: string;
   preferredAt: string | null;
   notes: string | null;
@@ -169,9 +171,11 @@ export type DoctorPatientNote = {
 export type DoctorPatientDetailData = {
   assignment: {
     id: string;
+    assignmentType: DoctorAssignmentType;
     assignedAt: string;
   };
   patient: DoctorPatientBasicInfo;
+  privacy: DoctorPatientPrivacyAccess;
   summary: {
     activeMedicineCount: number;
     todayDoseCount: number;
@@ -190,31 +194,16 @@ export type DoctorPatientDetailData = {
 };
 
 const getErrorMessage = (result: any) => {
-  if (typeof result?.message === "string") {
-    return result.message;
-  }
-
-  if (Array.isArray(result?.message)) {
-    return result.message[0]?.message || "Request failed.";
-  }
-
-  if (Array.isArray(result?.errors)) {
-    return result.errors[0]?.message || "Request failed.";
-  }
-
-  if (Array.isArray(result?.issues)) {
-    return result.issues[0]?.message || "Request failed.";
-  }
-
+  if (typeof result?.message === "string") return result.message;
+  if (Array.isArray(result?.message)) return result.message[0]?.message || "Request failed.";
+  if (Array.isArray(result?.errors)) return result.errors[0]?.message || "Request failed.";
+  if (Array.isArray(result?.issues)) return result.issues[0]?.message || "Request failed.";
   return "Request failed.";
 };
 
 const getAuthHeaders = async () => {
   const token = await tokenStorage.getToken();
-
-  if (!token) {
-    throw new Error("Please login again.");
-  }
+  if (!token) throw new Error("Please login again.");
 
   return {
     "Content-Type": "application/json",
@@ -229,31 +218,22 @@ export const doctorPatientsApi = {
       headers: await getAuthHeaders(),
     });
 
-    const result: ApiResponse<DoctorAssignedPatientsData> | any =
-      await response.json();
+    const result: ApiResponse<DoctorAssignedPatientsData> | any = await response.json();
 
-    if (!response.ok || !result.success) {
-      throw new Error(getErrorMessage(result));
-    }
+    if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
 
     return result.data as DoctorAssignedPatientsData;
   },
 
   async getPatientDetail(patientId: string) {
-    const response = await fetch(
-      `${API_BASE_URL}/doctor/patients/${patientId}`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/doctor/patients/${patientId}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
 
-    const result: ApiResponse<DoctorPatientDetailData> | any =
-      await response.json();
+    const result: ApiResponse<DoctorPatientDetailData> | any = await response.json();
 
-    if (!response.ok || !result.success) {
-      throw new Error(getErrorMessage(result));
-    }
+    if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
 
     return result.data as DoctorPatientDetailData;
   },

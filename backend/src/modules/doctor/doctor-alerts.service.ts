@@ -132,9 +132,12 @@ const isTerminalConsultationStatus = (
 };
 
 const formatAlert = (
-  alert: any
+  alert: any,
+  viewingDoctorId: string
 ): DoctorSafetyAlertResponse => {
   const consultation = alert.consultation || null;
+  const isResponsibleDoctor =
+    alert.doctorId === viewingDoctorId;
 
   return {
     id: alert.id,
@@ -149,52 +152,67 @@ const formatAlert = (
     resolvedAt: alert.resolvedAt,
     createdAt: alert.createdAt,
     updatedAt: alert.updatedAt,
+
     patient: alert.patient
       ? {
-        id: alert.patient.id,
-        fullName: alert.patient.fullName,
-        email: alert.patient.email,
-      }
+          id: alert.patient.id,
+          fullName: alert.patient.fullName,
+          email: alert.patient.email,
+        }
       : null,
+
     vitalReading: alert.vitalReading
       ? {
-        id: alert.vitalReading.id,
-        heartRate: alert.vitalReading.heartRate,
-        spo2: alert.vitalReading.spo2,
-        bpSystolic: alert.vitalReading.bpSystolic,
-        bpDiastolic: alert.vitalReading.bpDiastolic,
-        glucose: alert.vitalReading.glucose,
-        temperature: alert.vitalReading.temperature,
-        status: alert.vitalReading.status,
-        source: alert.vitalReading.source,
-        deviceSource: alert.vitalReading.deviceSource,
-        recordedAt: alert.vitalReading.recordedAt,
-      }
+          id: alert.vitalReading.id,
+          heartRate: alert.vitalReading.heartRate,
+          spo2: alert.vitalReading.spo2,
+          bpSystolic: alert.vitalReading.bpSystolic,
+          bpDiastolic: alert.vitalReading.bpDiastolic,
+          glucose: alert.vitalReading.glucose,
+          temperature: alert.vitalReading.temperature,
+          status: alert.vitalReading.status,
+          source: alert.vitalReading.source,
+          deviceSource: alert.vitalReading.deviceSource,
+          recordedAt: alert.vitalReading.recordedAt,
+        }
       : null,
+
     consultation: consultation
       ? {
-        id: consultation.id,
-        type: consultation.type,
-        status: consultation.status,
-        reason: consultation.reason,
-        acceptedAt: consultation.acceptedAt,
-        rejectedAt: consultation.rejectedAt,
-        startedAt: consultation.startedAt,
-        completedAt: consultation.completedAt,
-        cancelledAt: consultation.cancelledAt,
-        createdAt: consultation.createdAt,
-      }
+          id: consultation.id,
+          type: consultation.type,
+          status: consultation.status,
+          reason: consultation.reason,
+          acceptedAt: consultation.acceptedAt,
+          rejectedAt: consultation.rejectedAt,
+          startedAt: consultation.startedAt,
+          completedAt: consultation.completedAt,
+          cancelledAt: consultation.cancelledAt,
+          createdAt: consultation.createdAt,
+        }
       : null,
+
     canAcceptConsultation:
+      isResponsibleDoctor &&
       alert.status === "ESCALATED" &&
       consultation?.status === "PENDING",
+
     canJoinCall:
-      consultation?.status === "ACCEPTED" ||
-      consultation?.status === "IN_PROGRESS",
+      isResponsibleDoctor &&
+      (
+        consultation?.status === "ACCEPTED" ||
+        consultation?.status === "IN_PROGRESS"
+      ),
+
     canResolveAlert:
+      isResponsibleDoctor &&
       alert.status === "ESCALATED" &&
-      (!consultation ||
-        isTerminalConsultationStatus(consultation.status)),
+      (
+        !consultation ||
+        isTerminalConsultationStatus(
+          consultation.status
+        )
+      ),
   };
 };
 
@@ -207,13 +225,15 @@ const getAlertForDoctor = async (
   const alert = await prisma.safetyAlert.findFirst({
     where: {
       id: alertId,
-      doctorId,
     },
     include: alertInclude,
   });
 
   if (!alert) {
-    throw new AppError("Safety alert not found", 404);
+    throw new AppError(
+      "Safety alert not found",
+      404
+    );
   }
 
   await ensureAssignedPatient(
@@ -240,27 +260,33 @@ export const doctorAlertsService = {
       };
     }
 
-    const alerts = await prisma.safetyAlert.findMany({
-      where: {
-        doctorId,
-        patientId: {
-          in: assignedPatientIds,
+    const alerts =
+      await prisma.safetyAlert.findMany({
+        where: {
+          patientId: {
+            in: assignedPatientIds,
+          },
+
+          ...(query.status !== "ALL"
+            ? {
+                status: query.status,
+              }
+            : {}),
         },
-        ...(query.status !== "ALL"
-          ? {
-            status: query.status,
-          }
-          : {}),
-      },
-      include: alertInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 100,
-    });
+
+        include: alertInclude,
+
+        orderBy: {
+          createdAt: "desc",
+        },
+
+        take: 100,
+      });
 
     return {
-      alerts: alerts.map(formatAlert),
+      alerts: alerts.map((alert) =>
+        formatAlert(alert, doctorId)
+      ),
     };
   },
 
@@ -274,7 +300,10 @@ export const doctorAlertsService = {
     );
 
     return {
-      alert: formatAlert(alert),
+      alert: formatAlert(
+        alert,
+        doctorId
+      ),
     };
   },
 
@@ -287,9 +316,19 @@ export const doctorAlertsService = {
       alertId
     );
 
+    if (alert.doctorId !== doctorId) {
+      throw new AppError(
+        "Only the doctor currently responsible for this Safety Response can resolve the alert.",
+        403
+      );
+    }
+
     if (alert.status === "RESOLVED") {
       return {
-        alert: formatAlert(alert),
+        alert: formatAlert(
+          alert,
+          doctorId
+        ),
       };
     }
 
@@ -324,16 +363,22 @@ export const doctorAlertsService = {
         where: {
           id: alert.id,
         },
+
         data: {
           status: "RESOLVED",
           resolvedAt:
-            alert.resolvedAt || new Date(),
+            alert.resolvedAt ||
+            new Date(),
         },
+
         include: alertInclude,
       });
 
     return {
-      alert: formatAlert(updatedAlert),
+      alert: formatAlert(
+        updatedAlert,
+        doctorId
+      ),
     };
   },
 };

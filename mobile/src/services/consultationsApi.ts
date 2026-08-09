@@ -12,8 +12,25 @@ export type CreateManualConsultationPayload = {
   notes?: string;
 };
 
-export type CreateConsultationResult = { consultation: Consultation; patientMeeting: MeetingConfig; doctorMeeting: MeetingConfig };
-export type PatientJoinConfigResult = { consultation: Consultation; patientMeeting: MeetingConfig };
+export type RescheduleConsultationPayload = {
+  preferredDate: string;
+  preferredTime: string;
+};
+
+export type CreateConsultationResult = {
+  consultation: Consultation;
+  patientMeeting: MeetingConfig;
+  doctorMeeting: MeetingConfig;
+};
+
+export type PatientJoinConfigResult = {
+  consultation: Consultation;
+  patientMeeting: MeetingConfig;
+};
+
+export type PatientConsultationActionResult = {
+  consultation: Consultation;
+};
 
 export type PatientAppointmentSlot = {
   time: string;
@@ -65,23 +82,61 @@ const getAuthHeaders = async () => {
 };
 
 const requestPatientApi = async <T>(path: string, options: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: { ...(await getAuthHeaders()), ...(options.headers || {}) } });
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(await getAuthHeaders()),
+      ...(options.headers || {}),
+    },
+  });
+
   const result: ApiResponse<T> | any = await response.json();
+
   if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
+
   return result.data as T;
 };
 
 export const consultationsApi = {
   async getDoctorMonthlyAvailability(doctorId: string, month: string): Promise<PatientDoctorAvailability> {
-    return requestPatientApi<PatientDoctorAvailability>(`/patient/doctors/${doctorId}/availability?month=${encodeURIComponent(month)}`, { method: "GET" });
+    return requestPatientApi<PatientDoctorAvailability>(
+      `/patient/doctors/${doctorId}/availability?month=${encodeURIComponent(month)}`,
+      { method: "GET" },
+    );
   },
 
   async getDoctorAvailableSlots(doctorId: string, date: string): Promise<PatientDoctorSlots> {
-    return requestPatientApi<PatientDoctorSlots>(`/patient/doctors/${doctorId}/availability/slots?date=${encodeURIComponent(date)}`, { method: "GET" });
+    return requestPatientApi<PatientDoctorSlots>(
+      `/patient/doctors/${doctorId}/availability/slots?date=${encodeURIComponent(date)}`,
+      { method: "GET" },
+    );
   },
 
   async createManualConsultation(payload: CreateManualConsultationPayload): Promise<CreateConsultationResult> {
-    return requestPatientApi<CreateConsultationResult>("/patient/consultations/manual", { method: "POST", body: JSON.stringify(payload) });
+    return requestPatientApi<CreateConsultationResult>("/patient/consultations/manual", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async cancelConsultation(consultationId: string): Promise<PatientConsultationActionResult> {
+    return requestPatientApi<PatientConsultationActionResult>(
+      `/patient/consultations/${consultationId}/cancel`,
+      { method: "POST" },
+    );
+  },
+
+  async rescheduleConsultation(
+    consultationId: string,
+    payload: RescheduleConsultationPayload,
+  ): Promise<PatientConsultationActionResult> {
+    return requestPatientApi<PatientConsultationActionResult>(
+      `/patient/consultations/${consultationId}/reschedule`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
   },
 
   async listConsultations(): Promise<Consultation[]> {
@@ -89,10 +144,16 @@ export const consultationsApi = {
   },
 
   async getConsultationById(consultationId: string): Promise<Consultation> {
-    return requestPatientApi<Consultation>(`/patient/consultations/${consultationId}`, { method: "GET" });
+    return requestPatientApi<Consultation>(
+      `/patient/consultations/${consultationId}`,
+      { method: "GET" },
+    );
   },
 
   async getPatientJoinConfig(consultationId: string): Promise<PatientJoinConfigResult> {
-    return requestPatientApi<PatientJoinConfigResult>(`/patient/consultations/${consultationId}/join`, { method: "GET" });
+    return requestPatientApi<PatientJoinConfigResult>(
+      `/patient/consultations/${consultationId}/join`,
+      { method: "GET" },
+    );
   },
 };

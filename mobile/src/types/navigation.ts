@@ -71,6 +71,8 @@ export type RootStackParamList = {
   AdminTabs: (NavigatorScreenParams<AdminTabParamList> & { user?: any }) | undefined;
   PharmacyDashboard: { user?: any } | undefined;
   Notifications: undefined;
+  DoctorProfile: undefined;
+  AdminProfile: undefined;
   AdminDashboard: undefined;
   AdminDoctorVerificationDetail: { doctorId: string };
   AdminPharmacyVerificationDetail: { pharmacyId: string };
@@ -117,6 +119,7 @@ export type RootStackParamList = {
     completionStatus?: ConsultationCompletionStatus;
   };
   DoctorPatientDetail: { patientId: string; patientName?: string };
+  DoctorAlertDetail: { alertId: string };
   DoctorPatientReports: { patientId: string; patientName: string };
   DoctorReportReviews: undefined;
   DoctorReportReview: { patientId: string; patientName: string; reportId: string };

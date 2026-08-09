@@ -2,7 +2,13 @@ import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 import { notificationService } from "../notification/notification.service.js";
 import { jitsiService } from "./jitsi.service.js";
-import type { CreateManualConsultationInput, PatientAppointmentSlot, PatientDoctorAvailableSlots, PatientDoctorMonthlyAvailability } from "./consultation.types.js";
+import type {
+  CreateManualConsultationInput,
+  PatientAppointmentSlot,
+  PatientDoctorAvailableSlots,
+  PatientDoctorMonthlyAvailability,
+  RescheduleConsultationInput,
+} from "./consultation.types.js";
 
 const consultationInclude = { patient: true, doctor: true, safetyAlert: { include: { vitalReading: true } } } as const;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -39,7 +45,13 @@ const parsePreferredDateTime = (date?: string, time?: string) => {
   const [hour, minute] = time.split(":").map(Number);
   const preferredAt = new Date(year, month - 1, day, hour, minute, 0, 0);
 
-  const isInvalidDate = Number.isNaN(preferredAt.getTime()) || preferredAt.getFullYear() !== year || preferredAt.getMonth() !== month - 1 || preferredAt.getDate() !== day || preferredAt.getHours() !== hour || preferredAt.getMinutes() !== minute;
+  const isInvalidDate =
+    Number.isNaN(preferredAt.getTime()) ||
+    preferredAt.getFullYear() !== year ||
+    preferredAt.getMonth() !== month - 1 ||
+    preferredAt.getDate() !== day ||
+    preferredAt.getHours() !== hour ||
+    preferredAt.getMinutes() !== minute;
 
   if (isInvalidDate) throw new AppError("Preferred date or time is invalid.", 400);
   if (preferredAt.getTime() < Date.now() - 60 * 1000) throw new AppError("Preferred consultation time cannot be in the past.", 400);
@@ -67,7 +79,14 @@ const parseCalendarDate = (value: string) => {
   const [year, month, day] = value.split("-").map(Number);
   const localDate = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-  if (Number.isNaN(localDate.getTime()) || localDate.getFullYear() !== year || localDate.getMonth() !== month - 1 || localDate.getDate() !== day) throw new AppError("Invalid appointment date.", 400);
+  if (
+    Number.isNaN(localDate.getTime()) ||
+    localDate.getFullYear() !== year ||
+    localDate.getMonth() !== month - 1 ||
+    localDate.getDate() !== day
+  ) {
+    throw new AppError("Invalid appointment date.", 400);
+  }
 
   return {
     year,
@@ -107,7 +126,13 @@ const buildPatientMeeting = (consultation: any) => {
 
   return jitsiService.createMeetingConfig({
     roomName: consultation.jaasRoomName,
-    user: { id: consultation.patient.id, name: consultation.patient.fullName, email: consultation.patient.email, role: "PATIENT", moderator: false },
+    user: {
+      id: consultation.patient.id,
+      name: consultation.patient.fullName,
+      email: consultation.patient.email,
+      role: "PATIENT",
+      moderator: false,
+    },
   });
 };
 
@@ -116,42 +141,93 @@ const buildDoctorMeeting = (consultation: any) => {
 
   return jitsiService.createMeetingConfig({
     roomName: consultation.jaasRoomName,
-    user: { id: consultation.doctor.id, name: consultation.doctor.fullName, email: consultation.doctor.email, role: "DOCTOR", moderator: true },
+    user: {
+      id: consultation.doctor.id,
+      name: consultation.doctor.fullName,
+      email: consultation.doctor.email,
+      role: "DOCTOR",
+      moderator: true,
+    },
   });
 };
 
 const getPatientConsultation = async (patientId: string, consultationId: string) => {
-  const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patientId }, include: consultationInclude });
+  const consultation = await prisma.consultation.findFirst({
+    where: { id: consultationId, patientId },
+    include: consultationInclude,
+  });
+
   if (!consultation) throw new AppError("Consultation not found.", 404);
   return consultation;
 };
 
-const getAssignedApprovedDoctor = async (patientId: string, doctorId: string, requiredAssignmentType?: "PRIMARY" | "SPECIALIST") => {
+const getAssignedApprovedDoctor = async (
+  patientId: string,
+  doctorId: string,
+  requiredAssignmentType?: "PRIMARY" | "SPECIALIST",
+) => {
   const assignment = await prisma.patientDoctorAssignment.findFirst({
     where: {
       patientId,
       doctorId,
       status: "ACTIVE",
       ...(requiredAssignmentType ? { assignmentType: requiredAssignmentType } : {}),
-      doctor: { is: { role: "DOCTOR", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+      doctor: {
+        is: {
+          role: "DOCTOR",
+          isEmailVerified: true,
+          accountStatus: { in: ["ACTIVE", "APPROVED"] },
+        },
+      },
     },
-    include: { doctor: { include: { doctorProfile: { select: { specialization: true, clinicName: true } } } } },
+    include: {
+      doctor: {
+        include: {
+          doctorProfile: {
+            select: {
+              specialization: true,
+              clinicName: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!assignment) {
-    if (requiredAssignmentType === "PRIMARY") throw new AppError("The selected doctor is not the patient's active primary doctor.", 403);
+    if (requiredAssignmentType === "PRIMARY") {
+      throw new AppError("The selected doctor is not the patient's active primary doctor.", 403);
+    }
+
     throw new AppError("You can only request a consultation with an assigned approved doctor.", 403);
   }
 
   return assignment.doctor;
 };
 
-const getBookedConsultationsForPeriod = async (doctorId: string, start: Date, end: Date) => prisma.consultation.findMany({
-  where: { doctorId, preferredAt: { gte: start, lt: end }, status: { notIn: ["CANCELLED", "REJECTED"] } },
-  select: { id: true, preferredAt: true, status: true },
-});
+const getBookedConsultationsForPeriod = async (doctorId: string, start: Date, end: Date) =>
+  prisma.consultation.findMany({
+    where: {
+      doctorId,
+      preferredAt: { gte: start, lt: end },
+      status: { notIn: ["CANCELLED", "REJECTED"] },
+    },
+    select: {
+      id: true,
+      preferredAt: true,
+      status: true,
+    },
+  });
 
-const generateFreeSlots = (date: string, availability: { startTime: string | null; endTime: string | null; slotDurationMinutes: number | null }, bookedTimes: Set<number>): PatientAppointmentSlot[] => {
+const generateFreeSlots = (
+  date: string,
+  availability: {
+    startTime: string | null;
+    endTime: string | null;
+    slotDurationMinutes: number | null;
+  },
+  bookedTimes: Set<number>,
+): PatientAppointmentSlot[] => {
   if (!availability.startTime || !availability.endTime || !availability.slotDurationMinutes) return [];
 
   const startMinutes = timeToMinutes(availability.startTime);
@@ -169,20 +245,41 @@ const generateFreeSlots = (date: string, availability: { startTime: string | nul
     if (startsAt.getTime() <= Date.now() + 60 * 1000) continue;
     if (bookedTimes.has(startsAt.getTime())) continue;
 
-    slots.push({ time, startsAt: startsAt.toISOString(), durationMinutes: duration });
+    slots.push({
+      time,
+      startsAt: startsAt.toISOString(),
+      durationMinutes: duration,
+    });
   }
 
   return slots;
 };
 
-const validateAppointmentSlot = async (doctorId: string, preferredAt: Date, preferredDate: string, preferredTime: string) => {
+const validateAppointmentSlot = async (
+  doctorId: string,
+  preferredAt: Date,
+  preferredDate: string,
+  preferredTime: string,
+  excludeConsultationId?: string,
+) => {
   const [day, month, year] = preferredDate.split("/").map(Number);
   const calendarDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const parsedDate = parseCalendarDate(calendarDate);
 
-  const availability = await prisma.doctorAvailability.findFirst({ where: { doctorId, date: parsedDate.databaseDate } });
+  const availability = await prisma.doctorAvailability.findFirst({
+    where: {
+      doctorId,
+      date: parsedDate.databaseDate,
+    },
+  });
 
-  if (!availability || availability.status !== "AVAILABLE" || !availability.startTime || !availability.endTime || !availability.slotDurationMinutes) {
+  if (
+    !availability ||
+    availability.status !== "AVAILABLE" ||
+    !availability.startTime ||
+    !availability.endTime ||
+    !availability.slotDurationMinutes
+  ) {
     throw new AppError("The selected doctor is not available for appointments on this date.", 409);
   }
 
@@ -190,25 +287,51 @@ const validateAppointmentSlot = async (doctorId: string, preferredAt: Date, pref
   const endMinutes = timeToMinutes(availability.endTime);
   const selectedMinutes = timeToMinutes(preferredTime);
 
-  if (startMinutes === null || endMinutes === null || selectedMinutes === null) throw new AppError("The selected appointment slot is invalid.", 409);
+  if (startMinutes === null || endMinutes === null || selectedMinutes === null) {
+    throw new AppError("The selected appointment slot is invalid.", 409);
+  }
 
   const duration = availability.slotDurationMinutes;
-  const isAlignedSlot = selectedMinutes >= startMinutes && selectedMinutes + duration <= endMinutes && (selectedMinutes - startMinutes) % duration === 0;
 
-  if (!isAlignedSlot) throw new AppError("The selected appointment time is not part of the doctor's available schedule.", 409);
-  if (preferredAt.getTime() <= Date.now() + 60 * 1000) throw new AppError("This appointment slot is no longer available.", 409);
+  const isAlignedSlot =
+    selectedMinutes >= startMinutes &&
+    selectedMinutes + duration <= endMinutes &&
+    (selectedMinutes - startMinutes) % duration === 0;
+
+  if (!isAlignedSlot) {
+    throw new AppError("The selected appointment time is not part of the doctor's available schedule.", 409);
+  }
+
+  if (preferredAt.getTime() <= Date.now() + 60 * 1000) {
+    throw new AppError("This appointment slot is no longer available.", 409);
+  }
 
   const existingConsultation = await prisma.consultation.findFirst({
-    where: { doctorId, preferredAt, status: { notIn: ["CANCELLED", "REJECTED"] } },
+    where: {
+      doctorId,
+      preferredAt,
+      status: { notIn: ["CANCELLED", "REJECTED"] },
+      ...(excludeConsultationId ? { id: { not: excludeConsultationId } } : {}),
+    },
     select: { id: true },
   });
 
-  if (existingConsultation) throw new AppError("This appointment slot has already been booked. Please choose another time.", 409);
+  if (existingConsultation) {
+    throw new AppError("This appointment slot has already been booked. Please choose another time.", 409);
+  }
 };
 
 const formatPreferredTime = (preferredAt: Date | null) => {
   if (!preferredAt) return null;
-  return preferredAt.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+
+  return preferredAt.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 };
 
 const notifyDoctorAboutManualConsultation = async (consultation: any) => {
@@ -216,7 +339,12 @@ const notifyDoctorAboutManualConsultation = async (consultation: any) => {
     if (!consultation.doctorId || !consultation.patient) return;
 
     const existingNotification = await prisma.userNotification.findFirst({
-      where: { userId: consultation.doctorId, type: "MANUAL_CONSULTATION_REQUESTED", entityType: "CONSULTATION", entityId: consultation.id },
+      where: {
+        userId: consultation.doctorId,
+        type: "MANUAL_CONSULTATION_REQUESTED",
+        entityType: "CONSULTATION",
+        entityId: consultation.id,
+      },
       select: { id: true },
     });
 
@@ -228,7 +356,9 @@ const notifyDoctorAboutManualConsultation = async (consultation: any) => {
       userId: consultation.doctorId,
       type: "MANUAL_CONSULTATION_REQUESTED",
       title: "New consultation request",
-      body: preferredTime ? `${consultation.patient.fullName} requested a consultation for ${preferredTime}.` : `${consultation.patient.fullName} requested a consultation. Open CareMate+ to review it.`,
+      body: preferredTime
+        ? `${consultation.patient.fullName} requested a consultation for ${preferredTime}.`
+        : `${consultation.patient.fullName} requested a consultation. Open CareMate+ to review it.`,
       priority: "HIGH",
       entityType: "CONSULTATION",
       entityId: consultation.id,
@@ -245,21 +375,125 @@ const notifyDoctorAboutManualConsultation = async (consultation: any) => {
       },
     });
   } catch (error) {
-    console.warn(`Unable to notify doctor about manual consultation ${consultation.id}:`, error instanceof Error ? error.message : error);
+    console.warn(
+      `Unable to notify doctor about manual consultation ${consultation.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+};
+
+const notifyDoctorAboutRescheduledConsultation = async (consultation: any) => {
+  try {
+    if (!consultation.doctorId || !consultation.patient) return;
+
+    const preferredTime = formatPreferredTime(consultation.preferredAt);
+
+    await notificationService.createAndSend({
+      userId: consultation.doctorId,
+      type: "MANUAL_CONSULTATION_REQUESTED",
+      title: "Consultation rescheduled",
+      body: preferredTime
+        ? `${consultation.patient.fullName} rescheduled their consultation to ${preferredTime}. Please review the updated request.`
+        : `${consultation.patient.fullName} rescheduled their consultation. Please review the updated request.`,
+      priority: "HIGH",
+      entityType: "CONSULTATION",
+      entityId: consultation.id,
+      targetScreen: "DoctorConsultations",
+      data: {
+        consultationId: consultation.id,
+        patientId: consultation.patientId,
+        patientName: consultation.patient.fullName,
+        doctorId: consultation.doctorId,
+        consultationType: consultation.type,
+        consultationStatus: consultation.status,
+        preferredAt: consultation.preferredAt?.toISOString() || null,
+        source: "PATIENT_RESCHEDULED_CONSULTATION",
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `Unable to notify doctor about rescheduled consultation ${consultation.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+};
+
+const notifyDoctorAboutCancelledConsultation = async (consultation: any) => {
+  try {
+    if (!consultation.doctorId || !consultation.patient) return;
+
+    const existingNotification = await prisma.userNotification.findFirst({
+      where: {
+        userId: consultation.doctorId,
+        type: "CONSULTATION_CANCELLED",
+        entityType: "CONSULTATION",
+        entityId: consultation.id,
+      },
+      select: { id: true },
+    });
+
+    if (existingNotification) return;
+
+    const preferredTime = formatPreferredTime(consultation.preferredAt);
+
+    await notificationService.createAndSend({
+      userId: consultation.doctorId,
+      type: "CONSULTATION_CANCELLED",
+      title: "Consultation cancelled",
+      body: preferredTime
+        ? `${consultation.patient.fullName} cancelled the consultation scheduled for ${preferredTime}.`
+        : `${consultation.patient.fullName} cancelled their consultation request.`,
+      priority: "HIGH",
+      entityType: "CONSULTATION",
+      entityId: consultation.id,
+      targetScreen: "DoctorConsultations",
+      data: {
+        consultationId: consultation.id,
+        patientId: consultation.patientId,
+        patientName: consultation.patient.fullName,
+        doctorId: consultation.doctorId,
+        consultationType: consultation.type,
+        consultationStatus: consultation.status,
+        preferredAt: consultation.preferredAt?.toISOString() || null,
+        cancelledAt: consultation.cancelledAt?.toISOString() || null,
+        source: "PATIENT_CANCELLED_CONSULTATION",
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `Unable to notify doctor about cancelled consultation ${consultation.id}:`,
+      error instanceof Error ? error.message : error,
+    );
   }
 };
 
 export const consultationService = {
-  async getPatientDoctorMonthlyAvailability(patientId: string, doctorId: string, month: string): Promise<PatientDoctorMonthlyAvailability> {
+  async getPatientDoctorMonthlyAvailability(
+    patientId: string,
+    doctorId: string,
+    month: string,
+  ): Promise<PatientDoctorMonthlyAvailability> {
     const doctor = await getAssignedApprovedDoctor(patientId, doctorId);
     const range = parseMonth(month);
 
     const [availabilities, bookedConsultations] = await Promise.all([
       prisma.doctorAvailability.findMany({
-        where: { doctorId, date: { gte: range.availabilityStart, lt: range.availabilityEnd }, status: "AVAILABLE" },
+        where: {
+          doctorId,
+          date: {
+            gte: range.availabilityStart,
+            lt: range.availabilityEnd,
+          },
+          status: "AVAILABLE",
+        },
         orderBy: { date: "asc" },
       }),
-      getBookedConsultationsForPeriod(doctorId, range.consultationStart, range.consultationEnd),
+
+      getBookedConsultationsForPeriod(
+        doctorId,
+        range.consultationStart,
+        range.consultationEnd,
+      ),
     ]);
 
     const bookedByDate = new Map<string, Set<number>>();
@@ -278,46 +512,118 @@ export const consultationService = {
       const bookedTimes = bookedByDate.get(date) || new Set<number>();
       const slots = generateFreeSlots(date, availability, bookedTimes);
 
-      return { date, isAvailable: slots.length > 0, availableSlotCount: slots.length };
+      return {
+        date,
+        isAvailable: slots.length > 0,
+        availableSlotCount: slots.length,
+      };
     });
 
-    return { month, doctor: formatDoctor(doctor), dates };
+    return {
+      month,
+      doctor: formatDoctor(doctor),
+      dates,
+    };
   },
 
-  async getPatientDoctorAvailableSlots(patientId: string, doctorId: string, date: string): Promise<PatientDoctorAvailableSlots> {
+  async getPatientDoctorAvailableSlots(
+    patientId: string,
+    doctorId: string,
+    date: string,
+  ): Promise<PatientDoctorAvailableSlots> {
     const doctor = await getAssignedApprovedDoctor(patientId, doctorId);
     const parsedDate = parseCalendarDate(date);
 
-    const availability = await prisma.doctorAvailability.findFirst({ where: { doctorId, date: parsedDate.databaseDate } });
+    const availability = await prisma.doctorAvailability.findFirst({
+      where: {
+        doctorId,
+        date: parsedDate.databaseDate,
+      },
+    });
 
-    if (!availability || availability.status !== "AVAILABLE" || !availability.startTime || !availability.endTime || !availability.slotDurationMinutes) {
-      return { date, isAvailable: false, doctor: formatDoctor(doctor), slots: [] };
+    if (
+      !availability ||
+      availability.status !== "AVAILABLE" ||
+      !availability.startTime ||
+      !availability.endTime ||
+      !availability.slotDurationMinutes
+    ) {
+      return {
+        date,
+        isAvailable: false,
+        doctor: formatDoctor(doctor),
+        slots: [],
+      };
     }
 
-    const bookedConsultations = await getBookedConsultationsForPeriod(doctorId, parsedDate.dayStart, parsedDate.dayEnd);
+    const bookedConsultations = await getBookedConsultationsForPeriod(
+      doctorId,
+      parsedDate.dayStart,
+      parsedDate.dayEnd,
+    );
+
     const bookedTimes = new Set<number>();
 
     bookedConsultations.forEach((consultation) => {
-      if (consultation.preferredAt) bookedTimes.add(consultation.preferredAt.getTime());
+      if (consultation.preferredAt) {
+        bookedTimes.add(consultation.preferredAt.getTime());
+      }
     });
 
-    const slots = generateFreeSlots(date, availability, bookedTimes);
-    return { date, isAvailable: slots.length > 0, doctor: formatDoctor(doctor), slots };
+    const slots = generateFreeSlots(
+      date,
+      availability,
+      bookedTimes,
+    );
+
+    return {
+      date,
+      isAvailable: slots.length > 0,
+      doctor: formatDoctor(doctor),
+      slots,
+    };
   },
 
-  async createEmergencyConsultationFromAlert(patientId: string, safetyAlertId: string, doctorId: string) {
-    const doctor = await getAssignedApprovedDoctor(patientId, doctorId, "PRIMARY");
+  async createEmergencyConsultationFromAlert(
+    patientId: string,
+    safetyAlertId: string,
+    doctorId: string,
+  ) {
+    const doctor = await getAssignedApprovedDoctor(
+      patientId,
+      doctorId,
+      "PRIMARY",
+    );
 
-    const existingConsultation = await prisma.consultation.findFirst({ where: { patientId, safetyAlertId }, include: consultationInclude });
+    const existingConsultation = await prisma.consultation.findFirst({
+      where: {
+        patientId,
+        safetyAlertId,
+      },
+      include: consultationInclude,
+    });
 
     if (existingConsultation) {
-      if (existingConsultation.doctorId && existingConsultation.doctorId !== doctor.id) throw new AppError("This emergency consultation is already assigned to another doctor.", 409);
+      if (
+        existingConsultation.doctorId &&
+        existingConsultation.doctorId !== doctor.id
+      ) {
+        throw new AppError(
+          "This emergency consultation is already assigned to another doctor.",
+          409,
+        );
+      }
 
-      const resolvedConsultation = existingConsultation.doctorId ? existingConsultation : await prisma.consultation.update({
-        where: { id: existingConsultation.id },
-        data: { doctorId: doctor.id, doctorName: doctor.fullName },
-        include: consultationInclude,
-      });
+      const resolvedConsultation = existingConsultation.doctorId
+        ? existingConsultation
+        : await prisma.consultation.update({
+            where: { id: existingConsultation.id },
+            data: {
+              doctorId: doctor.id,
+              doctorName: doctor.fullName,
+            },
+            include: consultationInclude,
+          });
 
       return {
         consultation: formatConsultation(resolvedConsultation),
@@ -340,14 +646,39 @@ export const consultationService = {
       include: consultationInclude,
     });
 
-    return { consultation: formatConsultation(consultation), patientMeeting: buildPatientMeeting(consultation), doctorMeeting: buildDoctorMeeting(consultation) };
+    return {
+      consultation: formatConsultation(consultation),
+      patientMeeting: buildPatientMeeting(consultation),
+      doctorMeeting: buildDoctorMeeting(consultation),
+    };
   },
 
-  async createManualConsultation(patientId: string, data: CreateManualConsultationInput) {
-    const doctor = await getAssignedApprovedDoctor(patientId, data.doctorId);
-    const preferredAt = parsePreferredDateTime(data.preferredDate, data.preferredTime);
+  async createManualConsultation(
+    patientId: string,
+    data: CreateManualConsultationInput,
+  ) {
+    const doctor = await getAssignedApprovedDoctor(
+      patientId,
+      data.doctorId,
+    );
 
-    if (preferredAt && data.preferredDate && data.preferredTime) await validateAppointmentSlot(doctor.id, preferredAt, data.preferredDate, data.preferredTime);
+    const preferredAt = parsePreferredDateTime(
+      data.preferredDate,
+      data.preferredTime,
+    );
+
+    if (
+      preferredAt &&
+      data.preferredDate &&
+      data.preferredTime
+    ) {
+      await validateAppointmentSlot(
+        doctor.id,
+        preferredAt,
+        data.preferredDate,
+        data.preferredTime,
+      );
+    }
 
     const consultation = await prisma.consultation.create({
       data: {
@@ -366,33 +697,240 @@ export const consultationService = {
 
     await notifyDoctorAboutManualConsultation(consultation);
 
-    return { consultation: formatConsultation(consultation), patientMeeting: buildPatientMeeting(consultation), doctorMeeting: buildDoctorMeeting(consultation) };
+    return {
+      consultation: formatConsultation(consultation),
+      patientMeeting: buildPatientMeeting(consultation),
+      doctorMeeting: buildDoctorMeeting(consultation),
+    };
+  },
+
+  async cancelPatientConsultation(
+    patientId: string,
+    consultationId: string,
+  ) {
+    const consultation = await getPatientConsultation(
+      patientId,
+      consultationId,
+    );
+
+    if (consultation.type !== "MANUAL") {
+      throw new AppError(
+        "Emergency consultations cannot be cancelled using the appointment cancellation workflow.",
+        400,
+      );
+    }
+
+    if (consultation.status === "CANCELLED") {
+      throw new AppError(
+        "This consultation has already been cancelled.",
+        400,
+      );
+    }
+
+    if (
+      consultation.status !== "PENDING" &&
+      consultation.status !== "ACCEPTED"
+    ) {
+      throw new AppError(
+        "This consultation can no longer be cancelled.",
+        400,
+      );
+    }
+
+    const updatedConsultation = await prisma.consultation.update({
+      where: { id: consultation.id },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+      },
+      include: consultationInclude,
+    });
+
+    await notifyDoctorAboutCancelledConsultation(
+      updatedConsultation,
+    );
+
+    return {
+      consultation: formatConsultation(updatedConsultation),
+    };
+  },
+
+  async reschedulePatientConsultation(
+    patientId: string,
+    consultationId: string,
+    data: RescheduleConsultationInput,
+  ) {
+    const consultation = await getPatientConsultation(
+      patientId,
+      consultationId,
+    );
+
+    if (consultation.type !== "MANUAL") {
+      throw new AppError(
+        "Emergency consultations cannot be rescheduled using the appointment calendar.",
+        400,
+      );
+    }
+
+    if (
+      consultation.status !== "PENDING" &&
+      consultation.status !== "ACCEPTED"
+    ) {
+      throw new AppError(
+        "Only pending or accepted appointments can be rescheduled.",
+        400,
+      );
+    }
+
+    if (!consultation.doctorId) {
+      throw new AppError(
+        "The doctor assigned to this consultation is unavailable.",
+        400,
+      );
+    }
+
+    const doctor = await getAssignedApprovedDoctor(
+      patientId,
+      consultation.doctorId,
+    );
+
+    const preferredAt = parsePreferredDateTime(
+      data.preferredDate,
+      data.preferredTime,
+    );
+
+    if (!preferredAt) {
+      throw new AppError(
+        "A new appointment date and time are required.",
+        400,
+      );
+    }
+
+    if (
+      consultation.preferredAt &&
+      consultation.preferredAt.getTime() === preferredAt.getTime()
+    ) {
+      throw new AppError(
+        "Please choose a different appointment time.",
+        400,
+      );
+    }
+
+    await validateAppointmentSlot(
+      doctor.id,
+      preferredAt,
+      data.preferredDate,
+      data.preferredTime,
+      consultation.id,
+    );
+
+    const updatedConsultation = await prisma.consultation.update({
+      where: { id: consultation.id },
+      data: {
+        preferredAt,
+        doctorName: doctor.fullName,
+        status: "PENDING",
+        acceptedAt: null,
+        rejectedAt: null,
+        rejectionNote: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+      },
+      include: consultationInclude,
+    });
+
+    await notifyDoctorAboutRescheduledConsultation(
+      updatedConsultation,
+    );
+
+    return {
+      consultation: formatConsultation(updatedConsultation),
+    };
   },
 
   async listPatientConsultations(patientId: string) {
-    const consultations = await prisma.consultation.findMany({ where: { patientId }, include: { doctor: true }, orderBy: { createdAt: "desc" } });
+    const consultations = await prisma.consultation.findMany({
+      where: { patientId },
+      include: { doctor: true },
+      orderBy: { createdAt: "desc" },
+    });
+
     return consultations.map(formatConsultation);
   },
 
-  async getPatientConsultationById(patientId: string, consultationId: string) {
-    const consultation = await getPatientConsultation(patientId, consultationId);
+  async getPatientConsultationById(
+    patientId: string,
+    consultationId: string,
+  ) {
+    const consultation = await getPatientConsultation(
+      patientId,
+      consultationId,
+    );
+
     return formatConsultation(consultation);
   },
 
-  async getPatientJoinConfig(patientId: string, consultationId: string) {
-    const consultation = await getPatientConsultation(patientId, consultationId);
+  async getPatientJoinConfig(
+    patientId: string,
+    consultationId: string,
+  ) {
+    const consultation = await getPatientConsultation(
+      patientId,
+      consultationId,
+    );
 
-    if (consultation.status === "PENDING") throw new AppError("Doctor has not accepted this consultation yet.", 400);
-    if (consultation.status === "REJECTED") throw new AppError("This consultation was rejected.", 400);
-    if (consultation.status === "CANCELLED") throw new AppError("This consultation was cancelled.", 400);
-    if (consultation.status === "COMPLETED") throw new AppError("This consultation has already been completed.", 400);
+    if (consultation.status === "PENDING") {
+      throw new AppError(
+        "Doctor has not accepted this consultation yet.",
+        400,
+      );
+    }
 
-    const updatedConsultation = consultation.status === "ACCEPTED" ? await prisma.consultation.update({
-      where: { id: consultation.id },
-      data: { status: "IN_PROGRESS", startedAt: consultation.startedAt || new Date() },
-      include: consultationInclude,
-    }) : consultation;
+    if (consultation.status === "REJECTED") {
+      throw new AppError(
+        "This consultation was rejected.",
+        400,
+      );
+    }
 
-    return { consultation: formatConsultation(updatedConsultation), patientMeeting: buildPatientMeeting(updatedConsultation) };
+    if (consultation.status === "CANCELLED") {
+      throw new AppError(
+        "This consultation was cancelled.",
+        400,
+      );
+    }
+
+    if (consultation.status === "COMPLETED") {
+      throw new AppError(
+        "This consultation has already been completed.",
+        400,
+      );
+    }
+
+    const updatedConsultation =
+      consultation.status === "ACCEPTED"
+        ? await prisma.consultation.update({
+            where: { id: consultation.id },
+            data: {
+              status: "IN_PROGRESS",
+              startedAt:
+                consultation.startedAt ||
+                new Date(),
+            },
+            include: consultationInclude,
+          })
+        : consultation;
+
+    return {
+      consultation:
+        formatConsultation(
+          updatedConsultation,
+        ),
+      patientMeeting:
+        buildPatientMeeting(
+          updatedConsultation,
+        ),
+    };
   },
 };
