@@ -51,9 +51,7 @@ export type MedicineDraft = {
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 
 export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
-
 export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
-
 export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
 
 export type RootStackParamList = {
@@ -127,4 +125,6 @@ export type RootStackParamList = {
   DoctorSelectNotePatient: undefined;
   DoctorAddNote: { patientId: string; patientName: string };
   DoctorAvailability: undefined;
+  DoctorMedicineReviewPool: undefined;
+  DoctorMedicineReviewPoolDetail: { requestId: string };
 };

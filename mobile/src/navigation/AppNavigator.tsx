@@ -45,6 +45,8 @@ import DoctorPatientReportsScreen from "../screens/doctor/DoctorPatientReportsSc
 import DoctorReportReviewsScreen from "../screens/doctor/DoctorReportReviewsScreen";
 import DoctorReportReviewScreen from "../screens/doctor/DoctorReportReviewScreen";
 import DoctorAvailabilityScreen from "../screens/doctor/DoctorAvailabilityScreen";
+import DoctorMedicineReviewPoolScreen from "../screens/doctor/DoctorMedicineReviewPoolScreen";
+import DoctorMedicineReviewPoolDetailScreen from "../screens/doctor/DoctorMedicineReviewPoolDetailScreen";
 import { AdminDoctorVerificationDetailScreen } from "../screens/admin/AdminDoctorVerificationDetailScreen";
 import { AdminPharmacyVerificationDetailScreen } from "../screens/admin/AdminPharmacyVerificationDetailScreen";
 import { AdminAuditLogsScreen } from "../screens/admin/AdminAuditLogsScreen";
@@ -81,6 +83,8 @@ const DoctorPrescriptionStackScreen = DoctorPrescriptionScreen as ComponentType<
 const DoctorSelectNotePatientStackScreen = DoctorSelectNotePatientScreen as ComponentType<any>;
 const DoctorAddNoteStackScreen = DoctorAddNoteScreen as ComponentType<any>;
 const DoctorAvailabilityStackScreen = DoctorAvailabilityScreen as ComponentType<any>;
+const DoctorMedicineReviewPoolStackScreen = DoctorMedicineReviewPoolScreen as ComponentType<any>;
+const DoctorMedicineReviewPoolDetailStackScreen = DoctorMedicineReviewPoolDetailScreen as ComponentType<any>;
 const ReminderSettingsStackScreen = ReminderSettingsScreen as ComponentType<any>;
 const SafetyResponseSettingsStackScreen = SafetyResponseSettingsScreen as ComponentType<any>;
 const LanguageAccessibilityStackScreen = LanguageAccessibilityScreen as ComponentType<any>;
@@ -102,7 +106,13 @@ const CriticalVitalWatcher = () => {
 
     const currentRoute = navigationRef.getCurrentRoute();
 
-    if (currentRoute?.name === "SafetyResponse" || currentRoute?.name === "VideoConsultation" || currentRoute?.name === "ConsultationEnded") return;
+    if (
+      currentRoute?.name === "SafetyResponse" ||
+      currentRoute?.name === "VideoConsultation" ||
+      currentRoute?.name === "ConsultationEnded"
+    ) {
+      return;
+    }
 
     lastHandledReadingIdRef.current = lastSyncedReading.id;
 
@@ -149,6 +159,8 @@ export const AppNavigator = () => {
               <Stack.Screen name="DoctorSelectNotePatient" component={DoctorSelectNotePatientStackScreen} />
               <Stack.Screen name="DoctorAddNote" component={DoctorAddNoteStackScreen} />
               <Stack.Screen name="DoctorAvailability" component={DoctorAvailabilityStackScreen} />
+              <Stack.Screen name="DoctorMedicineReviewPool" component={DoctorMedicineReviewPoolStackScreen} />
+              <Stack.Screen name="DoctorMedicineReviewPoolDetail" component={DoctorMedicineReviewPoolDetailStackScreen} />
 
               <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
               <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />

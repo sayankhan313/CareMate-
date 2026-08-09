@@ -46,6 +46,7 @@ import {
   type DoctorUrgentAlert,
 } from "../../services/doctor/doctorDashboardApi";
 import { doctorReportsApi } from "../../services/doctor/doctorReportsApi";
+import { doctorMedicineReviewsApi } from "../../services/doctor/doctorMedicineReviewsApi";
 import type { DoctorTabParamList } from "../../types/navigation";
 
 type DoctorDashboardScreenProps = BottomTabScreenProps<DoctorTabParamList, "Home">;
@@ -133,6 +134,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
   const [dashboard, setDashboard] = useState<DoctorDashboardData | null>(null);
   const [pendingReportReviews, setPendingReportReviews] = useState(0);
+  const [pendingPoolReviews, setPendingPoolReviews] = useState(0);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -171,19 +173,22 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
         mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
         setErrorMessage("");
 
-        const [dashboardData, reportQueue, notificationData] = await Promise.all([
+        const [dashboardData, reportQueue, poolReviewQueue, notificationData] = await Promise.all([
           doctorDashboardApi.getDashboard(),
           doctorReportsApi.listReportQueue("PENDING").catch(() => null),
+          doctorMedicineReviewsApi.listPoolReviews().catch(() => null),
           notificationApi.getUnreadCount().catch(() => ({ unreadCount: 0 })),
         ]);
 
         setDashboard(dashboardData);
         setPendingReportReviews(reportQueue?.summary?.pending || 0);
+        setPendingPoolReviews(poolReviewQueue?.summary?.awaitingReview || 0);
         setNotificationUnreadCount(notificationData.unreadCount || 0);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to load doctor dashboard.";
         setErrorMessage(message);
         setPendingReportReviews(0);
+        setPendingPoolReviews(0);
 
         if (message.toLowerCase().includes("login")) await resetToLogin();
       } finally {
@@ -234,6 +239,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
   const openPrescriptionPatients = () => openRootScreen("DoctorSelectPrescriptionPatient");
   const openNotePatients = () => openRootScreen("DoctorSelectNotePatient");
   const openReportReviews = () => openRootScreen("DoctorReportReviews");
+  const openPoolReviews = () => openRootScreen("DoctorMedicineReviewPool");
 
   const openPatientDetail = (patient: DoctorDashboardPatient) => {
     const rootNavigation = navigation.getParent();
@@ -279,6 +285,13 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
       icon: <Pill size={23} color={WARNING} strokeWidth={2.6} />,
       badgeCount: dashboard?.stats.pendingMedicineReviews,
       onPress: openMedicineReviews,
+    },
+    {
+      key: "pool-reviews",
+      title: "Pool Reviews",
+      icon: <ShieldCheck size={23} color={DOCTOR_PRIMARY} strokeWidth={2.6} />,
+      badgeCount: pendingPoolReviews,
+      onPress: openPoolReviews,
     },
     {
       key: "reports",
@@ -410,8 +423,8 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
                   <View style={styles.heroStatDivider} />
 
                   <View style={styles.heroStatBox}>
-                    <Text style={styles.heroStatValue}>{pendingReportReviews}</Text>
-                    <Text style={styles.heroStatLabel}>Reports</Text>
+                    <Text style={styles.heroStatValue}>{pendingPoolReviews}</Text>
+                    <Text style={styles.heroStatLabel}>Pool reviews</Text>
                   </View>
                 </View>
               </LinearGradient>
@@ -419,14 +432,9 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
               <FlatList
                 horizontal
                 data={quickActions}
-                keyExtractor={(item) => item.key}
+                keyExtractor={item => item.key}
                 renderItem={({ item }) => (
-                  <QuickAction
-                    title={item.title}
-                    icon={item.icon}
-                    badgeCount={item.badgeCount}
-                    onPress={item.onPress}
-                  />
+                  <QuickAction title={item.title} icon={item.icon} badgeCount={item.badgeCount} onPress={item.onPress} />
                 )}
                 ItemSeparatorComponent={() => <View style={styles.quickActionSeparator} />}
                 contentContainerStyle={styles.quickActionsContent}
@@ -448,7 +456,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
               {dashboard.urgentAlerts.length > 0 ? (
                 <View style={styles.alertStack}>
-                  {dashboard.urgentAlerts.map((alert) => (
+                  {dashboard.urgentAlerts.map(alert => (
                     <UrgentAlertPanel key={alert.id} alert={alert} onOpen={openAlerts} onJoin={openAlerts} />
                   ))}
                 </View>
@@ -480,7 +488,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
               <View style={styles.cardStack}>
                 {dashboard.upcomingConsultations.length > 0 ? (
-                  dashboard.upcomingConsultations.map((consultation) => (
+                  dashboard.upcomingConsultations.map(consultation => (
                     <ConsultationCard key={consultation.id} consultation={consultation} onPress={openConsultations} />
                   ))
                 ) : (
@@ -505,7 +513,7 @@ export const DoctorDashboardScreen = ({ navigation, route }: DoctorDashboardScre
 
               <View style={styles.cardStack}>
                 {dashboard.recentPatients.length > 0 ? (
-                  dashboard.recentPatients.map((patient) => (
+                  dashboard.recentPatients.map(patient => (
                     <PatientCard key={patient.assignmentId} patient={patient} onPress={() => openPatientDetail(patient)} />
                   ))
                 ) : (
@@ -562,7 +570,6 @@ const UrgentAlertPanel = ({ alert, onOpen, onJoin }: { alert: DoctorUrgentAlert;
 
       <View style={styles.alertMetricBox}>
         <HeartPulse size={17} color={DANGER} strokeWidth={2.5} />
-
         <Text style={styles.alertMetricText}>
           {alert.vitalSummary ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}` : "Critical reading needs review"}
         </Text>
