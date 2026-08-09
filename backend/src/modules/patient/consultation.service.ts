@@ -14,6 +14,30 @@ const consultationInclude = { patient: true, doctor: true, safetyAlert: { includ
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+type DoctorOperationalStatusValue = "AVAILABLE" | "OUT_OF_OFFICE" | "UNAVAILABLE";
+
+const getEffectiveDoctorOperationalStatus = (profile: any): DoctorOperationalStatusValue => {
+  const configuredStatus = (profile?.operationalStatus || "AVAILABLE") as DoctorOperationalStatusValue;
+  if (configuredStatus === "AVAILABLE") return "AVAILABLE";
+
+  const now = new Date();
+  if (profile?.statusFrom && new Date(profile.statusFrom).getTime() > now.getTime()) return "AVAILABLE";
+  if (profile?.statusUntil && new Date(profile.statusUntil).getTime() < now.getTime()) return "AVAILABLE";
+
+  return configuredStatus;
+};
+
+const ensureDoctorAvailableForAppointments = (doctor: any) => {
+  const status = getEffectiveDoctorOperationalStatus(doctor?.doctorProfile);
+
+  if (status === "OUT_OF_OFFICE") {
+    throw new AppError("The selected doctor is currently out of office and is not accepting new appointments.", 409);
+  }
+
+  if (status === "UNAVAILABLE") {
+    throw new AppError("The selected doctor is currently unavailable for new appointments.", 409);
+  }
+};
 
 const formatConsultation = (consultation: any) => ({
   id: consultation.id,
@@ -187,6 +211,9 @@ const getAssignedApprovedDoctor = async (
             select: {
               specialization: true,
               clinicName: true,
+              operationalStatus: true,
+              statusFrom: true,
+              statusUntil: true,
             },
           },
         },
@@ -256,12 +283,15 @@ const generateFreeSlots = (
 };
 
 const validateAppointmentSlot = async (
-  doctorId: string,
+  doctor: any,
   preferredAt: Date,
   preferredDate: string,
   preferredTime: string,
   excludeConsultationId?: string,
 ) => {
+  ensureDoctorAvailableForAppointments(doctor);
+
+  const doctorId = doctor.id;
   const [day, month, year] = preferredDate.split("/").map(Number);
   const calendarDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const parsedDate = parseCalendarDate(calendarDate);
@@ -476,6 +506,14 @@ export const consultationService = {
     const doctor = await getAssignedApprovedDoctor(patientId, doctorId);
     const range = parseMonth(month);
 
+    if (getEffectiveDoctorOperationalStatus(doctor.doctorProfile) !== "AVAILABLE") {
+      return {
+        month,
+        doctor: formatDoctor(doctor),
+        dates: [],
+      };
+    }
+
     const [availabilities, bookedConsultations] = await Promise.all([
       prisma.doctorAvailability.findMany({
         where: {
@@ -533,6 +571,15 @@ export const consultationService = {
   ): Promise<PatientDoctorAvailableSlots> {
     const doctor = await getAssignedApprovedDoctor(patientId, doctorId);
     const parsedDate = parseCalendarDate(date);
+
+    if (getEffectiveDoctorOperationalStatus(doctor.doctorProfile) !== "AVAILABLE") {
+      return {
+        date,
+        isAvailable: false,
+        doctor: formatDoctor(doctor),
+        slots: [],
+      };
+    }
 
     const availability = await prisma.doctorAvailability.findFirst({
       where: {
@@ -662,6 +709,8 @@ export const consultationService = {
       data.doctorId,
     );
 
+    ensureDoctorAvailableForAppointments(doctor);
+
     const preferredAt = parsePreferredDateTime(
       data.preferredDate,
       data.preferredTime,
@@ -673,7 +722,7 @@ export const consultationService = {
       data.preferredTime
     ) {
       await validateAppointmentSlot(
-        doctor.id,
+        doctor,
         preferredAt,
         data.preferredDate,
         data.preferredTime,
@@ -794,6 +843,8 @@ export const consultationService = {
       consultation.doctorId,
     );
 
+    ensureDoctorAvailableForAppointments(doctor);
+
     const preferredAt = parsePreferredDateTime(
       data.preferredDate,
       data.preferredTime,
@@ -817,7 +868,7 @@ export const consultationService = {
     }
 
     await validateAppointmentSlot(
-      doctor.id,
+      doctor,
       preferredAt,
       data.preferredDate,
       data.preferredTime,
