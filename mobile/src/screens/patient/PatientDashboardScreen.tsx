@@ -44,7 +44,6 @@ import {
   Pill,
   Plus,
   RefreshCw,
-  Search,
   ShieldAlert,
   UserRound,
   Video,
@@ -55,6 +54,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { consultationsApi } from "../../services/consultationsApi";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
 import { patientReportsApi } from "../../services/patientReportsApi";
+import { patientSettingsApi, type ReminderSettings } from "../../services/patientSettingsApi";
 import { notificationApi } from "../../services/notificationApi";
 import { notificationEvents } from "../../services/notificationEvents";
 import { tokenStorage } from "../../services/tokenStorage";
@@ -338,6 +338,11 @@ export const PatientDashboardScreen = ({
       null
     );
 
+  const [
+    defaultSnoozeMinutes,
+    setDefaultSnoozeMinutes,
+  ] = useState<ReminderSettings["defaultSnoozeMinutes"]>(10);
+
   const resetToLogin =
     useCallback(async () => {
       await tokenStorage.removeToken();
@@ -426,6 +431,20 @@ export const PatientDashboardScreen = ({
         );
       } catch {
         setNotificationUnreadCount(0);
+      }
+    }, []);
+
+  const loadReminderSettings =
+    useCallback(async () => {
+      try {
+        const result =
+          await patientSettingsApi.getReminderSettings();
+
+        setDefaultSnoozeMinutes(
+          result.settings.defaultSnoozeMinutes
+        );
+      } catch {
+        return;
       }
     }, []);
 
@@ -547,6 +566,8 @@ export const PatientDashboardScreen = ({
 
       void loadNotificationUnreadCount();
 
+      void loadReminderSettings();
+
       const intervalId =
         setInterval(() => {
           void loadDashboard(
@@ -560,6 +581,8 @@ export const PatientDashboardScreen = ({
           void loadReportUnreadCount();
 
           void loadNotificationUnreadCount();
+
+          void loadReminderSettings();
         }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
@@ -572,6 +595,7 @@ export const PatientDashboardScreen = ({
       loadDashboard,
       loadMedicineReviewUnreadCount,
       loadNotificationUnreadCount,
+      loadReminderSettings,
       loadReportUnreadCount,
     ])
   );
@@ -754,7 +778,7 @@ export const PatientDashboardScreen = ({
         const snoozedUntil =
           new Date(
             Date.now() +
-              30 *
+              defaultSnoozeMinutes *
                 60 *
                 1000
           ).toISOString();
@@ -975,10 +999,6 @@ export const PatientDashboardScreen = ({
       );
     };
 
-  const showComingSoon = (featureName: string) => {
-    Alert.alert(t("common.comingSoon"), t("dashboard.comingSoonMessage", { feature: featureName }));
-  };
-
   const fallbackName =
     route.params?.user?.fullName?.split(
       " "
@@ -1088,22 +1108,6 @@ export const PatientDashboardScreen = ({
                 styles.iconButton
               }
               activeOpacity={0.84}
-              onPress={() =>
-                showComingSoon(t("dashboard.search"))
-              }
-            >
-              <Search
-                size={22}
-                color={TEXT}
-                strokeWidth={2}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={
-                styles.iconButton
-              }
-              activeOpacity={0.84}
               onPress={
                 openNotificationsScreen
               }
@@ -1189,6 +1193,8 @@ export const PatientDashboardScreen = ({
                 void loadReportUnreadCount();
 
                 void loadNotificationUnreadCount();
+
+                void loadReminderSettings();
               }}
               tintColor={PRIMARY}
               colors={[PRIMARY]}
