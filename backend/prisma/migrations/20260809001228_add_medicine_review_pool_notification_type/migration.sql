@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'MEDICINE_REVIEW_POOL_ASSIGNED';

@@ -79,6 +79,19 @@ enum MedicineReviewRequestStatus {
   APPLIED
 }
 
+enum MedicineReviewRoutingStatus {
+  ASSIGNED
+  ADMIN_REVIEW_REQUIRED
+  POOL_ASSIGNED
+  POOL_REVIEW_COMPLETED
+  RELEASED
+}
+
+enum MedicineReviewPoolDecision {
+  APPROVED
+  REJECTED
+}
+
 enum DoseLogStatus {
   PENDING
   TAKEN
@@ -237,6 +250,7 @@ enum NotificationType {
   CONSULTATION_CANCELLED
   PATIENT_JOINED_CALL
   MEDICINE_REVIEW_REQUESTED
+  MEDICINE_REVIEW_POOL_ASSIGNED
   MEDICINE_REVIEW_APPROVED
   MEDICINE_REVIEW_REJECTED
   NEW_PRESCRIPTION
@@ -301,6 +315,8 @@ model User {
   patientMedicineReviewRequests MedicineReviewRequest[] @relation("MedicineReviewPatient")
   doctorMedicineReviewRequests  MedicineReviewRequest[] @relation("MedicineReviewAssignedDoctor")
   doctorMedicineReviewDecisions MedicineReviewRequest[] @relation("MedicineReviewDecisionDoctor")
+  doctorPoolMedicineReviews     MedicineReviewRequest[] @relation("MedicineReviewPoolDoctor")
+  adminReleasedMedicineReviews  MedicineReviewRequest[] @relation("MedicineReviewReleasedByAdmin")
 
   patientPrescriptions      Prescription[] @relation("PatientPrescriptions")
   doctorPrescriptions       Prescription[] @relation("DoctorPrescriptions")
@@ -662,28 +678,51 @@ model MedicineReminder {
 model MedicineReviewRequest {
   id                 String                      @id @default(uuid())
   patientId          String
-  doctorId           String
+  doctorId           String?
   reviewedByDoctorId String?
+  poolDoctorId       String?
+  releasedByAdminId  String?
   medicineId         String
   requestType        MedicineReviewRequestType
   status             MedicineReviewRequestStatus @default(PENDING)
-  patientReason      String?
-  doctorNote         String?
-  reviewedAt         DateTime?
-  patientSeenAt      DateTime?
-  appliedAt          DateTime?
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
+  routingStatus      MedicineReviewRoutingStatus @default(ASSIGNED)
+
+  patientReason String?
+  doctorNote    String?
+
+  assignedAt         DateTime  @default(now())
+  escalatedAt        DateTime?
+  attemptedDoctorIds String[]  @default([])
+
+  poolAssignedAt DateTime?
+  poolDecision   MedicineReviewPoolDecision?
+  poolDoctorNote String?
+  poolReviewedAt DateTime?
+
+  adminReleasedAt DateTime?
+
+  reviewedAt    DateTime?
+  patientSeenAt DateTime?
+  appliedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   patient          User     @relation("MedicineReviewPatient", fields: [patientId], references: [id], onDelete: Cascade)
-  doctor           User     @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: Restrict)
+  doctor           User?    @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
   reviewedByDoctor User?    @relation("MedicineReviewDecisionDoctor", fields: [reviewedByDoctorId], references: [id], onDelete: SetNull)
+  poolDoctor       User?    @relation("MedicineReviewPoolDoctor", fields: [poolDoctorId], references: [id], onDelete: SetNull)
+  releasedByAdmin  User?    @relation("MedicineReviewReleasedByAdmin", fields: [releasedByAdminId], references: [id], onDelete: SetNull)
   medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
 
   @@index([patientId, status])
   @@index([doctorId, status])
+  @@index([poolDoctorId, routingStatus])
+  @@index([releasedByAdminId])
   @@index([medicineId, requestType, status])
   @@index([reviewedByDoctorId])
+  @@index([routingStatus, status])
+  @@index([assignedAt, status])
+  @@index([poolAssignedAt])
   @@index([createdAt])
 }
 

@@ -19,11 +19,6 @@ router.use(authorizeRoles("DOCTOR"));
 
 router.get("/dashboard", doctorController.getDashboard);
 
-router.get("/availability", doctorController.getAvailability);
-router.put("/availability/month", doctorController.saveMonthlyAvailability);
-router.patch("/availability/status", doctorController.updateOperationalStatus);
-router.delete("/availability/:availabilityId", doctorController.deleteAvailability);
-
 router.get("/alerts", doctorAlertsController.listAlerts);
 router.get("/alerts/:alertId", doctorAlertsController.getAlertDetail);
 router.post("/alerts/:alertId/resolve", doctorAlertsController.resolveAlert);
@@ -33,6 +28,11 @@ router.get("/medicine-reviews/:requestId", doctorMedicineReviewsController.getRe
 router.post("/medicine-reviews/:requestId/approve", doctorMedicineReviewsController.approveReview);
 router.post("/medicine-reviews/:requestId/reject", doctorMedicineReviewsController.rejectReview);
 
+router.get("/medicine-review-pool", doctorMedicineReviewsController.listPoolReviews);
+router.get("/medicine-review-pool/:requestId", doctorMedicineReviewsController.getPoolReviewDetail);
+router.post("/medicine-review-pool/:requestId/approve", doctorMedicineReviewsController.approvePoolReview);
+router.post("/medicine-review-pool/:requestId/reject", doctorMedicineReviewsController.rejectPoolReview);
+
 router.get("/reports", doctorReportsController.listReportQueue);
 
 router.post("/prescription-scan/parse", doctorPrescriptionsController.parsePrescriptionScan);
@@ -40,7 +40,7 @@ router.post("/prescription-scan/parse", doctorPrescriptionsController.parsePresc
 router.post(
   "/patients/:patientId/prescriptions",
   prescriptionImageUpload.single("prescriptionImage"),
-  doctorPrescriptionsController.createPrescription,
+  doctorPrescriptionsController.createPrescription
 );
 
 router.get("/patients/:patientId/prescriptions", doctorPrescriptionsController.listPatientPrescriptions);

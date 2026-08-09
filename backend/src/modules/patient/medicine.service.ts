@@ -3,6 +3,19 @@ import { AppError } from "../../utils/AppError.js";
 import { notificationService } from "../notification/notification.service.js";
 import type { CreateMedicineInput, RequestMedicineDeletionInput, ResubmitMedicineReviewInput, SnoozeMedicineInput, UpdateMedicineInput } from "./medicine.types.js";
 
+type ReviewDoctor = {
+  id: string;
+  fullName: string;
+  email: string;
+};
+
+type MedicineReviewRoutingDecision = {
+  doctor: ReviewDoctor | null;
+  routingStatus: "ASSIGNED" | "ADMIN_REVIEW_REQUIRED";
+  attemptedDoctorIds: string[];
+  escalatedAt: Date | null;
+};
+
 const reminderRelations = {
   reviewDoctor: { select: { id: true, fullName: true, email: true } },
   reviewedByDoctor: { select: { id: true, fullName: true, email: true } },
@@ -106,7 +119,13 @@ const getActiveReviewDoctorAssignments = async (patientId: string) => {
     where: {
       patientId,
       status: "ACTIVE",
-      doctor: { is: { role: "DOCTOR", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+      doctor: {
+        is: {
+          role: "DOCTOR",
+          isEmailVerified: true,
+          accountStatus: { in: ["ACTIVE", "APPROVED"] },
+        },
+      },
     },
     select: {
       assignmentType: true,
@@ -122,11 +141,16 @@ const findPrimaryReviewDoctor = async (patientId: string) => {
   return assignments.find(assignment => assignment.assignmentType === "PRIMARY")?.doctor || null;
 };
 
-const getMedicineReviewDoctor = async (patientId: string) => {
+const getMedicineReviewRouting = async (patientId: string): Promise<MedicineReviewRoutingDecision> => {
   const assignments = await getActiveReviewDoctorAssignments(patientId);
 
   if (assignments.length === 0) {
-    throw new AppError("Please assign an active doctor before requesting a medicine review.", 400);
+    return {
+      doctor: null,
+      routingStatus: "ADMIN_REVIEW_REQUIRED",
+      attemptedDoctorIds: [],
+      escalatedAt: new Date(),
+    };
   }
 
   const primaryAssignment = assignments.find(assignment => assignment.assignmentType === "PRIMARY") || null;
@@ -145,16 +169,30 @@ const getMedicineReviewDoctor = async (patientId: string) => {
   });
 
   const statusByDoctorId = new Map(todayAvailability.map(availability => [availability.doctorId, availability.status]));
+  const attemptedDoctorIds: string[] = [];
 
-  const selectedAssignment = orderedAssignments.find(
-    assignment => statusByDoctorId.get(assignment.doctor.id) !== "OUT_OF_OFFICE"
-  );
+  for (const assignment of orderedAssignments) {
+    const availabilityStatus = statusByDoctorId.get(assignment.doctor.id);
 
-  if (!selectedAssignment) {
-    throw new AppError("All assigned doctors are currently out of office. This medicine review cannot be routed automatically.", 409);
+    if (availabilityStatus === "OUT_OF_OFFICE") {
+      attemptedDoctorIds.push(assignment.doctor.id);
+      continue;
+    }
+
+    return {
+      doctor: assignment.doctor,
+      routingStatus: "ASSIGNED",
+      attemptedDoctorIds,
+      escalatedAt: null,
+    };
   }
 
-  return selectedAssignment.doctor;
+  return {
+    doctor: null,
+    routingStatus: "ADMIN_REVIEW_REQUIRED",
+    attemptedDoctorIds,
+    escalatedAt: new Date(),
+  };
 };
 
 const ensureNoPendingRequest = async (patientId: string, medicineId: string) => {
@@ -227,6 +265,10 @@ const formatReviewRequest = (request: any) => {
     medicineId: request.medicineId,
     requestType: request.requestType,
     status: request.status,
+    routingStatus: request.routingStatus,
+    attemptedDoctorIds: request.attemptedDoctorIds || [],
+    assignedAt: request.assignedAt,
+    escalatedAt: request.escalatedAt,
     patientReason: request.patientReason,
     doctorNote: request.doctorNote,
     reviewedAt: request.reviewedAt,
@@ -280,6 +322,9 @@ const formatMedicine = (medicine: any) => {
           id: latestReviewRequest.id,
           requestType: latestReviewRequest.requestType,
           status: latestReviewRequest.status,
+          routingStatus: latestReviewRequest.routingStatus,
+          assignedAt: latestReviewRequest.assignedAt,
+          escalatedAt: latestReviewRequest.escalatedAt,
           patientReason: latestReviewRequest.patientReason,
           doctorNote: latestReviewRequest.doctorNote,
           reviewedAt: latestReviewRequest.reviewedAt,
@@ -320,7 +365,7 @@ const notifyDoctorAboutMedicineReview = async (requestId: string) => {
       },
     });
 
-    if (!request) return;
+    if (!request || !request.doctorId) return;
 
     const existingNotification = await prisma.userNotification.findFirst({
       where: {
@@ -373,7 +418,8 @@ export const medicineService = {
     validateDateRange(startDate, endDate);
 
     const requestingReview = data.sendToDoctorForReview === true;
-    const reviewDoctor = requestingReview ? await getMedicineReviewDoctor(patientId) : null;
+    const routing = requestingReview ? await getMedicineReviewRouting(patientId) : null;
+    const reviewDoctor = routing?.doctor || null;
 
     const result = await prisma.$transaction(async tx => {
       const createdMedicine = await tx.medicine.create({
@@ -405,14 +451,18 @@ export const medicineService = {
 
       let reviewRequestId: string | null = null;
 
-      if (requestingReview && reviewDoctor) {
+      if (requestingReview && routing) {
         const reviewRequest = await tx.medicineReviewRequest.create({
           data: {
             patientId,
-            doctorId: reviewDoctor.id,
+            doctorId: reviewDoctor?.id || null,
             medicineId: createdMedicine.id,
             requestType: "ADD",
             status: "PENDING",
+            routingStatus: routing.routingStatus,
+            attemptedDoctorIds: routing.attemptedDoctorIds,
+            assignedAt: new Date(),
+            escalatedAt: routing.escalatedAt,
           },
           select: { id: true },
         });
@@ -555,7 +605,8 @@ export const medicineService = {
     validateDateRange(startDate, endDate);
 
     const requestingReview = data.sendToDoctorForReview === true;
-    const reviewDoctor = requestingReview ? await getMedicineReviewDoctor(patientId) : null;
+    const routing = requestingReview ? await getMedicineReviewRouting(patientId) : null;
+    const reviewDoctor = routing?.doctor || null;
 
     if (requestingReview) await ensureNoPendingRequest(patientId, medicineId);
 
@@ -602,15 +653,19 @@ export const medicineService = {
         await tx.medicineReminder.create({ data: { medicineId, ...reminderData } });
       }
 
-      if (!requestingReview || !reviewDoctor) return null;
+      if (!requestingReview || !routing) return null;
 
       const reviewRequest = await tx.medicineReviewRequest.create({
         data: {
           patientId,
-          doctorId: reviewDoctor.id,
+          doctorId: reviewDoctor?.id || null,
           medicineId,
           requestType: "ADD",
           status: "PENDING",
+          routingStatus: routing.routingStatus,
+          attemptedDoctorIds: routing.attemptedDoctorIds,
+          assignedAt: new Date(),
+          escalatedAt: routing.escalatedAt,
         },
         select: { id: true },
       });
@@ -644,15 +699,20 @@ export const medicineService = {
     const medicine = await getMedicineForPatient(patientId, medicineId, false);
     await ensureNoPendingRequest(patientId, medicineId);
 
-    const doctor = await getMedicineReviewDoctor(patientId);
+    const routing = await getMedicineReviewRouting(patientId);
+    const doctor = routing.doctor;
 
     const request = await prisma.medicineReviewRequest.create({
       data: {
         patientId,
-        doctorId: doctor.id,
+        doctorId: doctor?.id || null,
         medicineId: medicine.id,
         requestType: "DELETE",
         status: "PENDING",
+        routingStatus: routing.routingStatus,
+        attemptedDoctorIds: routing.attemptedDoctorIds,
+        assignedAt: new Date(),
+        escalatedAt: routing.escalatedAt,
         patientReason: data.reason.trim(),
       },
       include: reviewRequestRelations,
@@ -661,7 +721,9 @@ export const medicineService = {
     await notifyDoctorAboutMedicineReview(request.id);
 
     return {
-      message: "Medicine deletion request sent for doctor review.",
+      message: routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
+        ? "Medicine deletion request sent for administrator-assisted review routing."
+        : "Medicine deletion request sent for doctor review.",
       request: formatReviewRequest(request),
     };
   },
@@ -751,7 +813,9 @@ export const medicineService = {
 
     await ensureNoPendingRequest(patientId, request.medicineId);
 
-    const doctor = await getMedicineReviewDoctor(patientId);
+    const routing = await getMedicineReviewRouting(patientId);
+    const doctor = routing.doctor;
+
     const startDate = parseDate(data.startDate);
     const endDate = data.endDate ? parseDate(data.endDate) : null;
     validateDateRange(startDate, endDate);
@@ -778,7 +842,7 @@ export const medicineService = {
         isActive: false,
         sendToDoctorForReview: true,
         reviewStatus: "PENDING" as const,
-        reviewDoctorId: doctor.id,
+        reviewDoctorId: doctor?.id || null,
         reviewedByDoctorId: null,
         reviewedAt: null,
         reviewNote: null,
@@ -800,10 +864,14 @@ export const medicineService = {
       return tx.medicineReviewRequest.create({
         data: {
           patientId,
-          doctorId: doctor.id,
+          doctorId: doctor?.id || null,
           medicineId: request.medicineId,
           requestType: "ADD",
           status: "PENDING",
+          routingStatus: routing.routingStatus,
+          attemptedDoctorIds: routing.attemptedDoctorIds,
+          assignedAt: new Date(),
+          escalatedAt: routing.escalatedAt,
         },
         include: reviewRequestRelations,
       });
@@ -812,7 +880,9 @@ export const medicineService = {
     await notifyDoctorAboutMedicineReview(newRequest.id);
 
     return {
-      message: "Updated medicine sent for doctor review.",
+      message: routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
+        ? "Updated medicine sent for administrator-assisted review routing."
+        : "Updated medicine sent for doctor review.",
       request: formatReviewRequest(newRequest),
     };
   },

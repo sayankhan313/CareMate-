@@ -12,61 +12,28 @@ router.use(authorizeRoles("ADMIN"));
 
 router.get("/dashboard", adminController.getDashboard);
 
-router.get(
-  "/audit-logs",
-  adminAuditController.listAuditLogs
-);
+router.get("/medicine-review-escalations", adminController.listMedicineReviewEscalations);
+router.get("/medicine-review-escalations/:requestId", adminController.getMedicineReviewEscalation);
+router.patch("/medicine-review-escalations/:requestId/assign", adminController.assignMedicineReviewEscalation);
 
-router.get(
-  "/audit-logs/:auditLogId",
-  adminAuditController.getAuditLogDetail
-);
+router.get("/medicine-review-pool/assigned", adminController.listMedicineReviewPoolAssignments);
+router.get("/medicine-review-pool/completed", adminController.listCompletedMedicineReviewPoolReviews);
+router.patch("/medicine-review-pool/:requestId/release", adminController.releaseMedicineReviewPoolResult);
+
+router.get("/audit-logs", adminAuditController.listAuditLogs);
+router.get("/audit-logs/:auditLogId", adminAuditController.getAuditLogDetail);
 
 router.get("/users", adminController.listUsers);
+router.patch("/users/:userId/suspend", adminController.suspendUser);
 
-router.patch(
-  "/users/:userId/suspend",
-  adminController.suspendUser
-);
+router.get("/verifications/doctors", adminController.listDoctorVerifications);
+router.get("/verifications/doctors/:userId", adminController.getDoctorVerification);
+router.patch("/verifications/doctors/:userId/approve", adminController.approveDoctorVerification);
+router.patch("/verifications/doctors/:userId/reject", adminController.rejectDoctorVerification);
 
-router.get(
-  "/verifications/doctors",
-  adminController.listDoctorVerifications
-);
-
-router.get(
-  "/verifications/doctors/:userId",
-  adminController.getDoctorVerification
-);
-
-router.patch(
-  "/verifications/doctors/:userId/approve",
-  adminController.approveDoctorVerification
-);
-
-router.patch(
-  "/verifications/doctors/:userId/reject",
-  adminController.rejectDoctorVerification
-);
-
-router.get(
-  "/verifications/pharmacies",
-  adminController.listPharmacyVerifications
-);
-
-router.get(
-  "/verifications/pharmacies/:userId",
-  adminController.getPharmacyVerification
-);
-
-router.patch(
-  "/verifications/pharmacies/:userId/approve",
-  adminController.approvePharmacyVerification
-);
-
-router.patch(
-  "/verifications/pharmacies/:userId/reject",
-  adminController.rejectPharmacyVerification
-);
+router.get("/verifications/pharmacies", adminController.listPharmacyVerifications);
+router.get("/verifications/pharmacies/:userId", adminController.getPharmacyVerification);
+router.patch("/verifications/pharmacies/:userId/approve", adminController.approvePharmacyVerification);
+router.patch("/verifications/pharmacies/:userId/reject", adminController.rejectPharmacyVerification);
 
 export default router;
