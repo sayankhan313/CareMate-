@@ -181,9 +181,15 @@ const validateAvailabilityItem = (item: AvailabilityInput, month: string) => {
   return { date, status, startTime: item.startTime, endTime: item.endTime, slotDurationMinutes };
 };
 
+const formatPatientPrivacy = (preferences?: any | null) => ({
+  shareVitalsWithAssignedDoctors: preferences?.shareVitalsWithAssignedDoctors ?? true,
+  shareMedicinesWithAssignedDoctors: preferences?.shareMedicinesWithAssignedDoctors ?? true,
+});
+
 const formatPatient = (assignment: any) => {
   const patient = assignment.patient;
-  const latestVital = patient.vitalReadings[0] || null;
+  const privacy = formatPatientPrivacy(patient.privacyPreferences);
+  const latestVital = privacy.shareVitalsWithAssignedDoctors ? patient.vitalReadings[0] || null : null;
   const activeAlert = patient.patientSafetyAlerts[0] || null;
 
   return {
@@ -214,7 +220,7 @@ const formatPatient = (assignment: any) => {
           recordedAt: latestVital.recordedAt,
         }
       : null,
-    activeMedicineCount: patient.medicines.length,
+    activeMedicineCount: privacy.shareMedicinesWithAssignedDoctors ? patient.medicines.length : 0,
     activeAlert: activeAlert
       ? {
           id: activeAlert.id,
@@ -463,6 +469,12 @@ export const doctorService = {
                   emergencyContact: true,
                 },
               },
+              privacyPreferences: {
+                select: {
+                  shareVitalsWithAssignedDoctors: true,
+                  shareMedicinesWithAssignedDoctors: true,
+                },
+              },
               vitalReadings: {
                 orderBy: { recordedAt: "desc" },
                 take: 1,
@@ -536,6 +548,12 @@ export const doctorService = {
                 gender: true,
                 medicalConditions: true,
                 emergencyContact: true,
+              },
+            },
+            privacyPreferences: {
+              select: {
+                shareVitalsWithAssignedDoctors: true,
+                shareMedicinesWithAssignedDoctors: true,
               },
             },
             vitalReadings: {
