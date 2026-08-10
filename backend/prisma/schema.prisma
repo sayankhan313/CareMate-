@@ -45,6 +45,21 @@ enum Gender {
   PREFER_NOT_TO_SAY
 }
 
+enum AppLanguage {
+  ENGLISH
+  HINDI
+  GREEK
+  HAUSA
+  GERMAN
+}
+
+enum AppTextSize {
+  SMALL
+  NORMAL
+  LARGE
+  EXTRA_LARGE
+}
+
 enum MedicineReviewStatus {
   NOT_REQUESTED
   PENDING
@@ -62,6 +77,19 @@ enum MedicineReviewRequestStatus {
   APPROVED
   REJECTED
   APPLIED
+}
+
+enum MedicineReviewRoutingStatus {
+  ASSIGNED
+  ADMIN_REVIEW_REQUIRED
+  POOL_ASSIGNED
+  POOL_REVIEW_COMPLETED
+  RELEASED
+}
+
+enum MedicineReviewPoolDecision {
+  APPROVED
+  REJECTED
 }
 
 enum DoseLogStatus {
@@ -127,6 +155,18 @@ enum DoctorAssignmentType {
   SPECIALIST
 }
 
+enum DoctorOperationalStatus {
+  AVAILABLE
+  OUT_OF_OFFICE
+  UNAVAILABLE
+}
+
+enum DoctorAvailabilityStatus {
+  AVAILABLE
+  OUT_OF_OFFICE
+  UNAVAILABLE
+}
+
 enum PrescriptionSource {
   MANUAL
   SCANNED
@@ -164,6 +204,74 @@ enum AuditOutcome {
   FAILURE
 }
 
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+enum NotificationPriority {
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum NotificationPushStatus {
+  PENDING
+  SENT
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationType {
+  SYSTEM_TEST
+  ACCOUNT_APPROVED
+  ACCOUNT_REJECTED
+  ACCOUNT_SUSPENDED
+  ACCOUNT_REACTIVATED
+  LOGIN_ALERT
+  DOCTOR_VERIFICATION_REQUESTED
+  PHARMACY_VERIFICATION_REQUESTED
+  SAFETY_ALERT_CREATED
+  SAFETY_ALERT_ESCALATED
+  SAFETY_ALERT_RESOLVED
+  CRITICAL_VITAL_DETECTED
+  EMERGENCY_CONSULTATION_REQUESTED
+  MANUAL_CONSULTATION_REQUESTED
+  CONSULTATION_ACCEPTED
+  CONSULTATION_REJECTED
+  CONSULTATION_COMPLETED
+  CONSULTATION_CANCELLED
+  PATIENT_JOINED_CALL
+  MEDICINE_REVIEW_REQUESTED
+  MEDICINE_REVIEW_POOL_ASSIGNED
+  MEDICINE_REVIEW_APPROVED
+  MEDICINE_REVIEW_REJECTED
+  NEW_PRESCRIPTION
+  PATIENT_REPORT_UPLOADED
+  REPORT_REVIEWED
+  PATIENT_ASSIGNED
+  PATIENT_UNASSIGNED
+  PRIMARY_DOCTOR_CHANGED
+  MEDICINE_REMINDER_DUE
+  MEDICINE_REMINDER_SNOOZED
+  MISSED_DOSE_ALERT
+  REPEATED_MISSED_DOSE
+  NEW_MEDICINE_ORDER
+  ORDER_RECEIVED
+  ORDER_PREPARING
+  ORDER_READY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+}
+
 model User {
   id              String        @id @default(uuid())
   fullName        String
@@ -179,8 +287,14 @@ model User {
   passwordResetToken          String?
   passwordResetTokenExpiresAt DateTime?
 
-  patientProfile PatientProfile?
-  doctorProfile  DoctorProfile?
+  patientProfile           PatientProfile?
+  notificationPreferences  PatientNotificationPreference?
+  reminderPreferences      PatientReminderPreference?
+  safetyPreferences        PatientSafetyPreference?
+  accessibilityPreferences PatientAccessibilityPreference?
+  privacyPreferences       PatientPrivacyPreference?
+  doctorProfile            DoctorProfile?
+  doctorAvailabilities     DoctorAvailability[]            @relation("DoctorAvailabilities")
 
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
@@ -202,6 +316,8 @@ model User {
   patientMedicineReviewRequests MedicineReviewRequest[] @relation("MedicineReviewPatient")
   doctorMedicineReviewRequests  MedicineReviewRequest[] @relation("MedicineReviewAssignedDoctor")
   doctorMedicineReviewDecisions MedicineReviewRequest[] @relation("MedicineReviewDecisionDoctor")
+  doctorPoolMedicineReviews     MedicineReviewRequest[] @relation("MedicineReviewPoolDoctor")
+  adminReleasedMedicineReviews  MedicineReviewRequest[] @relation("MedicineReviewReleasedByAdmin")
 
   patientPrescriptions      Prescription[] @relation("PatientPrescriptions")
   doctorPrescriptions       Prescription[] @relation("DoctorPrescriptions")
@@ -213,22 +329,122 @@ model User {
   actorAuditLogs   AuditLog[] @relation("ActorAuditLogs")
   patientAuditLogs AuditLog[] @relation("PatientAuditLogs")
 
+  deviceTokens  DeviceToken[]
+  notifications UserNotification[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model PatientProfile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  phoneNumber       String
-  dateOfBirth       DateTime
-  gender            Gender?
-  medicalConditions String?
-  emergencyContact  String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  phoneNumber           String
+  dateOfBirth           DateTime
+  gender                Gender?
+  healthRecordNumber    String?  @unique
+  medicalConditions     String?
+  allergies             String?
+  bloodGroup            String?
+  addressLine           String?
+  postcode              String?
+  emergencyContact      String
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([healthRecordNumber])
+}
+
+model PatientNotificationPreference {
+  id                    String   @id @default(uuid())
+  patientId             String   @unique
+  medicineReminders     Boolean  @default(true)
+  missedDoseAlerts      Boolean  @default(true)
+  consultationUpdates   Boolean  @default(true)
+  medicineReviewUpdates Boolean  @default(true)
+  reportReviewUpdates   Boolean  @default(true)
+  criticalVitalAlerts   Boolean  @default(true)
+  safetyResponseAlerts  Boolean  @default(true)
+  careTeamUpdates       Boolean  @default(true)
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientReminderPreference {
+  id                    String   @id @default(uuid())
+  patientId             String   @unique
+  defaultSnoozeMinutes  Int      @default(10)
+  missedDoseReminder    Boolean  @default(true)
+  repeatMissedDoseAlert Boolean  @default(true)
+  repeatIntervalMinutes Int      @default(30)
+  vibrationEnabled      Boolean  @default(true)
+  soundEnabled          Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientSafetyPreference {
+  id                            String   @id @default(uuid())
+  patientId                     String   @unique
+  countdownSeconds              Int      @default(30)
+  notifyAssignedDoctors         Boolean  @default(true)
+  shareLatestVitalsOnEscalation Boolean  @default(true)
+  notifyEmergencyContact        Boolean  @default(false)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientAccessibilityPreference {
+  id                       String      @id @default(uuid())
+  patientId                String      @unique
+  language                 AppLanguage @default(ENGLISH)
+  textSize                 AppTextSize @default(NORMAL)
+  highContrastEnabled      Boolean     @default(false)
+  reduceMotionEnabled      Boolean     @default(false)
+  screenReaderHintsEnabled Boolean     @default(true)
+  hapticFeedbackEnabled    Boolean     @default(true)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model PatientPrivacyPreference {
+  id                                String   @id @default(uuid())
+  patientId                         String   @unique
+  shareVitalsWithAssignedDoctors    Boolean  @default(true)
+  shareMedicinesWithAssignedDoctors Boolean  @default(true)
+  shareReportsWithAssignedDoctors   Boolean  @default(true)
+  hideSensitiveNotificationContent  Boolean  @default(true)
+  loginAlertsEnabled                Boolean  @default(true)
+  sessionTimeoutMinutes             Int      @default(30)
+  confirmBeforeReportSharing        Boolean  @default(true)
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
 }
 
 model DoctorProfile {
@@ -249,6 +465,11 @@ model DoctorProfile {
   verificationCheckedAt DateTime?
   verificationNotes     String?
 
+  operationalStatus DoctorOperationalStatus @default(AVAILABLE)
+  statusFrom        DateTime?
+  statusUntil       DateTime?
+  statusNote        String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -256,6 +477,26 @@ model DoctorProfile {
 
   @@index([gmcNumber])
   @@index([specialization])
+  @@index([operationalStatus])
+}
+
+model DoctorAvailability {
+  id                  String                   @id @default(uuid())
+  doctorId            String
+  date                DateTime                 @db.Date
+  status              DoctorAvailabilityStatus @default(AVAILABLE)
+  startTime           String?
+  endTime             String?
+  slotDurationMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor User @relation("DoctorAvailabilities", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, date])
+  @@index([doctorId, date])
+  @@index([doctorId, status])
 }
 
 model PatientDoctorAssignment {
@@ -438,28 +679,51 @@ model MedicineReminder {
 model MedicineReviewRequest {
   id                 String                      @id @default(uuid())
   patientId          String
-  doctorId           String
+  doctorId           String?
   reviewedByDoctorId String?
+  poolDoctorId       String?
+  releasedByAdminId  String?
   medicineId         String
   requestType        MedicineReviewRequestType
   status             MedicineReviewRequestStatus @default(PENDING)
-  patientReason      String?
-  doctorNote         String?
-  reviewedAt         DateTime?
-  patientSeenAt      DateTime?
-  appliedAt          DateTime?
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
+  routingStatus      MedicineReviewRoutingStatus @default(ASSIGNED)
+
+  patientReason String?
+  doctorNote    String?
+
+  assignedAt         DateTime  @default(now())
+  escalatedAt        DateTime?
+  attemptedDoctorIds String[]  @default([])
+
+  poolAssignedAt DateTime?
+  poolDecision   MedicineReviewPoolDecision?
+  poolDoctorNote String?
+  poolReviewedAt DateTime?
+
+  adminReleasedAt DateTime?
+
+  reviewedAt    DateTime?
+  patientSeenAt DateTime?
+  appliedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   patient          User     @relation("MedicineReviewPatient", fields: [patientId], references: [id], onDelete: Cascade)
-  doctor           User     @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: Restrict)
+  doctor           User?    @relation("MedicineReviewAssignedDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
   reviewedByDoctor User?    @relation("MedicineReviewDecisionDoctor", fields: [reviewedByDoctorId], references: [id], onDelete: SetNull)
+  poolDoctor       User?    @relation("MedicineReviewPoolDoctor", fields: [poolDoctorId], references: [id], onDelete: SetNull)
+  releasedByAdmin  User?    @relation("MedicineReviewReleasedByAdmin", fields: [releasedByAdminId], references: [id], onDelete: SetNull)
   medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
 
   @@index([patientId, status])
   @@index([doctorId, status])
+  @@index([poolDoctorId, routingStatus])
+  @@index([releasedByAdminId])
   @@index([medicineId, requestType, status])
   @@index([reviewedByDoctorId])
+  @@index([routingStatus, status])
+  @@index([assignedAt, status])
+  @@index([poolAssignedAt])
   @@index([createdAt])
 }
 
@@ -664,4 +928,74 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([outcome, createdAt])
   @@index([createdAt])
+}
+
+model DeviceToken {
+  id         String         @id @default(uuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform
+  deviceId   String?
+  deviceName String?
+  appVersion String?
+  isActive   Boolean        @default(true)
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, isActive])
+  @@index([userId, platform])
+  @@index([lastSeenAt])
+}
+
+model UserNotification {
+  id            String                 @id @default(uuid())
+  userId        String
+  type          NotificationType
+  title         String
+  body          String
+  priority      NotificationPriority   @default(NORMAL)
+  entityType    String?
+  entityId      String?
+  targetScreen  String?
+  data          Json?
+  isRead        Boolean                @default(false)
+  readAt        DateTime?
+  pushStatus    NotificationPushStatus @default(PENDING)
+  sentAt        DateTime?
+  failureReason String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+  @@index([entityType, entityId])
+  @@index([pushStatus, createdAt])
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(uuid())
+  notificationId    String
+  deviceTokenId     String
+  status            NotificationDeliveryStatus @default(PENDING)
+  firebaseMessageId String?
+  failureCode       String?
+  failureReason     String?
+  sentAt            DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  notification UserNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  deviceToken  DeviceToken      @relation(fields: [deviceTokenId], references: [id], onDelete: Restrict)
+
+  @@unique([notificationId, deviceTokenId])
+  @@index([deviceTokenId, createdAt])
+  @@index([status, createdAt])
 }

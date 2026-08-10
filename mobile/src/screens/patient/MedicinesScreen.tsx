@@ -48,7 +48,9 @@ import {
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
+import { useLanguage } from "../../context/LanguageContext";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
+import { patientSettingsApi, type ReminderSettings } from "../../services/patientSettingsApi";
 import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
@@ -505,109 +507,48 @@ const buildSummaryFromMedicines =
     };
   };
 
-const getFrequencyLabel = (
-  frequency: string
-) => {
-  switch (frequency) {
-    case "ONCE_DAILY":
-      return "Once daily";
+type Translate = ReturnType<typeof useLanguage>["t"];
 
-    case "TWICE_DAILY":
-      return "Twice daily";
-
-    case "THREE_TIMES_DAILY":
-      return "Three times daily";
-
-    case "FOUR_TIMES_DAILY":
-      return "Four times daily";
-
-    case "AS_NEEDED":
-      return "As needed";
-
-    case "CUSTOM":
-      return "Custom schedule";
-
-    default:
-      return frequency;
-  }
+const getFrequencyLabel = (frequency: string, t: Translate) => {
+  if (frequency === "ONCE_DAILY") return t("medicines.onceDaily");
+  if (frequency === "TWICE_DAILY") return t("medicines.twiceDaily");
+  if (frequency === "THREE_TIMES_DAILY") return t("medicines.threeDaily");
+  if (frequency === "FOUR_TIMES_DAILY") return t("medicines.fourDaily");
+  if (frequency === "AS_NEEDED") return t("medicines.asNeeded");
+  if (frequency === "CUSTOM") return t("medicines.customSchedule");
+  return frequency;
 };
 
-const getStatusLabel = (
-  status: MedicineStatus
-) => {
-  switch (status) {
-    case "TAKEN":
-      return "Taken";
-
-    case "PENDING":
-      return "Pending";
-
-    case "MISSED":
-      return "Missed";
-
-    case "SNOOZED":
-      return "Snoozed";
-
-    default:
-      return status;
-  }
+const getStatusLabel = (status: MedicineStatus, t: Translate) => {
+  if (status === "TAKEN") return t("common.taken");
+  if (status === "PENDING") return t("common.pending");
+  if (status === "MISSED") return t("common.missed");
+  if (status === "SNOOZED") return t("common.snoozed");
+  return status;
 };
 
-const getProgressTitle = (
-  selectedTab: DateTab
-) => {
-  if (
-    selectedTab === "TODAY"
-  ) {
-    return "Today’s progress";
-  }
-
-  if (
-    selectedTab ===
-    "TOMORROW"
-  ) {
-    return "Tomorrow’s plan";
-  }
-
-  return "This week";
+const getProgressTitle = (selectedTab: DateTab, t: Translate) => {
+  if (selectedTab === "TODAY") return t("medicines.todayProgress");
+  if (selectedTab === "TOMORROW") return t("medicines.tomorrowPlan");
+  return t("medicines.thisWeek");
 };
 
-const getHeaderSubtitle = (
-  selectedTab: DateTab
-) => {
-  if (
-    selectedTab === "TODAY"
-  ) {
-    return "Track today’s doses";
-  }
-
-  if (
-    selectedTab ===
-    "TOMORROW"
-  ) {
-    return "Plan tomorrow’s schedule";
-  }
-
-  return "Review your next 7 days";
+const getHeaderSubtitle = (selectedTab: DateTab, t: Translate) => {
+  if (selectedTab === "TODAY") return t("medicines.trackToday");
+  if (selectedTab === "TOMORROW") return t("medicines.planTomorrow");
+  return t("medicines.reviewWeek");
 };
 
-const getEmptyTitle = (
-  selectedTab: DateTab
-) => {
-  if (
-    selectedTab === "TODAY"
-  ) {
-    return "No medicines for today";
-  }
+const getEmptyTitle = (selectedTab: DateTab, t: Translate) => {
+  if (selectedTab === "TODAY") return t("medicines.noToday");
+  if (selectedTab === "TOMORROW") return t("medicines.noTomorrow");
+  return t("medicines.noWeek");
+};
 
-  if (
-    selectedTab ===
-    "TOMORROW"
-  ) {
-    return "No medicines for tomorrow";
-  }
-
-  return "No medicines this week";
+const getPeriodLabel = (period: MedicinePeriod, t: Translate) => {
+  if (period === "Morning") return t("common.morning");
+  if (period === "Afternoon") return t("common.afternoon");
+  return t("common.evening");
 };
 
 const getCardKey = (
@@ -760,6 +701,7 @@ const ProgressRing = ({
   summary: TodayMedicineSummary;
   progress: number;
 }) => {
+  const { t } = useLanguage();
   const total =
     summary.totalCount;
 
@@ -902,7 +844,7 @@ const ProgressRing = ({
             styles.progressCenterLabel
           }
         >
-          done
+          {t("medicines.done")}
         </Text>
       </View>
     </View>
@@ -913,8 +855,15 @@ export const MedicinesScreen =
   ({
     navigation,
   }: MedicinesScreenProps) => {
-    const insets =
-      useSafeAreaInsets();
+    const insets = useSafeAreaInsets();
+    const { t } = useLanguage();
+
+    const [
+      defaultSnoozeMinutes,
+      setDefaultSnoozeMinutes,
+    ] = useState<
+      ReminderSettings["defaultSnoozeMinutes"]
+    >(10);
 
     const [
       selectedTab,
@@ -1073,6 +1022,23 @@ export const MedicinesScreen =
         []
       );
 
+    const loadReminderSettings =
+      useCallback(
+        async () => {
+          try {
+            const result =
+              await patientSettingsApi.getReminderSettings();
+
+            setDefaultSnoozeMinutes(
+              result.settings.defaultSnoozeMinutes
+            );
+          } catch {
+            return;
+          }
+        },
+        []
+      );
+
     const fetchMedicines =
       useCallback(
         async (
@@ -1106,8 +1072,8 @@ export const MedicinesScreen =
 
             if (!token) {
               Alert.alert(
-                "Session expired",
-                "Please login again."
+                t("common.sessionExpired"),
+                t("common.pleaseLoginAgain")
               );
 
               return;
@@ -1140,9 +1106,9 @@ export const MedicinesScreen =
               !response.ok
             ) {
               Alert.alert(
-                "Unable to fetch medicines",
+                t("medicines.unableFetch"),
                 result.message ||
-                  "Please try again."
+                  t("common.pleaseTryAgain")
               );
 
               return;
@@ -1161,8 +1127,8 @@ export const MedicinesScreen =
             );
           } catch {
             Alert.alert(
-              "Network error",
-              "Unable to connect to server."
+              t("common.networkError"),
+              t("common.unableConnect")
             );
           } finally {
             if (
@@ -1184,7 +1150,7 @@ export const MedicinesScreen =
             }
           }
         },
-        []
+        [t]
       );
 
     useFocusEffect(
@@ -1194,9 +1160,12 @@ export const MedicinesScreen =
         );
 
         void loadReviewSummary();
+
+        void loadReminderSettings();
       }, [
         fetchMedicines,
         loadReviewSummary,
+        loadReminderSettings,
       ])
     );
 
@@ -1208,11 +1177,13 @@ export const MedicinesScreen =
               "refresh"
             ),
             loadReviewSummary(),
+            loadReminderSettings(),
           ]);
         },
         [
           fetchMedicines,
           loadReviewSummary,
+          loadReminderSettings,
         ]
       );
 
@@ -1240,8 +1211,8 @@ export const MedicinesScreen =
 
           if (!token) {
             Alert.alert(
-              "Session expired",
-              "Please login again."
+              t("common.sessionExpired"),
+              t("common.pleaseLoginAgain")
             );
 
             return;
@@ -1274,9 +1245,9 @@ export const MedicinesScreen =
             !response.ok
           ) {
             Alert.alert(
-              "Unable to update medicine",
+              t("medicines.unableUpdate"),
               result.message ||
-                "Please try again."
+                t("common.pleaseTryAgain")
             );
 
             return;
@@ -1310,8 +1281,8 @@ export const MedicinesScreen =
           );
         } catch {
           Alert.alert(
-            "Network error",
-            "Unable to connect to server."
+            t("common.networkError"),
+            t("common.unableConnect")
           );
         } finally {
           setActionLoadingReminderId(
@@ -1348,8 +1319,8 @@ export const MedicinesScreen =
 
           if (!token) {
             Alert.alert(
-              "Session expired",
-              "Please login again."
+              t("common.sessionExpired"),
+              t("common.pleaseLoginAgain")
             );
 
             return;
@@ -1358,7 +1329,7 @@ export const MedicinesScreen =
           const snoozedUntil =
             new Date(
               Date.now() +
-                30 *
+                defaultSnoozeMinutes *
                   60 *
                   1000
             ).toISOString();
@@ -1398,9 +1369,9 @@ export const MedicinesScreen =
             !response.ok
           ) {
             Alert.alert(
-              "Unable to snooze medicine",
+              t("medicines.unableSnooze"),
               result.message ||
-                "Please try again."
+                t("common.pleaseTryAgain")
             );
 
             return;
@@ -1431,8 +1402,8 @@ export const MedicinesScreen =
           );
         } catch {
           Alert.alert(
-            "Network error",
-            "Unable to connect to server."
+            t("common.networkError"),
+            t("common.unableConnect")
           );
         } finally {
           setActionLoadingReminderId(
@@ -1500,8 +1471,8 @@ export const MedicinesScreen =
           reason.length < 3
         ) {
           Alert.alert(
-            "Reason required",
-            "Please explain why you want to remove this medicine."
+            t("medicines.reasonRequired"),
+            t("medicines.reasonRequiredText")
           );
 
           return;
@@ -1560,12 +1531,12 @@ export const MedicinesScreen =
           ]);
 
           Alert.alert(
-            "Removal request sent",
-            `${medicineName} will remain active until your primary doctor reviews the request.`,
+            t("medicines.removalSentTitle"),
+            t("medicines.removalSentText", { medicine: medicineName }),
             [
               {
                 text:
-                  "View Updates",
+                  t("medicines.viewUpdates"),
                 onPress:
                   () => {
                     navigation.navigate(
@@ -1574,16 +1545,16 @@ export const MedicinesScreen =
                   },
               },
               {
-                text: "OK",
+                text: t("common.ok"),
               },
             ]
           );
         } catch (error) {
           Alert.alert(
-            "Unable to request removal",
+            t("medicines.unableRequestRemoval"),
             error instanceof Error
               ? error.message
-              : "The removal request could not be sent."
+              : t("medicines.removalRequestFailed")
           );
         } finally {
           setIsSubmittingRemoval(
@@ -1612,10 +1583,8 @@ export const MedicinesScreen =
           (medicine.frequency ===
             "CUSTOM"
             ? medicine.customFrequency ||
-              "Custom schedule"
-            : getFrequencyLabel(
-                medicine.frequency
-              ));
+              t("medicines.customSchedule")
+            : getFrequencyLabel(medicine.frequency, t));
 
         const dateKey =
           getMedicineDateKey(
@@ -1703,7 +1672,7 @@ export const MedicinesScreen =
                     styles.progressKicker
                   }
                 >
-                  Medication plan
+                  {t("medicines.medicationPlan")}
                 </Text>
 
                 <Text
@@ -1711,9 +1680,7 @@ export const MedicinesScreen =
                     styles.progressTitle
                   }
                 >
-                  {getProgressTitle(
-                    selectedTab
-                  )}
+                  {getProgressTitle(selectedTab, t)}
                 </Text>
 
                 <Text
@@ -1721,10 +1688,9 @@ export const MedicinesScreen =
                     styles.progressSubtitle
                   }
                 >
-                  {summary.totalCount ===
-                  0
-                    ? "No reminders scheduled"
-                    : `${summary.takenCount} of ${summary.totalCount} doses completed`}
+                  {summary.totalCount === 0
+                    ? t("medicines.noReminders")
+                    : t("medicines.dosesCompleted", { taken: summary.takenCount, total: summary.totalCount })}
                 </Text>
               </View>
 
@@ -1744,7 +1710,7 @@ export const MedicinesScreen =
               }
             >
               <SummaryMetric
-                label="Taken"
+                label={t("common.taken")}
                 value={
                   summary.takenCount
                 }
@@ -1760,7 +1726,7 @@ export const MedicinesScreen =
               />
 
               <SummaryMetric
-                label="Pending"
+                label={t("common.pending")}
                 value={
                   summary.pendingCount
                 }
@@ -1776,7 +1742,7 @@ export const MedicinesScreen =
               />
 
               <SummaryMetric
-                label="Missed"
+                label={t("common.missed")}
                 value={
                   summary.missedCount
                 }
@@ -1792,7 +1758,7 @@ export const MedicinesScreen =
               />
 
               <SummaryMetric
-                label="Snoozed"
+                label={t("common.snoozed")}
                 value={
                   summary.snoozedCount
                 }
@@ -1841,9 +1807,7 @@ export const MedicinesScreen =
                 },
               ]}
             >
-              {getStatusLabel(
-                status
-              )}
+              {getStatusLabel(status, t)}
             </Text>
           </View>
         );
@@ -1942,7 +1906,7 @@ export const MedicinesScreen =
                     styles.timeLabel
                   }
                 >
-                  Due
+                  {t("common.due")}
                 </Text>
               </View>
             </View>
@@ -2067,7 +2031,7 @@ export const MedicinesScreen =
                         styles.removalPendingTitle
                       }
                     >
-                      Removal review pending
+                      {t("medicines.removalPendingTitle")}
                     </Text>
 
                     <Text
@@ -2075,7 +2039,7 @@ export const MedicinesScreen =
                         styles.removalPendingText
                       }
                     >
-                      This medicine remains active until your doctor decides.
+                      {t("medicines.removalPendingText")}
                     </Text>
                   </View>
 
@@ -2150,7 +2114,7 @@ export const MedicinesScreen =
                               : undefined,
                           ]}
                         >
-                          Taken
+                          {t("common.taken")}
                         </Text>
                       </>
                     )}
@@ -2212,7 +2176,7 @@ export const MedicinesScreen =
                               : undefined,
                           ]}
                         >
-                          Snooze
+                          {t("common.snooze")}
                         </Text>
                       </>
                     )}
@@ -2252,7 +2216,7 @@ export const MedicinesScreen =
                       styles.removeMedicineButtonText
                     }
                   >
-                    Request medicine removal
+                    {t("medicines.requestRemoval")}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -2268,7 +2232,7 @@ export const MedicinesScreen =
                       styles.missedHelpText
                     }
                   >
-                    This dose was missed, so dose actions are disabled.
+                    {t("medicines.missedHelp")}
                   </Text>
                 </View>
               ) : null}
@@ -2284,7 +2248,7 @@ export const MedicinesScreen =
                       styles.snoozedHelpText
                     }
                   >
-                    Snoozed reminder. You can still mark it as taken.
+                    {t("medicines.snoozedHelp")}
                   </Text>
                 </View>
               ) : null}
@@ -2350,7 +2314,7 @@ export const MedicinesScreen =
                     styles.periodTitle
                   }
                 >
-                  {period}
+                  {getPeriodLabel(period, t)}
                 </Text>
               </View>
 
@@ -2428,7 +2392,7 @@ export const MedicinesScreen =
                 styles.loadingTitle
               }
             >
-              Loading medicines...
+              {t("medicines.loadingTitle")}
             </Text>
 
             <Text
@@ -2436,7 +2400,7 @@ export const MedicinesScreen =
                 styles.loadingText
               }
             >
-              Preparing your medication schedule.
+              {t("medicines.loadingText")}
             </Text>
           </View>
         </SafeAreaView>
@@ -2471,7 +2435,7 @@ export const MedicinesScreen =
                   styles.headerTitle
                 }
               >
-                Medicines
+                {t("medicines.title")}
               </Text>
 
               <Text
@@ -2479,9 +2443,7 @@ export const MedicinesScreen =
                   styles.headerSubtitle
                 }
               >
-                {getHeaderSubtitle(
-                  selectedTab
-                )}
+                {getHeaderSubtitle(selectedTab, t)}
               </Text>
             </View>
 
@@ -2634,7 +2596,7 @@ export const MedicinesScreen =
                     styles.updatesPanelTitle
                   }
                 >
-                  Medicine Updates
+                  {t("medicines.updatesTitle")}
                 </Text>
 
                 <Text
@@ -2642,7 +2604,7 @@ export const MedicinesScreen =
                     styles.updatesPanelText
                   }
                 >
-                  View doctor approvals, rejection notes and removal decisions.
+                  {t("medicines.updatesText")}
                 </Text>
               </View>
 
@@ -2679,20 +2641,11 @@ export const MedicinesScreen =
                 styles.dateTabs
               }
             >
-              {renderDateTab(
-                "TODAY",
-                "Today"
-              )}
+              {renderDateTab("TODAY", t("common.today"))}
 
-              {renderDateTab(
-                "TOMORROW",
-                "Tomorrow"
-              )}
+              {renderDateTab("TOMORROW", t("common.tomorrow"))}
 
-              {renderDateTab(
-                "WEEK",
-                "Week"
-              )}
+              {renderDateTab("WEEK", t("common.week"))}
             </View>
 
             {filteredMedicines.length ===
@@ -2721,9 +2674,7 @@ export const MedicinesScreen =
                     styles.emptyTitle
                   }
                 >
-                  {getEmptyTitle(
-                    selectedTab
-                  )}
+                  {getEmptyTitle(selectedTab, t)}
                 </Text>
 
                 <Text
@@ -2731,7 +2682,7 @@ export const MedicinesScreen =
                     styles.emptyText
                   }
                 >
-                  Add a medicine reminder to start building your medication plan.
+                  {t("medicines.addReminderText")}
                 </Text>
 
                 <TouchableOpacity
@@ -2762,7 +2713,7 @@ export const MedicinesScreen =
                       styles.emptyButtonText
                     }
                   >
-                    Add Medicine
+                    {t("medicines.addMedicine")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2779,7 +2730,7 @@ export const MedicinesScreen =
                         styles.sectionTitle
                       }
                     >
-                      Schedule
+                      {t("medicines.schedule")}
                     </Text>
 
                     <Text
@@ -2787,15 +2738,9 @@ export const MedicinesScreen =
                         styles.sectionSubtitle
                       }
                     >
-                      {
-                        filteredMedicines.length
-                      }{" "}
-                      reminder
-                      {filteredMedicines.length ===
-                      1
-                        ? ""
-                        : "s"}{" "}
-                      found
+                      {filteredMedicines.length === 1
+                        ? t("medicines.oneReminderFound")
+                        : t("medicines.manyRemindersFound", { count: filteredMedicines.length })}
                     </Text>
                   </View>
 
@@ -2873,7 +2818,7 @@ export const MedicinesScreen =
                       styles.modalTitle
                     }
                   >
-                    Request Medicine Removal
+                    {t("medicines.modalTitle")}
                   </Text>
 
                   <Text
@@ -2930,7 +2875,7 @@ export const MedicinesScreen =
                     styles.modalWarningText
                   }
                 >
-                  This medicine and its reminders will remain active until your primary doctor approves the removal.
+                  {t("medicines.modalWarning")}
                 </Text>
               </View>
 
@@ -2939,7 +2884,7 @@ export const MedicinesScreen =
                   styles.modalInputLabel
                 }
               >
-                Why do you want to remove this medicine?
+                {t("medicines.modalQuestion")}
               </Text>
 
               <TextInput
@@ -2952,7 +2897,7 @@ export const MedicinesScreen =
                 onChangeText={
                   setRemovalReason
                 }
-                placeholder="For example: treatment completed, side effects, duplicate medicine..."
+                placeholder={t("medicines.modalPlaceholder")}
                 placeholderTextColor={
                   MUTED
                 }
@@ -2999,7 +2944,7 @@ export const MedicinesScreen =
                       styles.modalCancelText
                     }
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Text>
                 </TouchableOpacity>
 
@@ -3046,7 +2991,7 @@ export const MedicinesScreen =
                           styles.modalSubmitText
                         }
                       >
-                        Send Request
+                        {t("common.sendRequest")}
                       </Text>
                     </>
                   )}

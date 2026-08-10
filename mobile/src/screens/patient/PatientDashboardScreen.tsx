@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -43,16 +44,19 @@ import {
   Pill,
   Plus,
   RefreshCw,
-  Search,
   ShieldAlert,
   UserRound,
   Video,
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
+import { useLanguage } from "../../context/LanguageContext";
 import { consultationsApi } from "../../services/consultationsApi";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
 import { patientReportsApi } from "../../services/patientReportsApi";
+import { patientSettingsApi, type ReminderSettings } from "../../services/patientSettingsApi";
+import { notificationApi } from "../../services/notificationApi";
+import { notificationEvents } from "../../services/notificationEvents";
 import { tokenStorage } from "../../services/tokenStorage";
 import type {
   PatientTabParamList,
@@ -189,279 +193,71 @@ const ON_DANGER_CONTAINER = "#8C1D24";
 
 const DASHBOARD_AUTO_REFRESH_MS = 30_000;
 
-const getErrorMessage = (
-  result: any
-) => {
-  if (
-    typeof result?.message === "string"
-  ) {
-    return result.message;
-  }
+type Translate = ReturnType<typeof useLanguage>["t"];
 
-  if (
-    Array.isArray(result?.message)
-  ) {
-    return (
-      result.message[0]?.message ||
-      "Unable to load dashboard."
-    );
-  }
-
-  if (
-    Array.isArray(result?.errors)
-  ) {
-    return (
-      result.errors[0]?.message ||
-      "Unable to load dashboard."
-    );
-  }
-
-  return "Unable to load dashboard.";
+const getErrorMessage = (result: any, t: Translate) => {
+  if (typeof result?.message === "string") return result.message;
+  if (Array.isArray(result?.message)) return result.message[0]?.message || t("dashboard.unableLoad");
+  if (Array.isArray(result?.errors)) return result.errors[0]?.message || t("dashboard.unableLoad");
+  return t("dashboard.unableLoad");
 };
 
-const getGreetingText = () => {
-  const currentHour =
-    new Date().getHours();
-
-  if (currentHour < 12) {
-    return "Good morning";
-  }
-
-  if (currentHour < 18) {
-    return "Good afternoon";
-  }
-
-  return "Good evening";
+const getGreetingText = (t: Translate) => {
+  const currentHour = new Date().getHours();
+  if (currentHour < 12) return t("dashboard.goodMorning");
+  if (currentHour < 18) return t("dashboard.goodAfternoon");
+  return t("dashboard.goodEvening");
 };
 
-const getStatusTone = (
-  status: DashboardStatus
-) => {
-  if (status === "STABLE") {
-    return {
-      background:
-        SUCCESS_CONTAINER,
-      text:
-        ON_SUCCESS_CONTAINER,
-      dot: SUCCESS,
-      label: "On track",
-    };
-  }
-
-  if (status === "WARNING") {
-    return {
-      background:
-        WARNING_CONTAINER,
-      text:
-        ON_WARNING_CONTAINER,
-      dot: WARNING,
-      label: "Needs attention",
-    };
-  }
-
-  if (status === "CRITICAL") {
-    return {
-      background:
-        DANGER_CONTAINER,
-      text:
-        ON_DANGER_CONTAINER,
-      dot: DANGER,
-      label: "Critical",
-    };
-  }
-
-  return {
-    background:
-      PRIMARY_CONTAINER,
-    text:
-      ON_PRIMARY_CONTAINER,
-    dot: PRIMARY,
-    label: "No data",
-  };
+const getStatusTone = (status: DashboardStatus, t: Translate) => {
+  if (status === "STABLE") return { background: SUCCESS_CONTAINER, text: ON_SUCCESS_CONTAINER, dot: SUCCESS, badgeLabel: t("common.stable"), label: t("dashboard.statusOnTrack") };
+  if (status === "WARNING") return { background: WARNING_CONTAINER, text: ON_WARNING_CONTAINER, dot: WARNING, badgeLabel: t("common.warning"), label: t("dashboard.statusNeedsAttention") };
+  if (status === "CRITICAL") return { background: DANGER_CONTAINER, text: ON_DANGER_CONTAINER, dot: DANGER, badgeLabel: t("common.critical"), label: t("dashboard.statusCritical") };
+  return { background: PRIMARY_CONTAINER, text: ON_PRIMARY_CONTAINER, dot: PRIMARY, badgeLabel: t("dashboard.noDataLabel"), label: t("common.noData") };
 };
 
-const formatTime = (
-  value?: string | null
-) => {
-  if (!value) {
-    return "Not scheduled";
-  }
-
-  const parsedDate =
-    new Date(value);
-
-  if (
-    !Number.isNaN(
-      parsedDate.getTime()
-    )
-  ) {
-    return parsedDate.toLocaleTimeString(
-      [],
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-      }
-    );
-  }
-
-  const [
-    hourText,
-    minuteText,
-  ] = value.split(":");
-
-  const hour = Number(
-    hourText
-  );
-
-  const minute = Number(
-    minuteText
-  );
-
-  if (
-    Number.isNaN(hour) ||
-    Number.isNaN(minute)
-  ) {
-    return value;
-  }
-
+const formatTime = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("common.notScheduled");
+  const parsedDate = new Date(value);
+  if (!Number.isNaN(parsedDate.getTime())) return parsedDate.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return value;
   const date = new Date();
-
-  date.setHours(
-    hour,
-    minute,
-    0,
-    0
-  );
-
-  return date.toLocaleTimeString(
-    [],
-    {
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  );
+  date.setHours(hour, minute, 0, 0);
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 };
 
-const formatSourceLabel = (
-  source:
-    DashboardData["healthStatus"]["source"]
-) => {
-  if (
-    source === "HEALTH_CONNECT"
-  ) {
-    return "Health Connect";
-  }
-
-  if (
-    source === "SIMULATED"
-  ) {
-    return "Simulator";
-  }
-
-  if (
-    source === "MANUAL"
-  ) {
-    return "Manual entry";
-  }
-
-  return "No source";
+const formatSourceLabel = (source: DashboardData["healthStatus"]["source"], t: Translate) => {
+  if (source === "HEALTH_CONNECT") return t("dashboard.healthConnect");
+  if (source === "SIMULATED") return t("dashboard.simulator");
+  if (source === "MANUAL") return t("dashboard.manualEntry");
+  return t("common.noSource");
 };
 
-const formatRecordedAt = (
-  value?: string | null
-) => {
-  if (!value) {
-    return "No recent reading";
-  }
-
-  const parsedDate =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      parsedDate.getTime()
-    )
-  ) {
-    return "Updated recently";
-  }
-
-  return `Updated ${parsedDate.toLocaleTimeString(
-    [],
-    {
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  )}`;
+const formatRecordedAt = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("dashboard.noRecentReading");
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return t("common.updatedRecently");
+  return t("dashboard.updatedAt", { time: parsedDate.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) });
 };
 
-const formatDoctorNoteTime = (
-  value?: string | null
-) => {
-  if (!value) {
-    return "Recently added";
-  }
-
-  const parsedDate =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      parsedDate.getTime()
-    )
-  ) {
-    return "Recently added";
-  }
-
-  const timeText =
-    parsedDate.toLocaleTimeString(
-      [],
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-      }
-    );
-
+const formatDoctorNoteTime = (value: string | null | undefined, t: Translate, locale: string) => {
+  if (!value) return t("common.updatedRecently");
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return t("common.updatedRecently");
+  const timeText = parsedDate.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   const today = new Date();
-
-  const isToday =
-    parsedDate.toDateString() ===
-    today.toDateString();
-
-  if (isToday) {
-    return `Today · ${timeText}`;
-  }
-
-  const dateText =
-    parsedDate.toLocaleDateString(
-      [],
-      {
-        day: "2-digit",
-        month: "short",
-      }
-    );
-
-  return `${dateText} · ${timeText}`;
+  if (parsedDate.toDateString() === today.toDateString()) return `${t("common.today")} · ${timeText}`;
+  return `${parsedDate.toLocaleDateString(locale, { day: "2-digit", month: "short" })} · ${timeText}`;
 };
 
-const formatOrderStatus = (
-  status?: string | null
-) => {
-  if (!status) {
-    return "Preparing";
-  }
-
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((part) => {
-      return (
-        part
-          .charAt(0)
-          .toUpperCase() +
-        part.slice(1)
-      );
-    })
-    .join(" ");
+const formatOrderStatus = (status: string | null | undefined, t: Translate) => {
+  if (!status || status === "PREPARING") return t("dashboard.preparing");
+  if (status === "RECEIVED") return t("dashboard.received");
+  if (status === "READY") return t("dashboard.ready");
+  return status.toLowerCase().split("_").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 };
 
 const displayMetric = (
@@ -481,8 +277,8 @@ export const PatientDashboardScreen = ({
   navigation,
   route,
 }: PatientDashboardScreenProps) => {
-  const insets =
-    useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
+  const { t, locale } = useLanguage();
 
   const [
     dashboard,
@@ -523,6 +319,11 @@ export const PatientDashboardScreen = ({
   ] = useState(0);
 
   const [
+    notificationUnreadCount,
+    setNotificationUnreadCount,
+  ] = useState(0);
+
+  const [
     actionLoadingReminderId,
     setActionLoadingReminderId,
   ] = useState<string | null>(
@@ -536,6 +337,11 @@ export const PatientDashboardScreen = ({
     useState<DashboardMedicineActionType | null>(
       null
     );
+
+  const [
+    defaultSnoozeMinutes,
+    setDefaultSnoozeMinutes,
+  ] = useState<ReminderSettings["defaultSnoozeMinutes"]>(10);
 
   const resetToLogin =
     useCallback(async () => {
@@ -614,6 +420,34 @@ export const PatientDashboardScreen = ({
       }
     }, []);
 
+  const loadNotificationUnreadCount =
+    useCallback(async () => {
+      try {
+        const result =
+          await notificationApi.getUnreadCount();
+
+        setNotificationUnreadCount(
+          result.unreadCount || 0
+        );
+      } catch {
+        setNotificationUnreadCount(0);
+      }
+    }, []);
+
+  const loadReminderSettings =
+    useCallback(async () => {
+      try {
+        const result =
+          await patientSettingsApi.getReminderSettings();
+
+        setDefaultSnoozeMinutes(
+          result.settings.defaultSnoozeMinutes
+        );
+      } catch {
+        return;
+      }
+    }, []);
+
   const loadDashboard =
     useCallback(
       async (
@@ -677,9 +511,7 @@ export const PatientDashboardScreen = ({
 
           if (!response.ok) {
             throw new Error(
-              getErrorMessage(
-                result
-              )
+              getErrorMessage(result, t)
             );
           }
 
@@ -690,7 +522,7 @@ export const PatientDashboardScreen = ({
           const message =
             error instanceof Error
               ? error.message
-              : "Unable to load dashboard.";
+              : t("dashboard.unableLoad");
 
           if (
             mode !== "silent"
@@ -717,7 +549,7 @@ export const PatientDashboardScreen = ({
           }
         }
       },
-      [resetToLogin]
+      [resetToLogin, t]
     );
 
   useFocusEffect(
@@ -732,6 +564,10 @@ export const PatientDashboardScreen = ({
 
       void loadReportUnreadCount();
 
+      void loadNotificationUnreadCount();
+
+      void loadReminderSettings();
+
       const intervalId =
         setInterval(() => {
           void loadDashboard(
@@ -743,6 +579,10 @@ export const PatientDashboardScreen = ({
           void loadMedicineReviewUnreadCount();
 
           void loadReportUnreadCount();
+
+          void loadNotificationUnreadCount();
+
+          void loadReminderSettings();
         }, DASHBOARD_AUTO_REFRESH_MS);
 
       return () => {
@@ -754,9 +594,17 @@ export const PatientDashboardScreen = ({
       loadActiveCallCount,
       loadDashboard,
       loadMedicineReviewUnreadCount,
+      loadNotificationUnreadCount,
+      loadReminderSettings,
       loadReportUnreadCount,
     ])
   );
+
+  useEffect(() => {
+    return notificationEvents.subscribe(() => {
+      void loadNotificationUnreadCount();
+    });
+  }, [loadNotificationUnreadCount]);
 
   const removeMedicineFromDashboardCard = (
     reminderId: string
@@ -834,8 +682,8 @@ export const PatientDashboardScreen = ({
 
         if (!token) {
           Alert.alert(
-            "Session expired",
-            "Please login again."
+            t("common.sessionExpired"),
+            t("common.pleaseLoginAgain")
           );
 
           return;
@@ -865,9 +713,9 @@ export const PatientDashboardScreen = ({
 
         if (!response.ok) {
           Alert.alert(
-            "Unable to update medicine",
+            t("medicines.unableUpdate"),
             result.message ||
-              "Please try again."
+              t("common.pleaseTryAgain")
           );
 
           return;
@@ -882,8 +730,8 @@ export const PatientDashboardScreen = ({
         );
       } catch {
         Alert.alert(
-          "Network error",
-          "Unable to connect to server."
+          t("common.networkError"),
+          t("common.unableConnect")
         );
       } finally {
         setActionLoadingReminderId(
@@ -920,8 +768,8 @@ export const PatientDashboardScreen = ({
 
         if (!token) {
           Alert.alert(
-            "Session expired",
-            "Please login again."
+            t("common.sessionExpired"),
+            t("common.pleaseLoginAgain")
           );
 
           return;
@@ -930,7 +778,7 @@ export const PatientDashboardScreen = ({
         const snoozedUntil =
           new Date(
             Date.now() +
-              30 *
+              defaultSnoozeMinutes *
                 60 *
                 1000
           ).toISOString();
@@ -966,9 +814,9 @@ export const PatientDashboardScreen = ({
 
         if (!response.ok) {
           Alert.alert(
-            "Unable to snooze medicine",
+            t("medicines.unableSnooze"),
             result.message ||
-              "Please try again."
+              t("common.pleaseTryAgain")
           );
 
           return;
@@ -983,8 +831,8 @@ export const PatientDashboardScreen = ({
         );
       } catch {
         Alert.alert(
-          "Network error",
-          "Unable to connect to server."
+          t("common.networkError"),
+          t("common.unableConnect")
         );
       } finally {
         setActionLoadingReminderId(
@@ -1020,10 +868,7 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Profile screen is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("profile.title") }));
 
         return;
       }
@@ -1044,10 +889,7 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Medicine scanner is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.scan") }));
 
         return;
       }
@@ -1063,10 +905,7 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Safety Response screen is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.safety") }));
 
         return;
       }
@@ -1096,10 +935,7 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Active Calls screen is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.activeCalls") }));
 
         return;
       }
@@ -1115,10 +951,7 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Medicine Updates screen is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.updates") }));
 
         return;
       }
@@ -1134,16 +967,28 @@ export const PatientDashboardScreen = ({
         getRootNavigation();
 
       if (!rootNavigation) {
-        Alert.alert(
-          "Unable to open",
-          "Medical Reports screen is not available right now."
-        );
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.reports") }));
 
         return;
       }
 
       rootNavigation.navigate(
         "PatientReports"
+      );
+    };
+
+  const openNotificationsScreen =
+    () => {
+      const rootNavigation =
+        getRootNavigation();
+
+      if (!rootNavigation) {
+        Alert.alert(t("common.unableOpen"), t("dashboard.featureUnavailable", { feature: t("dashboard.notifications") }));
+        return;
+      }
+
+      rootNavigation.navigate(
+        "Notifications"
       );
     };
 
@@ -1154,19 +999,10 @@ export const PatientDashboardScreen = ({
       );
     };
 
-  const showComingSoon = (
-    featureName: string
-  ) => {
-    Alert.alert(
-      "Coming soon",
-      `${featureName} will be connected in the next patient module step.`
-    );
-  };
-
   const fallbackName =
     route.params?.user?.fullName?.split(
       " "
-    )[0] || "Patient";
+    )[0] || t("common.patient");
 
   const patientFirstName =
     dashboard?.patient
@@ -1185,8 +1021,7 @@ export const PatientDashboardScreen = ({
     healthStatus?.status ||
     "NO_DATA";
 
-  const statusTone =
-    getStatusTone(status);
+  const statusTone = getStatusTone(status, t);
 
   const nextMedicineGroup =
     dashboard?.nextMedicineGroup ||
@@ -1217,16 +1052,13 @@ export const PatientDashboardScreen = ({
 
   const healthMeta = useMemo(
     () => {
-      return `${formatSourceLabel(
-        healthStatus?.source ||
-          null
-      )} · ${formatRecordedAt(
-        healthStatus?.recordedAt
-      )}`;
+      return `${formatSourceLabel(healthStatus?.source || null, t)} · ${formatRecordedAt(healthStatus?.recordedAt, t, locale)}`;
     },
     [
       healthStatus?.recordedAt,
       healthStatus?.source,
+      locale,
+      t,
     ]
   );
 
@@ -1254,7 +1086,7 @@ export const PatientDashboardScreen = ({
                 styles.helloText
               }
             >
-              Hello {patientFirstName} 👋
+              {t("dashboard.hello", { name: patientFirstName })}
             </Text>
 
             <Text
@@ -1262,7 +1094,7 @@ export const PatientDashboardScreen = ({
                 styles.subHelloText
               }
             >
-              {getGreetingText()}
+              {getGreetingText(t)}
             </Text>
           </View>
 
@@ -1276,28 +1108,8 @@ export const PatientDashboardScreen = ({
                 styles.iconButton
               }
               activeOpacity={0.84}
-              onPress={() =>
-                showComingSoon(
-                  "Search"
-                )
-              }
-            >
-              <Search
-                size={22}
-                color={TEXT}
-                strokeWidth={2}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={
-                styles.iconButton
-              }
-              activeOpacity={0.84}
-              onPress={() =>
-                showComingSoon(
-                  "Notifications"
-                )
+              onPress={
+                openNotificationsScreen
               }
             >
               <Bell
@@ -1306,11 +1118,21 @@ export const PatientDashboardScreen = ({
                 strokeWidth={2}
               />
 
-              <View
-                style={
-                  styles.notificationDot
-                }
-              />
+              {notificationUnreadCount > 0 ? (
+                <View
+                  style={
+                    styles.notificationBadge
+                  }
+                >
+                  <Text
+                    style={
+                      styles.notificationBadgeText
+                    }
+                  >
+                    {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1369,6 +1191,10 @@ export const PatientDashboardScreen = ({
                 void loadMedicineReviewUnreadCount();
 
                 void loadReportUnreadCount();
+
+                void loadNotificationUnreadCount();
+
+                void loadReminderSettings();
               }}
               tintColor={PRIMARY}
               colors={[PRIMARY]}
@@ -1390,7 +1216,7 @@ export const PatientDashboardScreen = ({
                   styles.stateTitle
                 }
               >
-                Loading your plan...
+                {t("dashboard.loadingTitle")}
               </Text>
 
               <Text
@@ -1398,7 +1224,7 @@ export const PatientDashboardScreen = ({
                   styles.stateText
                 }
               >
-                Getting your medicines, vitals and care updates.
+                {t("dashboard.loadingText")}
               </Text>
             </View>
           ) : null}
@@ -1427,7 +1253,7 @@ export const PatientDashboardScreen = ({
                   styles.errorTitle
                 }
               >
-                Dashboard unavailable
+                {t("dashboard.unavailable")}
               </Text>
 
               <Text
@@ -1460,7 +1286,7 @@ export const PatientDashboardScreen = ({
                     styles.retryButtonText
                   }
                 >
-                  Try again
+                  {t("common.tryAgain")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1512,8 +1338,7 @@ export const PatientDashboardScreen = ({
                           },
                         ]}
                       >
-                        {healthStatus?.label ||
-                          "No Data"}
+                        {statusTone.badgeLabel}
                       </Text>
                     </View>
 
@@ -1555,7 +1380,7 @@ export const PatientDashboardScreen = ({
                   }
                 >
                   <HealthStat
-                    label="Heart"
+                    label={t("dashboard.healthHeart")}
                     value={displayMetric(
                       healthStatus?.heartRate
                     )}
@@ -1603,7 +1428,7 @@ export const PatientDashboardScreen = ({
                 }
               >
                 <CategoryShortcut
-                  label="Scan"
+                  label={t("dashboard.scan")}
                   icon={
                     <Camera
                       size={23}
@@ -1619,7 +1444,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Add Med"
+                  label={t("dashboard.addMed")}
                   icon={
                     <Plus
                       size={23}
@@ -1635,7 +1460,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Vitals"
+                  label={t("vitals.title")}
                   icon={
                     <HeartPulse
                       size={23}
@@ -1651,7 +1476,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Active Calls"
+                  label={t("dashboard.activeCalls")}
                   icon={
                     <Video
                       size={23}
@@ -1670,7 +1495,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Updates"
+                  label={t("dashboard.updates")}
                   icon={
                     <FilePenLine
                       size={23}
@@ -1689,7 +1514,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Reports"
+                  label={t("dashboard.reports")}
                   icon={
                     <FileText
                       size={23}
@@ -1708,7 +1533,7 @@ export const PatientDashboardScreen = ({
                 />
 
                 <CategoryShortcut
-                  label="Safety"
+                  label={t("dashboard.safety")}
                   icon={
                     <ShieldAlert
                       size={23}
@@ -1734,7 +1559,7 @@ export const PatientDashboardScreen = ({
                     styles.sectionTitle
                   }
                 >
-                  My plan
+                  {t("dashboard.myPlan")}
                 </Text>
 
                 <TouchableOpacity
@@ -1749,7 +1574,7 @@ export const PatientDashboardScreen = ({
                       styles.sectionAction
                     }
                   >
-                    View meds
+                    {t("dashboard.viewMeds")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1800,7 +1625,7 @@ export const PatientDashboardScreen = ({
                     styles.sectionTitle
                   }
                 >
-                  Latest doctor note
+                  {t("dashboard.latestDoctorNote")}
                 </Text>
               </View>
 
@@ -1837,8 +1662,8 @@ export const PatientDashboardScreen = ({
                       }
                     >
                       {dashboard?.latestDoctorNote
-                        ? "Note from your doctor"
-                        : "No doctor note yet"}
+                        ? t("dashboard.noteFromDoctor")
+                        : t("dashboard.noDoctorNote")}
                     </Text>
 
                     <Text
@@ -1847,10 +1672,8 @@ export const PatientDashboardScreen = ({
                       }
                     >
                       {dashboard?.latestDoctorNote
-                        ? formatDoctorNoteTime(
-                            dashboard.latestDoctorNote.createdAt
-                          )
-                        : "A new note will automatically appear here after your doctor creates it."}
+                        ? formatDoctorNoteTime(dashboard.latestDoctorNote.createdAt, t, locale)
+                        : t("dashboard.notePlaceholder")}
                     </Text>
                   </View>
                 </View>
@@ -2023,6 +1846,7 @@ const MedicineOrderMiniBar = ({
     DashboardData["medicineOrder"];
   onPress: () => void;
 }) => {
+  const { t } = useLanguage();
   const steps =
     order?.steps || {
       received: true,
@@ -2031,10 +1855,7 @@ const MedicineOrderMiniBar = ({
     };
 
   const statusText =
-    formatOrderStatus(
-      order?.status ||
-        "PREPARING"
-    );
+    formatOrderStatus(order?.status || "PREPARING", t);
 
   return (
     <TouchableOpacity
@@ -2054,7 +1875,7 @@ const MedicineOrderMiniBar = ({
             styles.orderMiniTitle
           }
         >
-          Medicine Order
+          {t("dashboard.medicineOrder")}
         </Text>
 
         <View
@@ -2078,7 +1899,7 @@ const MedicineOrderMiniBar = ({
         }
       >
         <OrderMiniStep
-          label="Received"
+          label={t("dashboard.received")}
           active={Boolean(
             steps.received
           )}
@@ -2086,7 +1907,7 @@ const MedicineOrderMiniBar = ({
         />
 
         <OrderMiniStep
-          label="Preparing"
+          label={t("dashboard.preparing")}
           active={Boolean(
             steps.preparing
           )}
@@ -2094,7 +1915,7 @@ const MedicineOrderMiniBar = ({
         />
 
         <OrderMiniStep
-          label="Ready"
+          label={t("dashboard.ready")}
           active={Boolean(
             steps.ready
           )}
@@ -2235,6 +2056,8 @@ const MedicinePlanBlock = ({
     reminderId: string
   ) => void;
 }) => {
+  const { t, locale } = useLanguage();
+
   if (
     !nextMedicineGroup ||
     !firstMedicine
@@ -2269,7 +2092,7 @@ const MedicinePlanBlock = ({
           <Text
             style={styles.rowTitle}
           >
-            No upcoming dose
+            {t("dashboard.noUpcomingDose")}
           </Text>
 
           <Text
@@ -2277,7 +2100,7 @@ const MedicinePlanBlock = ({
               styles.rowSubtitle
             }
           >
-            Add a medicine reminder to build your daily plan.
+            {t("dashboard.addReminderText")}
           </Text>
         </View>
 
@@ -2295,7 +2118,7 @@ const MedicinePlanBlock = ({
               styles.smallPrimaryButtonText
             }
           >
-            Add
+            {t("common.add")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -2325,9 +2148,7 @@ const MedicinePlanBlock = ({
               styles.timeBoxText
             }
           >
-            {formatTime(
-              nextMedicineGroup.scheduledFor
-            )}
+            {formatTime(nextMedicineGroup.scheduledFor, t, locale)}
           </Text>
 
           <Text
@@ -2335,7 +2156,7 @@ const MedicinePlanBlock = ({
               styles.timeBoxLabel
             }
           >
-            Due
+            {t("common.due")}
           </Text>
         </View>
 
@@ -2349,7 +2170,7 @@ const MedicinePlanBlock = ({
             numberOfLines={1}
           >
             {hasMultipleMedicines
-              ? `${nextMedicineGroup.count} medicines due`
+              ? t("dashboard.medicinesDue", { count: nextMedicineGroup.count })
               : firstMedicine.name}
           </Text>
 
@@ -2360,7 +2181,7 @@ const MedicinePlanBlock = ({
             numberOfLines={2}
           >
             {hasMultipleMedicines
-              ? "Open schedule to manage all medicines at this time."
+              ? t("dashboard.openSchedule")
               : `${firstMedicine.dose}${
                   firstMedicine.instructions
                     ? ` · ${firstMedicine.instructions}`
@@ -2464,8 +2285,8 @@ const MedicinePlanBlock = ({
               }
             >
               {isTakingNextMedicine
-                ? "Saving..."
-                : "Taken"}
+                ? t("common.saving")
+                : t("common.taken")}
             </Text>
           </TouchableOpacity>
 
@@ -2498,8 +2319,8 @@ const MedicinePlanBlock = ({
               }
             >
               {isSnoozingNextMedicine
-                ? "Snoozing..."
-                : "Snooze"}
+                ? t("common.snoozing")
+                : t("common.snooze")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2589,17 +2410,25 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  notificationDot: {
+  notificationBadge: {
     position: "absolute",
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 2,
+    right: 1,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 8,
     backgroundColor: DANGER,
-    borderWidth: 1.5,
-    borderColor:
-      BACKGROUND,
+    borderWidth: 2,
+    borderColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+
+  notificationBadgeText: {
+    color: SURFACE,
+    fontSize: 8,
+    fontWeight: "700",
   },
 
   avatar: {

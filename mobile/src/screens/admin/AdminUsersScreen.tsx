@@ -17,6 +17,7 @@ import {
   Mail,
   RefreshCw,
   ShieldCheck,
+  RotateCcw,
   UserRound,
   UsersRound,
   XCircle,
@@ -219,11 +220,59 @@ export const AdminUsersScreen = ({ route }: AdminUsersScreenProps) => {
     );
   };
 
+  const confirmReactivateUser = (user: AdminUser) => {
+    if (user.role === "ADMIN") {
+      Alert.alert("Not allowed", "Admin accounts cannot be reactivated here.");
+      return;
+    }
+
+    if (user.accountStatus !== "DISABLED") {
+      Alert.alert("Not disabled", "Only disabled accounts can be reactivated.");
+      return;
+    }
+
+    Alert.alert(
+      "Reactivate account",
+      `Reactivate ${user.fullName}'s account? They will be able to sign in again.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Reactivate",
+          onPress: async () => {
+            try {
+              setActionUserId(user.id);
+
+              const result = await adminApi.reactivateUser(user.id);
+
+              setUsers((currentUsers) =>
+                currentUsers.map((currentUser) =>
+                  currentUser.id === user.id ? result.user : currentUser
+                )
+              );
+
+              Alert.alert("Account reactivated", "The account is active again.");
+            } catch (error) {
+              Alert.alert("Reactivate failed", getErrorMessage(error));
+            } finally {
+              setActionUserId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderUserCard = (user: AdminUser) => {
     const tone = getStatusTone(user.accountStatus);
     const isActionLoading = actionUserId === user.id;
     const canSuspend =
-      user.role !== "ADMIN" && user.accountStatus !== "DISABLED";
+      user.role !== "ADMIN" &&
+      (user.accountStatus === "ACTIVE" || user.accountStatus === "APPROVED");
+    const canReactivate =
+      user.role !== "ADMIN" && user.accountStatus === "DISABLED";
 
     return (
       <View key={user.id} style={styles.card}>
@@ -284,6 +333,24 @@ export const AdminUsersScreen = ({ route }: AdminUsersScreenProps) => {
                 <ActivityIndicator color={DANGER} />
               ) : (
                 <Text style={styles.suspendButtonText}>Suspend account</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
+
+          {canReactivate ? (
+            <TouchableOpacity
+              style={styles.reactivateButton}
+              onPress={() => confirmReactivateUser(user)}
+              disabled={isActionLoading}
+              activeOpacity={0.86}
+            >
+              {isActionLoading ? (
+                <ActivityIndicator color={ON_SUCCESS_CONTAINER} />
+              ) : (
+                <>
+                  <RotateCcw size={15} color={ON_SUCCESS_CONTAINER} strokeWidth={2.5} />
+                  <Text style={styles.reactivateButtonText}>Reactivate account</Text>
+                </>
               )}
             </TouchableOpacity>
           ) : null}
@@ -571,6 +638,22 @@ const styles = StyleSheet.create({
     color: DANGER,
     fontSize: 12,
     fontWeight: "700",
+  },
+  reactivateButton: {
+    alignSelf: "flex-start",
+    backgroundColor: SUCCESS_CONTAINER,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  reactivateButtonText: {
+    color: ON_SUCCESS_CONTAINER,
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
   },
   stateCard: {
     backgroundColor: SURFACE,

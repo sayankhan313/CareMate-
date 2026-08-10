@@ -51,9 +51,7 @@ export type MedicineDraft = {
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 
 export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
-
 export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
-
 export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
 
 export type RootStackParamList = {
@@ -72,6 +70,9 @@ export type RootStackParamList = {
   DoctorTabs: (NavigatorScreenParams<DoctorTabParamList> & { user?: any }) | undefined;
   AdminTabs: (NavigatorScreenParams<AdminTabParamList> & { user?: any }) | undefined;
   PharmacyDashboard: { user?: any } | undefined;
+  Notifications: undefined;
+  DoctorProfile: undefined;
+  AdminProfile: undefined;
   AdminDashboard: undefined;
   AdminDoctorVerificationDetail: { doctorId: string };
   AdminPharmacyVerificationDetail: { pharmacyId: string };
@@ -79,6 +80,12 @@ export type RootStackParamList = {
   AdminAuditLogDetail: { auditLogId: string };
   AdminRegisterWebView: { title: string; url: string; helperText?: string };
   PatientProfile: { user?: any } | undefined;
+  EditPatientProfile: undefined;
+  NotificationPreferences: undefined;
+  ReminderSettings: undefined;
+  SafetyResponseSettings: undefined;
+  LanguageAccessibility: undefined;
+  PrivacySecurity: undefined;
   SelectDoctor: undefined;
   PatientActiveCalls: undefined;
   MedicineUpdates: undefined;
@@ -112,6 +119,7 @@ export type RootStackParamList = {
     completionStatus?: ConsultationCompletionStatus;
   };
   DoctorPatientDetail: { patientId: string; patientName?: string };
+  DoctorAlertDetail: { alertId: string };
   DoctorPatientReports: { patientId: string; patientName: string };
   DoctorReportReviews: undefined;
   DoctorReportReview: { patientId: string; patientName: string; reportId: string };
@@ -119,4 +127,7 @@ export type RootStackParamList = {
   DoctorPrescription: { patientId: string; patientName: string };
   DoctorSelectNotePatient: undefined;
   DoctorAddNote: { patientId: string; patientName: string };
+  DoctorAvailability: undefined;
+  DoctorMedicineReviewPool: undefined;
+  DoctorMedicineReviewPoolDetail: { requestId: string };
 };

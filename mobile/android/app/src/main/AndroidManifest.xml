@@ -1,15 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
   <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
   <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
   <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
   <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
   <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+
   <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-permission android:name="android.permission.VIBRATE" />
 
   <queries>
     <package android:name="com.google.android.apps.healthdata" />

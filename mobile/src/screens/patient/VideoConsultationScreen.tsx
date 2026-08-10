@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, } from "react";
-import { ActivityIndicator, Alert, PermissionsAndroid, Platform, Share, StatusBar, StyleSheet, Text, TouchableOpacity, View, } from "react-native";
+import { ActivityIndicator, PermissionsAndroid, Platform, Share, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets, } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AlertCircle, Camera, CheckCircle2, Link, Mic, PhoneOff, RefreshCw, Share2, ShieldAlert, Video, } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 import { consultationsApi } from "../../services/consultationsApi";
 import { doctorConsultationsApi } from "../../services/doctor/doctorConsultationsApi";
 import type { RootStackParamList } from "../../types/navigation";
@@ -862,6 +864,8 @@ const VideoConsultationScreen = ({ navigation, route, }: Props) => {
             styles.callHeader,
             {
                 paddingTop: Math.max(14, insets.top + 10),
+                paddingLeft: Math.max(14, insets.left + 14),
+                paddingRight: Math.max(14, insets.right + 14),
             },
         ]}>
         <View style={styles.callTitleRow}>
@@ -878,7 +882,7 @@ const VideoConsultationScreen = ({ navigation, route, }: Props) => {
             <View style={styles.callMetaRow}>
               <View style={styles.liveDot}/>
 
-              <Text style={styles.callSubtitle}>
+              <Text style={styles.callSubtitle} numberOfLines={1}>
                 {participantLabel} joined •{" "}
                 {consultationTypeLabel}
               </Text>
@@ -1171,6 +1175,7 @@ const styles = StyleSheet.create({
     },
     callTitleRow: {
         flex: 1,
+        minWidth: 0,
         flexDirection: "row",
         alignItems: "center",
         paddingRight: 10,
@@ -1186,6 +1191,7 @@ const styles = StyleSheet.create({
     },
     headerTextBox: {
         flex: 1,
+        minWidth: 0,
     },
     callTitle: {
         color: SURFACE,
@@ -1213,7 +1219,8 @@ const styles = StyleSheet.create({
         minHeight: 40,
         borderRadius: 12,
         backgroundColor: DANGER,
-        paddingHorizontal: 13,
+        paddingHorizontal: 12,
+        flexShrink: 0,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

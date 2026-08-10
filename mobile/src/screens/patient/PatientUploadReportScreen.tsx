@@ -40,6 +40,7 @@ import {
   patientReportsApi,
   type PatientReportCategory,
 } from "../../services/patientReportsApi";
+import { patientSettingsApi } from "../../services/patientSettingsApi";
 import type { RootStackParamList } from "../../types/navigation";
 
 type Props = NativeStackScreenProps<
@@ -371,71 +372,23 @@ export const PatientUploadReportScreen = ({
     }
   };
 
-  const uploadReport = async () => {
-    if (
-      title.trim().length < 2
-    ) {
-      Alert.alert(
-        "Title required",
-        "Please enter a report title."
-      );
-
-      return;
-    }
-
-    if (!selectedFile) {
-      Alert.alert(
-        "File required",
-        "Please select a medical report file."
-      );
-
-      return;
-    }
-
-    if (
-      !isValidReportDate(
-        reportDate
-      )
-    ) {
-      Alert.alert(
-        "Invalid report date",
-        "Use YYYY-MM-DD and do not enter a future date."
-      );
-
-      return;
-    }
-
-    if (!isSampleConfirmed) {
-      Alert.alert(
-        "Confirmation required",
-        "Confirm that this is fictional or sample data without real personal information."
-      );
-
-      return;
-    }
+  const performUploadReport = async () => {
+    if (!selectedFile) return;
 
     try {
       setIsUploading(true);
 
       await patientReportsApi.uploadReport(
         {
-          title:
-            title.trim(),
+          title: title.trim(),
           category,
-          description:
-            description.trim() ||
-            undefined,
-          reportDate:
-            reportDate.trim() ||
-            undefined,
+          description: description.trim() || undefined,
+          reportDate: reportDate.trim() || undefined,
           confirmSampleData: true,
           file: {
-            uri:
-              selectedFile.uri,
-            name:
-              selectedFile.name,
-            type:
-              selectedFile.type,
+            uri: selectedFile.uri,
+            name: selectedFile.name,
+            type: selectedFile.type,
           },
         }
       );
@@ -447,14 +400,10 @@ export const PatientUploadReportScreen = ({
           {
             text: "View Reports",
             onPress: () => {
-              if (
-                navigation.canGoBack()
-              ) {
+              if (navigation.canGoBack()) {
                 navigation.goBack();
               } else {
-                navigation.replace(
-                  "PatientReports"
-                );
+                navigation.replace("PatientReports");
               }
             },
           },
@@ -470,6 +419,71 @@ export const PatientUploadReportScreen = ({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const uploadReport = async () => {
+    if (title.trim().length < 2) {
+      Alert.alert(
+        "Title required",
+        "Please enter a report title."
+      );
+      return;
+    }
+
+    if (!selectedFile) {
+      Alert.alert(
+        "File required",
+        "Please select a medical report file."
+      );
+      return;
+    }
+
+    if (!isValidReportDate(reportDate)) {
+      Alert.alert(
+        "Invalid report date",
+        "Use YYYY-MM-DD and do not enter a future date."
+      );
+      return;
+    }
+
+    if (!isSampleConfirmed) {
+      Alert.alert(
+        "Confirmation required",
+        "Confirm that this is fictional or sample data without real personal information."
+      );
+      return;
+    }
+
+    let confirmBeforeSharing = true;
+
+    try {
+      const privacyResult = await patientSettingsApi.getPrivacySettings();
+      confirmBeforeSharing = privacyResult.settings.confirmBeforeReportSharing;
+    } catch {
+      confirmBeforeSharing = true;
+    }
+
+    if (!confirmBeforeSharing) {
+      await performUploadReport();
+      return;
+    }
+
+    Alert.alert(
+      "Share report with assigned doctors?",
+      "This report will be uploaded securely and made available to your assigned doctors for review.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Upload & Share",
+          onPress: () => {
+            void performUploadReport();
+          },
+        },
+      ]
+    );
   };
 
   return (

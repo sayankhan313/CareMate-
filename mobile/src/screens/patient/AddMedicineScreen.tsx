@@ -8,14 +8,11 @@ import {
   useForm,
 } from "react-hook-form";
 import {
-  Alert,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -37,6 +34,9 @@ import {
   Send,
   Stethoscope,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedTextInput as TextInput } from "../../components/common/LocalizedTextInput";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import type {
   MedicineDraft,

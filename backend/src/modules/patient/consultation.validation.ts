@@ -4,6 +4,18 @@ export const consultationIdParamsSchema = z.object({
   consultationId: z.string().uuid("Invalid consultation id."),
 });
 
+export const doctorAvailabilityParamsSchema = z.object({
+  doctorId: z.string().uuid("Invalid doctor id."),
+});
+
+export const doctorAvailabilityMonthQuerySchema = z.object({
+  month: z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Month must use YYYY-MM format."),
+});
+
+export const doctorAvailabilitySlotsQuerySchema = z.object({
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must use YYYY-MM-DD format."),
+});
+
 export const createManualConsultationSchema = z
   .object({
     doctorId: z.string().uuid("Please select a valid assigned doctor."),
@@ -41,3 +53,15 @@ export const createManualConsultationSchema = z
       path: ["preferredTime"],
     }
   );
+
+export const rescheduleConsultationSchema = z.object({
+  preferredDate: z
+    .string()
+    .trim()
+    .regex(/^\d{2}\/\d{2}\/\d{4}$/, "Date must be DD/MM/YYYY."),
+
+  preferredTime: z
+    .string()
+    .trim()
+    .regex(/^\d{2}:\d{2}$/, "Time must be HH:mm."),
+});

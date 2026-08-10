@@ -382,6 +382,20 @@ export const DoctorAlertsScreen = ({
     void loadAlerts("refresh");
   }, [loadAlerts]);
 
+  const openAlertDetail = (alert: DoctorSafetyAlert) => {
+    if (!rootNavigation) {
+      Alert.alert(
+        "Unable to open alert",
+        "Safety alert details are not available right now."
+      );
+      return;
+    }
+
+    rootNavigation.navigate("DoctorAlertDetail", {
+      alertId: alert.id,
+    });
+  };
+
   const openPatient = (alert: DoctorSafetyAlert) => {
     if (!rootNavigation || !alert.patient) {
       return;
@@ -797,6 +811,9 @@ export const DoctorAlertsScreen = ({
                 key={alert.id}
                 alert={alert}
                 activeAction={activeAction}
+                onViewAlert={() => {
+                  openAlertDetail(alert);
+                }}
                 onViewPatient={() => {
                   openPatient(alert);
                 }}
@@ -852,6 +869,7 @@ const SummaryStat = ({
 const AlertCard = ({
   alert,
   activeAction,
+  onViewAlert,
   onViewPatient,
   onAccept,
   onJoin,
@@ -859,6 +877,7 @@ const AlertCard = ({
 }: {
   alert: DoctorSafetyAlert;
   activeAction: ActiveAction;
+  onViewAlert: () => void;
   onViewPatient: () => void;
   onAccept: () => void;
   onJoin: () => void;
@@ -1105,6 +1124,23 @@ const AlertCard = ({
 
       <View style={styles.actions}>
         <TouchableOpacity
+          style={styles.alertDetailButton}
+          activeOpacity={0.85}
+          onPress={onViewAlert}
+          disabled={isBusy}
+        >
+          <ShieldAlert
+            size={16}
+            color={DANGER_DARK}
+            strokeWidth={2.5}
+          />
+
+          <Text style={styles.alertDetailButtonText}>
+            View alert
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.patientButton}
           activeOpacity={0.85}
           onPress={onViewPatient}
@@ -1117,7 +1153,7 @@ const AlertCard = ({
           />
 
           <Text style={styles.patientButtonText}>
-            View patient
+            Patient
           </Text>
         </TouchableOpacity>
 
@@ -1709,6 +1745,23 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     marginTop: 14,
     marginHorizontal: -4,
+  },
+  alertDetailButton: {
+    flexGrow: 1,
+    minWidth: "46%",
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: DANGER_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 4,
+  },
+  alertDetailButtonText: {
+    color: DANGER_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
   },
   patientButton: {
     flexGrow: 1,
