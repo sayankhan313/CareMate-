@@ -864,6 +864,8 @@ const VideoConsultationScreen = ({ navigation, route, }: Props) => {
             styles.callHeader,
             {
                 paddingTop: Math.max(14, insets.top + 10),
+                paddingLeft: Math.max(14, insets.left + 14),
+                paddingRight: Math.max(14, insets.right + 14),
             },
         ]}>
         <View style={styles.callTitleRow}>
@@ -880,7 +882,7 @@ const VideoConsultationScreen = ({ navigation, route, }: Props) => {
             <View style={styles.callMetaRow}>
               <View style={styles.liveDot}/>
 
-              <Text style={styles.callSubtitle}>
+              <Text style={styles.callSubtitle} numberOfLines={1}>
                 {participantLabel} joined •{" "}
                 {consultationTypeLabel}
               </Text>
@@ -1173,6 +1175,7 @@ const styles = StyleSheet.create({
     },
     callTitleRow: {
         flex: 1,
+        minWidth: 0,
         flexDirection: "row",
         alignItems: "center",
         paddingRight: 10,
@@ -1188,6 +1191,7 @@ const styles = StyleSheet.create({
     },
     headerTextBox: {
         flex: 1,
+        minWidth: 0,
     },
     callTitle: {
         color: SURFACE,
@@ -1215,7 +1219,8 @@ const styles = StyleSheet.create({
         minHeight: 40,
         borderRadius: 12,
         backgroundColor: DANGER,
-        paddingHorizontal: 13,
+        paddingHorizontal: 12,
+        flexShrink: 0,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
