@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AlertCircle, ArrowLeft, Bell, BellRing, CheckCircle2, Clock3, FileText, HeartPulse, Mail, Pill, RefreshCw, Repeat2, ShieldAlert, Stethoscope, UsersRound, Vibrate, Video, Volume2 } from "lucide-react-native";
+import { AlertCircle, ArrowLeft, Bell, BellRing, CheckCircle2, Clock3, FileText, HeartPulse, Pill, RefreshCw, Repeat2, ShieldAlert, Stethoscope, UsersRound, Vibrate, Video, Volume2 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -40,8 +40,6 @@ const COPY = {
     delivery: "Delivery",
     push: "Push notifications",
     pushDesc: "Allow CareMate+ notifications on this device.",
-    email: "Email notifications",
-    emailDesc: "Receive account and important service updates by email.",
     careUpdates: "Care updates",
     medicine: "Medicine reminders",
     medicineDesc: "Reminder when a scheduled medicine is due.",
@@ -85,8 +83,6 @@ const COPY = {
     delivery: "Zustellung",
     push: "Push-Benachrichtigungen",
     pushDesc: "CareMate+-Benachrichtigungen auf diesem Gerät erlauben.",
-    email: "E-Mail-Benachrichtigungen",
-    emailDesc: "Konto- und wichtige Service-Updates per E-Mail erhalten.",
     careUpdates: "Versorgungsupdates",
     medicine: "Medikamentenerinnerungen",
     medicineDesc: "Erinnerung, wenn ein Medikament fällig ist.",
@@ -130,8 +126,6 @@ const COPY = {
     delivery: "Παράδοση",
     push: "Ειδοποιήσεις push",
     pushDesc: "Να επιτρέπονται ειδοποιήσεις CareMate+ σε αυτή τη συσκευή.",
-    email: "Ειδοποιήσεις email",
-    emailDesc: "Λήψη σημαντικών ενημερώσεων μέσω email.",
     careUpdates: "Ενημερώσεις φροντίδας",
     medicine: "Υπενθυμίσεις φαρμάκων",
     medicineDesc: "Υπενθύμιση όταν πρέπει να ληφθεί ένα φάρμακο.",
@@ -175,8 +169,6 @@ const COPY = {
     delivery: "Isarwa",
     push: "Sanarwar push",
     pushDesc: "Bada damar sanarwar CareMate+ a wannan na'urar.",
-    email: "Sanarwar imel",
-    emailDesc: "Karɓi muhimman sabuntawa ta imel.",
     careUpdates: "Sabuntawar kulawa",
     medicine: "Tunanin magani",
     medicineDesc: "Tuna lokacin shan magani ya yi.",
@@ -220,8 +212,6 @@ const COPY = {
     delivery: "डिलीवरी",
     push: "पुश नोटिफिकेशन",
     pushDesc: "इस डिवाइस पर CareMate+ नोटिफिकेशन की अनुमति दें।",
-    email: "ईमेल नोटिफिकेशन",
-    emailDesc: "ज़रूरी अकाउंट और सेवा अपडेट ईमेल से पाएं।",
     careUpdates: "केयर अपडेट",
     medicine: "दवा रिमाइंडर",
     medicineDesc: "दवा लेने का समय होने पर रिमाइंडर पाएं।",
@@ -385,8 +375,7 @@ export const NotificationPreferencesScreen = ({ navigation }: Props) => {
           {!isLoading && !errorMessage && preferences ? (
             <>
               <SettingsSection title={copy.delivery} surfaceColor={surfaceColor} textColor={textColor} scaleFont={scaleFont}>
-                <ToggleRow icon={<Bell size={20} color={primaryColor} strokeWidth={2.5} />} title={copy.push} description={copy.pushDesc} value={preferences.notifications.pushNotifications} loading={savingKey === "pushNotifications"} saved={savedKey === "pushNotifications"} onPress={() => void updateNotificationBoolean("pushNotifications")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} iconBackground={primaryLightColor} primaryColor={primaryColor} scaleFont={scaleFont} />
-                <ToggleRow icon={<Mail size={20} color={primaryColor} strokeWidth={2.5} />} title={copy.email} description={copy.emailDesc} value={preferences.notifications.emailNotifications} loading={savingKey === "emailNotifications"} saved={savedKey === "emailNotifications"} onPress={() => void updateNotificationBoolean("emailNotifications")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} iconBackground={primaryLightColor} primaryColor={primaryColor} scaleFont={scaleFont} isLast />
+                <ToggleRow icon={<Bell size={20} color={primaryColor} strokeWidth={2.5} />} title={copy.push} description={copy.pushDesc} value={preferences.notifications.pushNotifications} loading={savingKey === "pushNotifications"} saved={savedKey === "pushNotifications"} onPress={() => void updateNotificationBoolean("pushNotifications")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} iconBackground={primaryLightColor} primaryColor={primaryColor} scaleFont={scaleFont} isLast />
               </SettingsSection>
 
               {!pushEnabled ? <View style={styles.disabledPanel}><AlertCircle size={18} color={DANGER_DARK} strokeWidth={2.5} /><Text style={[styles.disabledText, { fontSize: scaleFont(12) }]}>{copy.disabledHint}</Text></View> : null}

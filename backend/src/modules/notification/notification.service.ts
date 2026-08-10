@@ -118,6 +118,31 @@ const getPushPermission = async (input: SendNotificationInput) => {
 };
 
 
+const getPushDisplayContent = async (input: SendNotificationInput) => {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true },
+  });
+
+  if (!user) throw new AppError("Notification recipient was not found.", 404);
+  if (user.role !== "PATIENT") return { title: input.title, body: input.body };
+
+  const privacy = await prisma.patientPrivacyPreference.upsert({
+    where: { patientId: input.userId },
+    create: { patientId: input.userId },
+    update: {},
+    select: { hideSensitiveNotificationContent: true },
+  });
+
+  if (!privacy.hideSensitiveNotificationContent) return { title: input.title, body: input.body };
+
+  return {
+    title: "CareMate+ update",
+    body: "Open CareMate+ to view this notification.",
+  };
+};
+
+
 const REMINDER_NOTIFICATION_TYPES = new Set([
   "MEDICINE_REMINDER_DUE",
   "MEDICINE_REMINDER_SNOOZED",
@@ -464,12 +489,13 @@ export const notificationService = {
 
     try {
       const presentation = await getNotificationPresentation(input);
+      const pushContent = await getPushDisplayContent(input);
 
       const response = await firebaseMessaging.sendEachForMulticast({
         tokens: tokens.map(token => token.token),
         notification: {
-          title: input.title,
-          body: input.body,
+          title: pushContent.title,
+          body: pushContent.body,
         },
         data: toFcmData(notification.id, input),
         android: {

@@ -1,5 +1,5 @@
 import React, { type ReactNode } from "react";
-import { Text as NativeText, type TextProps } from "react-native";
+import { StyleSheet, Text as NativeText, type TextProps } from "react-native";
 
 import { useLanguage } from "../../context/LanguageContext";
 import { translateDisplayText } from "../../locales/displayTranslations";
@@ -10,7 +10,13 @@ const translateNode = (node: ReactNode, language: ReturnType<typeof useLanguage>
   return node;
 };
 
-export const LocalizedText = ({ children, ...props }: TextProps) => {
-  const { language } = useLanguage();
-  return <NativeText {...props}>{React.Children.map(children, child => translateNode(child, language))}</NativeText>;
+export const LocalizedText = ({ children, style, ...props }: TextProps) => {
+  const { language, scaleFont } = useLanguage();
+  const flattenedStyle = StyleSheet.flatten(style);
+  const scaledStyle = {
+    ...(typeof flattenedStyle?.fontSize === "number" ? { fontSize: scaleFont(flattenedStyle.fontSize) } : {}),
+    ...(typeof flattenedStyle?.lineHeight === "number" ? { lineHeight: scaleFont(flattenedStyle.lineHeight) } : {}),
+  };
+
+  return <NativeText {...props} style={[style, scaledStyle]}>{React.Children.map(children, child => translateNode(child, language))}</NativeText>;
 };

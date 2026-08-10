@@ -71,6 +71,40 @@ const getDoctorProfileData = (data: RegisterInput) => {
   };
 };
 
+const notifyPatientAboutSuccessfulLogin = async (user: { id: string; role: string }) => {
+  if (user.role !== "PATIENT") return;
+
+  try {
+    const privacy = await prisma.patientPrivacyPreference.upsert({
+      where: { patientId: user.id },
+      create: { patientId: user.id },
+      update: {},
+      select: { loginAlertsEnabled: true },
+    });
+
+    if (!privacy.loginAlertsEnabled) return;
+
+    const loggedInAt = new Date();
+
+    await notificationService.createAndSend({
+      userId: user.id,
+      type: "LOGIN_ALERT",
+      title: "New login to CareMate+",
+      body: "A successful login to your CareMate+ patient account was detected.",
+      priority: "HIGH",
+      entityType: "ACCOUNT_SECURITY",
+      entityId: `${user.id}:${loggedInAt.getTime()}`,
+      targetScreen: "Notifications",
+      data: {
+        source: "AUTH_LOGIN",
+        loggedInAt: loggedInAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.warn("Unable to create patient login alert:", error instanceof Error ? error.message : error);
+  }
+};
+
 const notifyAdminsAboutVerificationRequest = async (user: { id: string; fullName: string; role: string; createdAt: Date }) => {
   if (user.role !== "DOCTOR" && user.role !== "PHARMACY") return;
 
@@ -182,6 +216,7 @@ export const authService = {
     if (user.accountStatus === "REJECTED") throw new AppError("Your account verification was rejected", 403);
 
     const token = createJwtToken({ userId: user.id, role: user.role });
+    void notifyPatientAboutSuccessfulLogin(user);
 
     return {
       token,

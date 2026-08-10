@@ -8,9 +8,9 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TextInput,
   TouchableOpacity,
+  Vibration,
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -36,6 +36,7 @@ import {
 } from "lucide-react-native";
 
 import { useLanguage } from "../../context/LanguageContext";
+import { AccessibleText as Text } from "../../components/common/AccessibleText";
 import {
   consultationsApi,
   type CreateManualConsultationPayload,
@@ -206,10 +207,14 @@ const getReasonLabel = (option: string, t: Translate) => {
 
 const ConsultationsScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const { t, locale } = useLanguage();
+  const { t, locale, reduceMotionEnabled, hapticFeedbackEnabled, screenReaderHintsEnabled, scaleFont } = useLanguage();
   const rootNavigation = navigation.getParent<any>();
   const slotRequestIdRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
+  const triggerHaptic = useCallback(() => {
+    if (hapticFeedbackEnabled) Vibration.vibrate(12);
+  }, [hapticFeedbackEnabled]);
+
 
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [assignedDoctors, setAssignedDoctors] = useState<AssignedDoctor[]>([]);
@@ -400,6 +405,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
       }
 
       if (doctorId !== selectedDoctorId) {
+        triggerHaptic();
         slotRequestIdRef.current += 1;
         setCurrentMonth(getMonthString());
         setSelectedDate(null);
@@ -410,7 +416,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
       setActiveDropdown(null);
     },
-    [reschedulingConsultation, selectedDoctorId]
+    [reschedulingConsultation, selectedDoctorId, triggerHaptic]
   );
 
   const handleMonthChange = useCallback(
@@ -436,6 +442,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
       if (!availability?.isAvailable) return;
 
+      triggerHaptic();
       const requestId = ++slotRequestIdRef.current;
 
       setSelectedDate(day.dateString);
@@ -468,10 +475,11 @@ const ConsultationsScreen = ({ navigation }: Props) => {
         if (requestId === slotRequestIdRef.current) setIsLoadingSlots(false);
       }
     },
-    [availabilityByDate, selectedDoctorId]
+    [availabilityByDate, selectedDoctorId, triggerHaptic]
   );
 
   const stopRescheduling = useCallback(() => {
+    triggerHaptic();
     slotRequestIdRef.current += 1;
     setReschedulingConsultation(null);
     setSelectedDate(null);
@@ -479,7 +487,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
     setAvailableSlots([]);
     setAvailabilityError("");
     setCurrentMonth(getMonthString());
-  }, []);
+  }, [triggerHaptic]);
 
   const startRescheduling = useCallback(
     (consultation: Consultation) => {
@@ -502,6 +510,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
 
       const existingDate = consultation.preferredAt ? new Date(consultation.preferredAt) : null;
 
+      triggerHaptic();
       slotRequestIdRef.current += 1;
       setReschedulingConsultation(consultation);
       setSelectedDoctorId(consultation.doctorId);
@@ -515,10 +524,10 @@ const ConsultationsScreen = ({ navigation }: Props) => {
       else setCurrentMonth(getMonthString());
 
       requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ y: 170, animated: true });
+        scrollRef.current?.scrollTo({ y: 170, animated: !reduceMotionEnabled });
       });
     },
-    [assignedDoctors]
+    [assignedDoctors, reduceMotionEnabled, triggerHaptic]
   );
 
   const sendConsultationRequest = useCallback(async () => {
@@ -953,9 +962,9 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                       textDayFontWeight: "600",
                       textMonthFontWeight: "700",
                       textDayHeaderFontWeight: "700",
-                      textDayFontSize: 13,
-                      textMonthFontSize: 16,
-                      textDayHeaderFontSize: 11,
+                      textDayFontSize: scaleFont(13),
+                      textMonthFontSize: scaleFont(16),
+                      textDayHeaderFontSize: scaleFont(11),
                     }}
                     style={styles.calendar}
                   />
@@ -1037,7 +1046,12 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                               isSelected ? styles.slotButtonSelected : undefined,
                             ]}
                             activeOpacity={0.84}
-                            onPress={() => setSelectedSlot(slot)}
+                            onPress={() => {
+                              triggerHaptic();
+                              setSelectedSlot(slot);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={screenReaderHintsEnabled ? `${t("consultations.preferredTime")} ${slot.time}` : undefined}
                           >
                             <Clock3
                               size={15}
@@ -1084,7 +1098,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                 <Text style={styles.inputLabel}>{t("consultations.notesOptional")}</Text>
 
                 <TextInput
-                  style={styles.notesInput}
+                  style={[styles.notesInput, { fontSize: scaleFont(15), lineHeight: scaleFont(21) }]}
                   value={notes}
                   onChangeText={setNotes}
                   placeholder={t("consultations.notesPlaceholder")}
@@ -1106,7 +1120,12 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                   : undefined,
               ]}
               activeOpacity={0.85}
-              onPress={() => void sendConsultationRequest()}
+              onPress={() => {
+                triggerHaptic();
+                void sendConsultationRequest();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={screenReaderHintsEnabled ? (reschedulingConsultation ? "Confirm new appointment" : t("common.sendRequest")) : undefined}
               disabled={
                 isSendingRequest ||
                 !selectedDoctorId ||
@@ -1290,6 +1309,8 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                   style={styles.modalCloseButton}
                   activeOpacity={0.85}
                   onPress={() => setActiveDropdown(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel={screenReaderHintsEnabled ? t("common.cancel") : undefined}
                 >
                   <X size={20} color={TEXT} strokeWidth={2.6} />
                 </TouchableOpacity>
@@ -1370,6 +1391,7 @@ const ConsultationsScreen = ({ navigation }: Props) => {
                         ]}
                         activeOpacity={0.85}
                         onPress={() => {
+                          triggerHaptic();
                           setSelectedReason(option);
                           setActiveDropdown(null);
                         }}

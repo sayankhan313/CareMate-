@@ -76,12 +76,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const scaleFont = useCallback((size: number) => Math.round(size * fontScale * 10) / 10, [fontScale]);
 
   const palette = useMemo<LanguagePalette>(() => {
-    if (settings.highContrastEnabled) {
-      return { background: "#FFFFFF", surface: "#FFFFFF", text: "#000000", muted: "#2F3542", border: "#111111", primary: "#204EA3", primaryLight: "#DCE8FF" };
-    }
-
     return { background: "#EEF1FA", surface: "#FFFFFF", text: "#111936", muted: "#7A8194", border: "#E4E8F2", primary: "#5B86E5", primaryLight: "#EEF4FF" };
-  }, [settings.highContrastEnabled]);
+  }, []);
 
   const value = useMemo<LanguageContextValue>(() => ({ ...settings, isReady, locale, fontScale, palette, t, setLanguage, applyAccessibilitySettings, scaleFont }), [settings, isReady, locale, fontScale, palette, t, setLanguage, applyAccessibilitySettings, scaleFont]);
 

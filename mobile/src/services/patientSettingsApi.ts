@@ -131,7 +131,7 @@ const sanitizeSafetySettings = (value: SafetySettings): SafetySettings => ({
 const sanitizeAccessibilitySettings = (value: AccessibilitySettings): AccessibilitySettings => ({
   language: value.language,
   textSize: value.textSize,
-  highContrastEnabled: Boolean(value.highContrastEnabled),
+  highContrastEnabled: false,
   reduceMotionEnabled: Boolean(value.reduceMotionEnabled),
   screenReaderHintsEnabled: Boolean(value.screenReaderHintsEnabled),
   hapticFeedbackEnabled: Boolean(value.hapticFeedbackEnabled),

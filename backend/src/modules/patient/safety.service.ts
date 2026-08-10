@@ -33,18 +33,7 @@ const formatSafetyAlert = (alert: any) => ({
 
 const getActivePrimaryDoctor = async (patientId: string) => {
   const assignment = await prisma.patientDoctorAssignment.findFirst({
-    where: {
-      patientId,
-      status: "ACTIVE",
-      assignmentType: "PRIMARY",
-      doctor: {
-        is: {
-          role: "DOCTOR",
-          isEmailVerified: true,
-          accountStatus: { in: ["ACTIVE", "APPROVED"] },
-        },
-      },
-    },
+    where: { patientId, status: "ACTIVE", assignmentType: "PRIMARY", doctor: { is: { role: "DOCTOR", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } } },
     include: { doctor: true },
   });
 
@@ -55,19 +44,11 @@ const getSafetyPreferences = async (patientId: string) => prisma.patientSafetyPr
   where: { patientId },
   create: { patientId },
   update: {},
-  select: {
-    countdownSeconds: true,
-    notifyAssignedDoctors: true,
-    shareLatestVitalsOnEscalation: true,
-    notifyEmergencyContact: true,
-  },
+  select: { countdownSeconds: true, notifyAssignedDoctors: true, shareLatestVitalsOnEscalation: true, notifyEmergencyContact: true },
 });
 
 const getSafetyAlertForPatient = async (patientId: string, alertId: string) => {
-  const alert = await prisma.safetyAlert.findFirst({
-    where: { id: alertId, patientId },
-    include: safetyAlertInclude,
-  });
+  const alert = await prisma.safetyAlert.findFirst({ where: { id: alertId, patientId }, include: safetyAlertInclude });
 
   if (!alert) throw new AppError("Safety alert not found.", 404);
 
@@ -235,10 +216,7 @@ export const safetyService = {
 
     const updatedAlert = await prisma.safetyAlert.update({
       where: { id: alert.id },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-      },
+      data: { status: "CANCELLED", cancelledAt: new Date() },
       include: safetyAlertInclude,
     });
 
@@ -262,10 +240,7 @@ export const safetyService = {
     ]);
 
     if (!primaryDoctor) {
-      throw new AppError(
-        "No active primary doctor is assigned. Please assign a primary doctor before escalation.",
-        400,
-      );
+      throw new AppError("No active primary doctor is assigned. Please assign a primary doctor before escalation.", 400);
     }
 
     const updatedAlert = await prisma.safetyAlert.update({
@@ -281,7 +256,7 @@ export const safetyService = {
     const consultationResult = await consultationService.createEmergencyConsultationFromAlert(
       patientId,
       updatedAlert.id,
-      primaryDoctor.id,
+      primaryDoctor.id
     );
 
     if (safetyPreferences.notifyAssignedDoctors) {

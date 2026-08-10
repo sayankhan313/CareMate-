@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, type ComponentType } from "react";
+import React, { useCallback, useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { Alert, AppState, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -69,6 +70,10 @@ import type { RootStackParamList } from "../types/navigation";
 import { HealthConnectDeviceProvider, useHealthConnectDevice } from "../context/HealthConnectDeviceContext";
 import { LanguageProvider } from "../context/LanguageContext";
 import { navigationRef } from "./navigationRef";
+import { patientSettingsApi } from "../services/patientSettingsApi";
+import { tokenStorage } from "../services/tokenStorage";
+import { getRuntimeLanguage } from "../locales/localizationRuntime";
+import { translateText } from "../locales";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -103,6 +108,193 @@ const AdminAuditLogsStackScreen = AdminAuditLogsScreen as ComponentType<any>;
 const AdminAuditLogDetailStackScreen = AdminAuditLogDetailScreen as ComponentType<any>;
 const NotificationsStackScreen = NotificationsScreen as ComponentType<any>;
 const ConsultationEndedStackScreen = ConsultationEndedScreen as ComponentType<any>;
+
+const SESSION_CHECK_INTERVAL_MS = 15_000;
+const SESSION_PREFERENCE_REFRESH_MS = 60_000;
+const PATIENT_SESSION_ROUTES = new Set([
+  "PatientTabs",
+  "PatientProfile",
+  "EditPatientProfile",
+  "NotificationPreferences",
+  "ReminderSettings",
+  "SafetyResponseSettings",
+  "LanguageAccessibility",
+  "PrivacySecurity",
+  "SelectDoctor",
+  "PatientActiveCalls",
+  "MedicineUpdates",
+  "PatientReports",
+  "PatientUploadReport",
+  "AddMedicine",
+  "ConfirmReminder",
+  "ScanMedicine",
+  "ScanMedicineResult",
+  "PrescriptionScanResult",
+  "ConnectedDevice",
+  "ManualSafetyResponse",
+  "SafetyResponse",
+  "VideoConsultation",
+  "ConsultationEnded",
+]);
+
+const NON_PATIENT_SESSION_ROUTES = new Set([
+  "DoctorTabs",
+  "DoctorProfile",
+  "DoctorPatientDetail",
+  "DoctorAlertDetail",
+  "DoctorPatientReports",
+  "DoctorReportReviews",
+  "DoctorReportReview",
+  "DoctorSelectPrescriptionPatient",
+  "DoctorPrescription",
+  "DoctorSelectNotePatient",
+  "DoctorAddNote",
+  "DoctorAvailability",
+  "DoctorMedicineReviewPool",
+  "DoctorMedicineReviewPoolDetail",
+  "AdminTabs",
+  "AdminDashboard",
+  "AdminProfile",
+  "AdminDoctorVerificationDetail",
+  "AdminPharmacyVerificationDetail",
+  "AdminAuditLogs",
+  "AdminAuditLogDetail",
+  "AdminRegisterWebView",
+  "PharmacyDashboard",
+]);
+
+
+const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
+  const activeTokenRef = useRef<string | null>(null);
+  const timeoutMsRef = useRef<number | null>(null);
+  const lastActivityAtRef = useRef(Date.now());
+  const patientSessionEnabledRef = useRef(false);
+  const signingOutRef = useRef(false);
+
+  const refreshPrivacySettings = useCallback(async (token: string | null) => {
+    if (!token) {
+      patientSessionEnabledRef.current = false;
+      timeoutMsRef.current = null;
+      return;
+    }
+
+    const currentRoute = navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined;
+
+    if (currentRoute && NON_PATIENT_SESSION_ROUTES.has(currentRoute)) {
+      patientSessionEnabledRef.current = false;
+      timeoutMsRef.current = null;
+      return;
+    }
+
+    if ((!currentRoute || !PATIENT_SESSION_ROUTES.has(currentRoute)) && timeoutMsRef.current === null) return;
+
+    try {
+      const result = await patientSettingsApi.getPrivacySettings();
+      if (activeTokenRef.current !== token) return;
+
+      patientSessionEnabledRef.current = true;
+      timeoutMsRef.current = result.settings.sessionTimeoutMinutes * 60_000;
+    } catch {
+      if (activeTokenRef.current !== token) return;
+      if (timeoutMsRef.current === null) patientSessionEnabledRef.current = false;
+    }
+  }, []);
+
+  const expirePatientSession = useCallback(async () => {
+    if (signingOutRef.current || !patientSessionEnabledRef.current || !activeTokenRef.current) return;
+
+    signingOutRef.current = true;
+
+    try {
+      await tokenStorage.removeToken();
+
+      if (navigationRef.isReady()) {
+        navigationRef.resetRoot({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
+      }
+
+      const language = getRuntimeLanguage();
+      const title = translateText(language, "common.sessionExpired");
+      const message = translateText(language, "common.pleaseLoginAgain");
+      Alert.alert(title, message);
+    } finally {
+      signingOutRef.current = false;
+    }
+  }, []);
+
+  const checkSessionExpiry = useCallback(() => {
+    if (AppState.currentState !== "active") return;
+    if (!patientSessionEnabledRef.current || !timeoutMsRef.current || !activeTokenRef.current) return;
+
+    const currentRoute = navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined;
+    if (currentRoute === "SafetyResponse" || currentRoute === "VideoConsultation") {
+      lastActivityAtRef.current = Date.now();
+      return;
+    }
+
+    if (Date.now() - lastActivityAtRef.current >= timeoutMsRef.current) {
+      void expirePatientSession();
+    }
+  }, [expirePatientSession]);
+
+  const registerActivity = useCallback(() => {
+    if (!patientSessionEnabledRef.current || !activeTokenRef.current) return;
+    lastActivityAtRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applyToken = async (token: string | null) => {
+      if (!mounted) return;
+
+      const tokenChanged = activeTokenRef.current !== token;
+      activeTokenRef.current = token;
+
+      if (!token) {
+        patientSessionEnabledRef.current = false;
+        timeoutMsRef.current = null;
+        return;
+      }
+
+      if (tokenChanged) lastActivityAtRef.current = Date.now();
+      await refreshPrivacySettings(token);
+    };
+
+    void tokenStorage.getToken().then(token => applyToken(token));
+    const unsubscribeToken = tokenStorage.subscribe(token => {
+      void applyToken(token);
+    });
+
+    const appStateSubscription = AppState.addEventListener("change", nextState => {
+      if (nextState === "active" && activeTokenRef.current) {
+        checkSessionExpiry();
+        void refreshPrivacySettings(activeTokenRef.current);
+      }
+    });
+
+    const sessionCheckTimer = setInterval(() => {
+      if (activeTokenRef.current && timeoutMsRef.current === null) void refreshPrivacySettings(activeTokenRef.current);
+      checkSessionExpiry();
+    }, SESSION_CHECK_INTERVAL_MS);
+
+    const preferenceRefreshTimer = setInterval(() => {
+      if (activeTokenRef.current) void refreshPrivacySettings(activeTokenRef.current);
+    }, SESSION_PREFERENCE_REFRESH_MS);
+
+    return () => {
+      mounted = false;
+      unsubscribeToken();
+      appStateSubscription.remove();
+      clearInterval(sessionCheckTimer);
+      clearInterval(preferenceRefreshTimer);
+    };
+  }, [checkSessionExpiry, refreshPrivacySettings]);
+
+  return <View style={styles.sessionBoundary} onTouchStart={registerActivity}>{children}</View>;
+};
 
 const CriticalVitalWatcher = () => {
   const { lastSyncedReading } = useHealthConnectDevice();
@@ -141,7 +333,8 @@ export const AppNavigator = () => {
     <SafeAreaProvider>
       <LanguageProvider>
         <HealthConnectDeviceProvider>
-          <NavigationContainer ref={navigationRef}>
+          <PatientSessionBoundary>
+            <NavigationContainer ref={navigationRef}>
             <FCMInitializer />
             <CriticalVitalWatcher />
 
@@ -209,9 +402,14 @@ export const AppNavigator = () => {
               <Stack.Screen name="VideoConsultation" component={VideoConsultationScreen} />
               <Stack.Screen name="ConsultationEnded" component={ConsultationEndedStackScreen} />
             </Stack.Navigator>
-          </NavigationContainer>
+            </NavigationContainer>
+          </PatientSessionBoundary>
         </HealthConnectDeviceProvider>
       </LanguageProvider>
     </SafeAreaProvider>
   );
 };
+
+const styles = StyleSheet.create({
+  sessionBoundary: { flex: 1 },
+});

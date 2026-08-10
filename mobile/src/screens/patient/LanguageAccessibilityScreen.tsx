@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Accessibility, AlertCircle, ArrowLeft, Eye, Languages, RefreshCw, Save, Smartphone, Type } from "lucide-react-native";
+import { Accessibility, AlertCircle, ArrowLeft, Languages, RefreshCw, Save, Smartphone, Type } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -11,7 +11,7 @@ import { patientSettingsApi, type AccessibilitySettings, type AppTextSize, type 
 import type { RootStackParamList } from "../../types/navigation";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LanguageAccessibility">;
-type AccessibilityBooleanKey = "highContrastEnabled" | "reduceMotionEnabled" | "screenReaderHintsEnabled" | "hapticFeedbackEnabled";
+type AccessibilityBooleanKey = "reduceMotionEnabled" | "screenReaderHintsEnabled" | "hapticFeedbackEnabled";
 
 const DEFAULT_SETTINGS: AccessibilitySettings = { language: "ENGLISH", textSize: "NORMAL", highContrastEnabled: false, reduceMotionEnabled: false, screenReaderHintsEnabled: true, hapticFeedbackEnabled: true };
 
@@ -39,8 +39,8 @@ const elevate = (level = 1) => ({ elevation: level === 1 ? 2 : 4, shadowColor: "
 
 const LanguageAccessibilityScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const { t, language, textSize, highContrastEnabled, reduceMotionEnabled, screenReaderHintsEnabled, hapticFeedbackEnabled, palette, scaleFont, applyAccessibilitySettings } = useLanguage();
-  const [settings, setSettings] = useState<AccessibilitySettings>({ language, textSize, highContrastEnabled, reduceMotionEnabled, screenReaderHintsEnabled, hapticFeedbackEnabled });
+  const { t, language, textSize, reduceMotionEnabled, screenReaderHintsEnabled, hapticFeedbackEnabled, palette, scaleFont, applyAccessibilitySettings } = useLanguage();
+  const [settings, setSettings] = useState<AccessibilitySettings>({ language, textSize, highContrastEnabled: false, reduceMotionEnabled, screenReaderHintsEnabled, hapticFeedbackEnabled });
   const [savedSettings, setSavedSettings] = useState<AccessibilitySettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -177,7 +177,6 @@ const LanguageAccessibilityScreen = ({ navigation }: Props) => {
                 <Text style={[styles.sectionTitle, { color: textColor, fontSize: scaleFont(16) }]}>{t("language.accessibility")}</Text>
                 <Text style={[styles.sectionSubtitle, { color: mutedColor, fontSize: scaleFont(11) }]}>{t("language.accessibilityDescription")}</Text>
 
-                <ToggleRow icon={<Eye size={20} color={primaryColor} />} title={t("language.highContrast")} description={t("language.highContrastDescription")} value={settings.highContrastEnabled} onPress={() => toggle("highContrastEnabled")} textColor={textColor} mutedColor={mutedColor} borderColor={borderColor} primaryColor={primaryColor} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
                 <ToggleRow icon={<Smartphone size={20} color={primaryColor} />} title={t("language.reduceMotion")} description={t("language.reduceMotionDescription")} value={settings.reduceMotionEnabled} onPress={() => toggle("reduceMotionEnabled")} textColor={textColor} mutedColor={mutedColor} borderColor={borderColor} primaryColor={primaryColor} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
                 <ToggleRow icon={<Accessibility size={20} color={primaryColor} />} title={t("language.screenReaderHints")} description={t("language.screenReaderHintsDescription")} value={settings.screenReaderHintsEnabled} onPress={() => toggle("screenReaderHintsEnabled")} textColor={textColor} mutedColor={mutedColor} borderColor={borderColor} primaryColor={primaryColor} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
                 <ToggleRow icon={<Smartphone size={20} color={primaryColor} />} title={t("language.hapticFeedback")} description={t("language.hapticFeedbackDescription")} value={settings.hapticFeedbackEnabled} onPress={() => toggle("hapticFeedbackEnabled")} textColor={textColor} mutedColor={mutedColor} borderColor={borderColor} primaryColor={primaryColor} primaryLightColor={primaryLightColor} scaleFont={scaleFont} isLast />

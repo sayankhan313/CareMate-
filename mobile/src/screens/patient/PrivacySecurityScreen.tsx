@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AlertCircle, ArrowLeft, BellRing, Clock3, FileCheck2, HeartPulse, Lock, Pill, RefreshCw, Save, ShieldCheck } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import { patientSettingsApi, type PrivacySettings } from "../../services/patientSettingsApi";
 import type { RootStackParamList } from "../../types/navigation";
