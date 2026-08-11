@@ -81,6 +81,7 @@ export type RootStackParamList = {
   AdminRegisterWebView: { title: string; url: string; helperText?: string };
   PatientProfile: { user?: any } | undefined;
   EditPatientProfile: undefined;
+  MyPharmacies: undefined;
   NotificationPreferences: undefined;
   ReminderSettings: undefined;
   SafetyResponseSettings: undefined;

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AlertCircle, ArrowLeft, Bell, Calendar, CheckCircle2, ChevronRight, Clock, Crown, Droplet, Hash, HeartPulse, Languages, Lock, LogOut, Mail, MapPin, Pencil, Phone, RefreshCw, ShieldAlert, Stethoscope, UserRound, Users, UsersRound } from "lucide-react-native";
+import { AlertCircle, ArrowLeft, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Clock, Crown, Droplet, Hash, HeartPulse, Languages, Lock, LogOut, Mail, MapPin, Pencil, Phone, RefreshCw, ShieldAlert, Stethoscope, UserRound, Users, UsersRound } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -36,6 +36,7 @@ const DANGER_LIGHT = "#FFEDEE";
 const elevate = (level: 1 | 2 = 1) => ({ elevation: level === 1 ? 2 : 4, shadowColor: "#172033", shadowOpacity: Platform.OS === "android" ? 0 : 0.08, shadowRadius: level === 1 ? 4 : 8, shadowOffset: { width: 0, height: level === 1 ? 2 : 4 } });
 
 const formatDoctorName = (fullName: string) => /^dr\.?\s/i.test(fullName.trim()) ? fullName.trim() : `Dr. ${fullName.trim()}`;
+
 const getInitials = (name?: string | null) => {
   if (!name) return "P";
   const parts = name.trim().split(" ").filter(Boolean);
@@ -43,16 +44,56 @@ const getInitials = (name?: string | null) => {
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
 };
+
 const getDisplayValue = (value: string | null | undefined, fallback: string) => value?.trim() || fallback;
+
 const formatMedicalConditions = (conditions: string | string[] | null | undefined, fallback: string) => {
   if (!conditions) return fallback;
   if (Array.isArray(conditions)) return conditions.length > 0 ? conditions.join(", ") : fallback;
   return conditions.trim() || fallback;
 };
 
+const getPharmacyProfileCopy = (language: string) => {
+  if (language === "HINDI") {
+    return {
+      title: "मेरी फ़ार्मेसियाँ",
+      value: "सेव और प्राथमिक फ़ार्मेसी प्रबंधित करें",
+    };
+  }
+
+  if (language === "GREEK") {
+    return {
+      title: "Τα φαρμακεία μου",
+      value: "Διαχείριση αποθηκευμένων και κύριου φαρμακείου",
+    };
+  }
+
+  if (language === "HAUSA") {
+    return {
+      title: "Pharmacies dina",
+      value: "Sarrafa saved da primary pharmacy",
+    };
+  }
+
+  if (language === "GERMAN") {
+    return {
+      title: "Meine Apotheken",
+      value: "Gespeicherte und Hauptapotheke verwalten",
+    };
+  }
+
+  return {
+    title: "My Pharmacies",
+    value: "Manage saved and primary pharmacy",
+  };
+};
+
 export const PatientProfileScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
-  const { t, palette, scaleFont, screenReaderHintsEnabled } = useLanguage();
+  const { t, language, palette, scaleFont, screenReaderHintsEnabled } = useLanguage();
+
+  const pharmacyCopy = getPharmacyProfileCopy(language);
+
   const [profile, setProfile] = useState<PatientProfileData | null>(route.params?.user || null);
   const [linkedUsers, setLinkedUsers] = useState<LinkedUsers>({ caregiver: null });
   const [assignedDoctors, setAssignedDoctors] = useState<AssignedDoctor[]>([]);
@@ -61,10 +102,25 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const primaryDoctor = useMemo(() => assignedDoctors.find(assignment => assignment.assignmentType === "PRIMARY"), [assignedDoctors]);
+
   const specialistCount = useMemo(() => assignedDoctors.filter(assignment => assignment.assignmentType === "SPECIALIST").length, [assignedDoctors]);
+
   const profileCompletion = useMemo(() => {
-    const fields = [profile?.healthRecordNumber, profile?.bloodGroup, profile?.medicalConditions, profile?.allergies, profile?.emergencyContactName || profile?.emergencyContact, profile?.addressLine];
-    const completed = fields.filter(value => Array.isArray(value) ? value.length > 0 : typeof value === "string" && value.trim().length > 0).length;
+    const fields = [
+      profile?.healthRecordNumber,
+      profile?.bloodGroup,
+      profile?.medicalConditions,
+      profile?.allergies,
+      profile?.emergencyContactName || profile?.emergencyContact,
+      profile?.addressLine,
+    ];
+
+    const completed = fields.filter(value =>
+      Array.isArray(value)
+        ? value.length > 0
+        : typeof value === "string" && value.trim().length > 0
+    ).length;
+
     return Math.round((completed / fields.length) * 100);
   }, [profile]);
 
@@ -72,44 +128,143 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
     try {
       mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
       setErrorMessage("");
+
       const token = await tokenStorage.getToken();
+
       if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
+
         return;
       }
-      const [profileResult, assignedDoctorsResult] = await Promise.all([patientProfileApi.getProfile(), doctorAssignmentApi.getAssignedDoctors()]);
+
+      const [profileResult, assignedDoctorsResult] = await Promise.all([
+        patientProfileApi.getProfile(),
+        doctorAssignmentApi.getAssignedDoctors(),
+      ]);
+
       setProfile(profileResult.patient);
-      setLinkedUsers({ caregiver: profileResult.linkedUsers?.caregiver || null });
+      setLinkedUsers({
+        caregiver: profileResult.linkedUsers?.caregiver || null,
+      });
       setAssignedDoctors(assignedDoctorsResult.doctors || []);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t("profile.unavailable"));
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : t("profile.unavailable")
+      );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, [navigation, t]);
 
-  useFocusEffect(useCallback(() => { void loadProfile("initial"); }, [loadProfile]));
+  useFocusEffect(
+    useCallback(() => {
+      void loadProfile("initial");
+    }, [loadProfile])
+  );
 
   const handleLogout = () => {
-    Alert.alert(t("profile.logoutTitle"), t("profile.logoutMessage"), [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("profile.logoutConfirm"), style: "destructive", onPress: async () => { await tokenStorage.removeToken(); navigation.reset({ index: 0, routes: [{ name: "Login" }] }); } },
-    ]);
+    Alert.alert(
+      t("profile.logoutTitle"),
+      t("profile.logoutMessage"),
+      [
+        {
+          text: t("common.cancel"),
+          style: "cancel",
+        },
+        {
+          text: t("profile.logoutConfirm"),
+          style: "destructive",
+          onPress: async () => {
+            await tokenStorage.removeToken();
+
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Login" }],
+            });
+          },
+        },
+      ]
+    );
   };
 
-  const showComingSoon = () => Alert.alert(t("common.comingSoon"), t("profile.linkedCaregiverSoon"));
+  const showComingSoon = () => {
+    Alert.alert(
+      t("common.comingSoon"),
+      t("profile.linkedCaregiverSoon")
+    );
+  };
+
   const notAdded = t("common.notAdded");
-  const fullName = profile?.fullName || route.params?.user?.fullName || profile?.firstName || t("common.patient");
-  const email = profile?.email || route.params?.user?.email || notAdded;
-  const phone = profile?.phoneNumber || profile?.phone || null;
+
+  const fullName =
+    profile?.fullName ||
+    route.params?.user?.fullName ||
+    profile?.firstName ||
+    t("common.patient");
+
+  const email =
+    profile?.email ||
+    route.params?.user?.email ||
+    notAdded;
+
+  const phone =
+    profile?.phoneNumber ||
+    profile?.phone ||
+    null;
+
   const initials = getInitials(fullName);
-  const assignedDoctorsText = assignedDoctors.length === 0 ? t("profile.noDoctorsAssigned") : assignedDoctors.length === 1 ? t("profile.oneDoctorAssigned") : t("profile.manyDoctorsAssigned", { count: assignedDoctors.length });
-  const emergencyName = profile?.emergencyContactName?.trim();
-  const emergencyPhone = profile?.emergencyContactPhone?.trim();
-  const emergencyContact = emergencyName && emergencyPhone ? `${emergencyName} · ${emergencyPhone}` : emergencyName || emergencyPhone || getDisplayValue(profile?.emergencyContact, notAdded);
-  const address = profile?.addressLine?.trim() && profile?.postcode?.trim() ? `${profile.addressLine.trim()}, ${profile.postcode.trim()}` : profile?.addressLine?.trim() || profile?.postcode?.trim() || notAdded;
-  const accountStatus = profile?.accountStatus === "APPROVED" ? t("status.approved") : profile?.accountStatus === "PENDING_VERIFICATION" ? t("status.pendingVerification") : profile?.accountStatus === "REJECTED" ? t("status.rejected") : profile?.accountStatus === "DISABLED" ? t("status.disabled") : profile?.accountStatus === "ACTIVE" ? t("status.active") : t("common.notAvailable");
+
+  const assignedDoctorsText =
+    assignedDoctors.length === 0
+      ? t("profile.noDoctorsAssigned")
+      : assignedDoctors.length === 1
+        ? t("profile.oneDoctorAssigned")
+        : t("profile.manyDoctorsAssigned", {
+            count: assignedDoctors.length,
+          });
+
+  const emergencyName =
+    profile?.emergencyContactName?.trim();
+
+  const emergencyPhone =
+    profile?.emergencyContactPhone?.trim();
+
+  const emergencyContact =
+    emergencyName && emergencyPhone
+      ? `${emergencyName} · ${emergencyPhone}`
+      : emergencyName ||
+        emergencyPhone ||
+        getDisplayValue(
+          profile?.emergencyContact,
+          notAdded
+        );
+
+  const address =
+    profile?.addressLine?.trim() &&
+    profile?.postcode?.trim()
+      ? `${profile.addressLine.trim()}, ${profile.postcode.trim()}`
+      : profile?.addressLine?.trim() ||
+        profile?.postcode?.trim() ||
+        notAdded;
+
+  const accountStatus =
+    profile?.accountStatus === "APPROVED"
+      ? t("status.approved")
+      : profile?.accountStatus === "PENDING_VERIFICATION"
+        ? t("status.pendingVerification")
+        : profile?.accountStatus === "REJECTED"
+          ? t("status.rejected")
+          : profile?.accountStatus === "DISABLED"
+            ? t("status.disabled")
+            : profile?.accountStatus === "ACTIVE"
+              ? t("status.active")
+              : t("common.notAvailable");
 
   const textColor = palette.text;
   const mutedColor = palette.muted;
@@ -119,81 +274,1253 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
   const primaryLightColor = palette.primaryLight;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor }]} edges={["top", "bottom"]}>
-      <StatusBar backgroundColor={backgroundColor} barStyle="dark-content" />
-      <View style={[styles.screen, { backgroundColor }]}>
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        { backgroundColor },
+      ]}
+      edges={["top", "bottom"]}
+    >
+      <StatusBar
+        backgroundColor={backgroundColor}
+        barStyle="dark-content"
+      />
+
+      <View
+        style={[
+          styles.screen,
+          { backgroundColor },
+        ]}
+      >
         <View style={styles.appBar}>
-          <TouchableOpacity style={[styles.backButton, { backgroundColor: surfaceColor }]} activeOpacity={0.85} onPress={() => navigation.goBack()}><ArrowLeft size={22} color={textColor} strokeWidth={2.7} /></TouchableOpacity>
-          <View style={styles.appBarTextBlock}><Text style={[styles.appBarTitle, { color: textColor, fontSize: scaleFont(26) }]}>{t("profile.title")}</Text><Text style={[styles.appBarSubtitle, { color: mutedColor, fontSize: scaleFont(13) }]}>{t("profile.subtitle")}</Text></View>
-          <TouchableOpacity style={[styles.editHeaderButton, { backgroundColor: surfaceColor }]} activeOpacity={0.85} onPress={() => navigation.navigate("EditPatientProfile")} accessibilityLabel={screenReaderHintsEnabled ? t("profile.title") : undefined}><Pencil size={20} color={primaryColor} strokeWidth={2.6} /></TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: surfaceColor,
+              },
+            ]}
+            activeOpacity={0.85}
+            onPress={() => navigation.goBack()}
+          >
+            <ArrowLeft
+              size={22}
+              color={textColor}
+              strokeWidth={2.7}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.appBarTextBlock}>
+            <Text
+              style={[
+                styles.appBarTitle,
+                {
+                  color: textColor,
+                  fontSize: scaleFont(26),
+                },
+              ]}
+            >
+              {t("profile.title")}
+            </Text>
+
+            <Text
+              style={[
+                styles.appBarSubtitle,
+                {
+                  color: mutedColor,
+                  fontSize: scaleFont(13),
+                },
+              ]}
+            >
+              {t("profile.subtitle")}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.editHeaderButton,
+              {
+                backgroundColor: surfaceColor,
+              },
+            ]}
+            activeOpacity={0.85}
+            onPress={() =>
+              navigation.navigate(
+                "EditPatientProfile"
+              )
+            }
+            accessibilityLabel={
+              screenReaderHintsEnabled
+                ? t("profile.title")
+                : undefined
+            }
+          >
+            <Pencil
+              size={20}
+              color={primaryColor}
+              strokeWidth={2.6}
+            />
+          </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(130, insets.bottom + 120) }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadProfile("refresh")} tintColor={primaryColor} colors={[primaryColor]} />}>
-          {isLoading ? <View style={[styles.loadingCard, { backgroundColor: surfaceColor }]}><ActivityIndicator color={primaryColor} /><Text style={[styles.loadingText, { color: mutedColor, fontSize: scaleFont(14) }]}>{t("profile.loading")}</Text></View> : null}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(
+                130,
+                insets.bottom + 120
+              ),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() =>
+                void loadProfile("refresh")
+              }
+              tintColor={primaryColor}
+              colors={[primaryColor]}
+            />
+          }
+        >
+          {isLoading ? (
+            <View
+              style={[
+                styles.loadingCard,
+                {
+                  backgroundColor: surfaceColor,
+                },
+              ]}
+            >
+              <ActivityIndicator
+                color={primaryColor}
+              />
 
-          {!isLoading && errorMessage ? <View style={styles.errorCard}><View style={styles.errorIconCircle}><AlertCircle size={22} color={DANGER} strokeWidth={2.6} /></View><View style={styles.errorTextBlock}><Text style={[styles.errorTitle, { fontSize: scaleFont(15) }]}>{t("profile.unavailable")}</Text><Text style={[styles.errorText, { fontSize: scaleFont(13) }]}>{errorMessage}</Text><TouchableOpacity style={styles.retryButton} activeOpacity={0.85} onPress={() => void loadProfile("initial")}><RefreshCw size={16} color={SURFACE} strokeWidth={2.5} /><Text style={[styles.retryButtonText, { fontSize: scaleFont(12) }]}>{t("common.tryAgain")}</Text></TouchableOpacity></View></View> : null}
+              <Text
+                style={[
+                  styles.loadingText,
+                  {
+                    color: mutedColor,
+                    fontSize: scaleFont(14),
+                  },
+                ]}
+              >
+                {t("profile.loading")}
+              </Text>
+            </View>
+          ) : null}
+
+          {!isLoading && errorMessage ? (
+            <View style={styles.errorCard}>
+              <View
+                style={styles.errorIconCircle}
+              >
+                <AlertCircle
+                  size={22}
+                  color={DANGER}
+                  strokeWidth={2.6}
+                />
+              </View>
+
+              <View
+                style={styles.errorTextBlock}
+              >
+                <Text
+                  style={[
+                    styles.errorTitle,
+                    {
+                      fontSize: scaleFont(15),
+                    },
+                  ]}
+                >
+                  {t("profile.unavailable")}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.errorText,
+                    {
+                      fontSize: scaleFont(13),
+                    },
+                  ]}
+                >
+                  {errorMessage}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    void loadProfile("initial")
+                  }
+                >
+                  <RefreshCw
+                    size={16}
+                    color={SURFACE}
+                    strokeWidth={2.5}
+                  />
+
+                  <Text
+                    style={[
+                      styles.retryButtonText,
+                      {
+                        fontSize: scaleFont(12),
+                      },
+                    ]}
+                  >
+                    {t("common.tryAgain")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
 
           {!isLoading && !errorMessage ? (
             <>
-              <View style={[styles.profileCard, { backgroundColor: surfaceColor }]}>
-                <View style={[styles.avatarCircle, { backgroundColor: primaryColor }]}><Text style={[styles.avatarText, { fontSize: scaleFont(22) }]}>{initials}</Text></View>
-                <View style={styles.profileTextBlock}>
-                  <View style={styles.nameRow}><Text style={[styles.profileName, { color: textColor, fontSize: scaleFont(20) }]} numberOfLines={1}>{fullName}</Text>{profile?.isEmailVerified ? <View style={styles.verifiedBadge}><CheckCircle2 size={13} color={SUCCESS_DARK} strokeWidth={2.6} /><Text style={[styles.verifiedText, { fontSize: scaleFont(9) }]}>{t("common.verified")}</Text></View> : null}</View>
-                  <Text style={[styles.profileRole, { color: primaryColor, fontSize: scaleFont(12) }]}>{t("common.patient")}</Text>
-                  <View style={styles.contactRow}><Mail size={15} color={mutedColor} strokeWidth={2.3} /><Text style={[styles.contactText, { color: mutedColor, fontSize: scaleFont(12) }]} numberOfLines={1}>{email}</Text></View>
-                  <View style={styles.contactRow}><Phone size={15} color={mutedColor} strokeWidth={2.3} /><Text style={[styles.contactText, { color: mutedColor, fontSize: scaleFont(12) }]} numberOfLines={1}>{getDisplayValue(phone, notAdded)}</Text></View>
+              <View
+                style={[
+                  styles.profileCard,
+                  {
+                    backgroundColor: surfaceColor,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.avatarCircle,
+                    {
+                      backgroundColor: primaryColor,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.avatarText,
+                      {
+                        fontSize: scaleFont(22),
+                      },
+                    ]}
+                  >
+                    {initials}
+                  </Text>
+                </View>
+
+                <View
+                  style={styles.profileTextBlock}
+                >
+                  <View style={styles.nameRow}>
+                    <Text
+                      style={[
+                        styles.profileName,
+                        {
+                          color: textColor,
+                          fontSize: scaleFont(20),
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {fullName}
+                    </Text>
+
+                    {profile?.isEmailVerified ? (
+                      <View
+                        style={styles.verifiedBadge}
+                      >
+                        <CheckCircle2
+                          size={13}
+                          color={SUCCESS_DARK}
+                          strokeWidth={2.6}
+                        />
+
+                        <Text
+                          style={[
+                            styles.verifiedText,
+                            {
+                              fontSize: scaleFont(9),
+                            },
+                          ]}
+                        >
+                          {t("common.verified")}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.profileRole,
+                      {
+                        color: primaryColor,
+                        fontSize: scaleFont(12),
+                      },
+                    ]}
+                  >
+                    {t("common.patient")}
+                  </Text>
+
+                  <View style={styles.contactRow}>
+                    <Mail
+                      size={15}
+                      color={mutedColor}
+                      strokeWidth={2.3}
+                    />
+
+                    <Text
+                      style={[
+                        styles.contactText,
+                        {
+                          color: mutedColor,
+                          fontSize: scaleFont(12),
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {email}
+                    </Text>
+                  </View>
+
+                  <View style={styles.contactRow}>
+                    <Phone
+                      size={15}
+                      color={mutedColor}
+                      strokeWidth={2.3}
+                    />
+
+                    <Text
+                      style={[
+                        styles.contactText,
+                        {
+                          color: mutedColor,
+                          fontSize: scaleFont(12),
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {getDisplayValue(
+                        phone,
+                        notAdded
+                      )}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={[styles.profileStatsCard, { backgroundColor: surfaceColor }]}>
-                <ProfileStat value={String(assignedDoctors.length)} label={t("profile.doctors")} textColor={textColor} mutedColor={mutedColor} scaleFont={scaleFont} />
-                <View style={[styles.profileStatDivider, { backgroundColor: palette.border }]} />
-                <ProfileStat value={String(specialistCount)} label={t("profile.specialists")} textColor={textColor} mutedColor={mutedColor} scaleFont={scaleFont} />
-                <View style={[styles.profileStatDivider, { backgroundColor: palette.border }]} />
-                <ProfileStat value={`${profileCompletion}%`} label={t("profile.complete")} textColor={textColor} mutedColor={mutedColor} scaleFont={scaleFont} />
+              <View
+                style={[
+                  styles.profileStatsCard,
+                  {
+                    backgroundColor: surfaceColor,
+                  },
+                ]}
+              >
+                <ProfileStat
+                  value={String(
+                    assignedDoctors.length
+                  )}
+                  label={t("profile.doctors")}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  scaleFont={scaleFont}
+                />
+
+                <View
+                  style={[
+                    styles.profileStatDivider,
+                    {
+                      backgroundColor:
+                        palette.border,
+                    },
+                  ]}
+                />
+
+                <ProfileStat
+                  value={String(
+                    specialistCount
+                  )}
+                  label={t("profile.specialists")}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  scaleFont={scaleFont}
+                />
+
+                <View
+                  style={[
+                    styles.profileStatDivider,
+                    {
+                      backgroundColor:
+                        palette.border,
+                    },
+                  ]}
+                />
+
+                <ProfileStat
+                  value={`${profileCompletion}%`}
+                  label={t("profile.complete")}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  scaleFont={scaleFont}
+                />
               </View>
 
-              <TouchableOpacity style={[styles.completionCard, { backgroundColor: surfaceColor }]} activeOpacity={0.86} onPress={() => navigation.navigate("EditPatientProfile")}>
-                <View style={styles.completionHeader}><View style={[styles.completionIcon, { backgroundColor: primaryLightColor }]}><HeartPulse size={23} color={primaryColor} strokeWidth={2.6} /></View><View style={styles.completionTextBlock}><Text style={[styles.completionTitle, { color: textColor, fontSize: scaleFont(15) }]}>{profileCompletion === 100 ? t("profile.healthCompleteTitle") : t("profile.healthIncompleteTitle")}</Text><Text style={[styles.completionText, { color: mutedColor, fontSize: scaleFont(11) }]}>{profileCompletion === 100 ? t("profile.healthCompleteText") : t("profile.healthIncompleteText")}</Text></View><ChevronRight size={20} color={primaryColor} strokeWidth={2.5} /></View>
-                <View style={[styles.progressTrack, { backgroundColor: palette.border }]}><View style={[styles.progressFill, { width: `${profileCompletion}%`, backgroundColor: primaryColor }]} /></View>
+              <TouchableOpacity
+                style={[
+                  styles.completionCard,
+                  {
+                    backgroundColor: surfaceColor,
+                  },
+                ]}
+                activeOpacity={0.86}
+                onPress={() =>
+                  navigation.navigate(
+                    "EditPatientProfile"
+                  )
+                }
+              >
+                <View
+                  style={styles.completionHeader}
+                >
+                  <View
+                    style={[
+                      styles.completionIcon,
+                      {
+                        backgroundColor:
+                          primaryLightColor,
+                      },
+                    ]}
+                  >
+                    <HeartPulse
+                      size={23}
+                      color={primaryColor}
+                      strokeWidth={2.6}
+                    />
+                  </View>
+
+                  <View
+                    style={
+                      styles.completionTextBlock
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.completionTitle,
+                        {
+                          color: textColor,
+                          fontSize: scaleFont(15),
+                        },
+                      ]}
+                    >
+                      {profileCompletion === 100
+                        ? t(
+                            "profile.healthCompleteTitle"
+                          )
+                        : t(
+                            "profile.healthIncompleteTitle"
+                          )}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.completionText,
+                        {
+                          color: mutedColor,
+                          fontSize: scaleFont(11),
+                        },
+                      ]}
+                    >
+                      {profileCompletion === 100
+                        ? t(
+                            "profile.healthCompleteText"
+                          )
+                        : t(
+                            "profile.healthIncompleteText"
+                          )}
+                    </Text>
+                  </View>
+
+                  <ChevronRight
+                    size={20}
+                    color={primaryColor}
+                    strokeWidth={2.5}
+                  />
+                </View>
+
+                <View
+                  style={[
+                    styles.progressTrack,
+                    {
+                      backgroundColor:
+                        palette.border,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${profileCompletion}%`,
+                        backgroundColor:
+                          primaryColor,
+                      },
+                    ]}
+                  />
+                </View>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.careTeamCard, { backgroundColor: surfaceColor }]} activeOpacity={0.86} onPress={() => navigation.navigate("SelectDoctor")}>
-                <View style={styles.careTeamHeader}><View style={[styles.careTeamIcon, { backgroundColor: primaryLightColor }]}><UsersRound size={24} color={primaryColor} strokeWidth={2.5} /></View><View style={styles.careTeamHeading}><Text style={[styles.careTeamTitle, { color: textColor, fontSize: scaleFont(16) }]}>{t("profile.careTeam")}</Text><Text style={[styles.careTeamSubtitle, { color: mutedColor, fontSize: scaleFont(11) }]}>{assignedDoctorsText}</Text></View><View style={[styles.doctorCountBadge, { backgroundColor: primaryColor }]}><Text style={[styles.doctorCountText, { fontSize: scaleFont(14) }]}>{assignedDoctors.length}</Text></View></View>
-                <View style={[styles.primaryDoctorPanel, { backgroundColor }]}><View style={[styles.primaryDoctorIcon, !primaryDoctor ? styles.emptyPrimaryDoctorIcon : undefined]}>{primaryDoctor ? <Crown size={19} color={WARNING_DARK} strokeWidth={2.5} /> : <Stethoscope size={19} color={mutedColor} strokeWidth={2.5} />}</View><View style={styles.primaryDoctorTextBlock}><Text style={[styles.primaryDoctorLabel, { color: mutedColor, fontSize: scaleFont(10) }]}>{t("profile.primaryDoctor")}</Text><Text style={[styles.primaryDoctorName, { color: textColor, fontSize: scaleFont(14) }]} numberOfLines={1}>{primaryDoctor ? formatDoctorName(primaryDoctor.doctor.fullName) : t("common.notAssigned")}</Text>{primaryDoctor?.doctor.specialization ? <Text style={[styles.primaryDoctorSpecialization, { color: primaryColor, fontSize: scaleFont(11) }]} numberOfLines={1}>{primaryDoctor.doctor.specialization}</Text> : null}</View><ChevronRight size={20} color="#A8B2C5" strokeWidth={2.5} /></View>
+              <TouchableOpacity
+                style={[
+                  styles.careTeamCard,
+                  {
+                    backgroundColor: surfaceColor,
+                  },
+                ]}
+                activeOpacity={0.86}
+                onPress={() =>
+                  navigation.navigate(
+                    "SelectDoctor"
+                  )
+                }
+              >
+                <View
+                  style={styles.careTeamHeader}
+                >
+                  <View
+                    style={[
+                      styles.careTeamIcon,
+                      {
+                        backgroundColor:
+                          primaryLightColor,
+                      },
+                    ]}
+                  >
+                    <UsersRound
+                      size={24}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  </View>
+
+                  <View
+                    style={styles.careTeamHeading}
+                  >
+                    <Text
+                      style={[
+                        styles.careTeamTitle,
+                        {
+                          color: textColor,
+                          fontSize: scaleFont(16),
+                        },
+                      ]}
+                    >
+                      {t("profile.careTeam")}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.careTeamSubtitle,
+                        {
+                          color: mutedColor,
+                          fontSize: scaleFont(11),
+                        },
+                      ]}
+                    >
+                      {assignedDoctorsText}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.doctorCountBadge,
+                      {
+                        backgroundColor:
+                          primaryColor,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.doctorCountText,
+                        {
+                          fontSize: scaleFont(14),
+                        },
+                      ]}
+                    >
+                      {assignedDoctors.length}
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.primaryDoctorPanel,
+                    { backgroundColor },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.primaryDoctorIcon,
+                      !primaryDoctor
+                        ? styles.emptyPrimaryDoctorIcon
+                        : undefined,
+                    ]}
+                  >
+                    {primaryDoctor ? (
+                      <Crown
+                        size={19}
+                        color={WARNING_DARK}
+                        strokeWidth={2.5}
+                      />
+                    ) : (
+                      <Stethoscope
+                        size={19}
+                        color={mutedColor}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </View>
+
+                  <View
+                    style={
+                      styles.primaryDoctorTextBlock
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.primaryDoctorLabel,
+                        {
+                          color: mutedColor,
+                          fontSize: scaleFont(10),
+                        },
+                      ]}
+                    >
+                      {t("profile.primaryDoctor")}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.primaryDoctorName,
+                        {
+                          color: textColor,
+                          fontSize: scaleFont(14),
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {primaryDoctor
+                        ? formatDoctorName(
+                            primaryDoctor.doctor
+                              .fullName
+                          )
+                        : t(
+                            "common.notAssigned"
+                          )}
+                    </Text>
+
+                    {primaryDoctor?.doctor
+                      .specialization ? (
+                      <Text
+                        style={[
+                          styles.primaryDoctorSpecialization,
+                          {
+                            color: primaryColor,
+                            fontSize: scaleFont(11),
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {
+                          primaryDoctor.doctor
+                            .specialization
+                        }
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <ChevronRight
+                    size={20}
+                    color="#A8B2C5"
+                    strokeWidth={2.5}
+                  />
+                </View>
               </TouchableOpacity>
 
-              <View style={styles.accountStatusPanel}><View style={styles.statusIconCircle}><CheckCircle2 size={21} color={SUCCESS} strokeWidth={2.6} /></View><View style={styles.statusTextBlock}><Text style={[styles.statusTitle, { fontSize: scaleFont(13) }]}>{t("profile.accountStatus")}</Text><Text style={[styles.statusText, { fontSize: scaleFont(12) }]}>{accountStatus}</Text></View></View>
+              <View
+                style={styles.accountStatusPanel}
+              >
+                <View
+                  style={styles.statusIconCircle}
+                >
+                  <CheckCircle2
+                    size={21}
+                    color={SUCCESS}
+                    strokeWidth={2.6}
+                  />
+                </View>
 
-              <ProfileSection title={t("profile.personalDetails")} surfaceColor={surfaceColor} textColor={textColor} scaleFont={scaleFont}>
-                <ProfileRow icon={<Calendar size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.dateOfBirth")} value={getDisplayValue(profile?.dateOfBirth, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<UserRound size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.gender")} value={getDisplayValue(profile?.gender, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Phone size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.emergencyContact")} value={emergencyContact} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} isLast />
+                <View
+                  style={styles.statusTextBlock}
+                >
+                  <Text
+                    style={[
+                      styles.statusTitle,
+                      {
+                        fontSize: scaleFont(13),
+                      },
+                    ]}
+                  >
+                    {t("profile.accountStatus")}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.statusText,
+                      {
+                        fontSize: scaleFont(12),
+                      },
+                    ]}
+                  >
+                    {accountStatus}
+                  </Text>
+                </View>
+              </View>
+
+              <ProfileSection
+                title={t(
+                  "profile.personalDetails"
+                )}
+                surfaceColor={surfaceColor}
+                textColor={textColor}
+                scaleFont={scaleFont}
+              >
+                <ProfileRow
+                  icon={
+                    <Calendar
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.dateOfBirth"
+                  )}
+                  value={getDisplayValue(
+                    profile?.dateOfBirth,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <UserRound
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t("profile.gender")}
+                  value={getDisplayValue(
+                    profile?.gender,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Phone
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.emergencyContact"
+                  )}
+                  value={emergencyContact}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                  isLast
+                />
               </ProfileSection>
 
-              <ProfileSection title={t("profile.healthProfile")} surfaceColor={surfaceColor} textColor={textColor} scaleFont={scaleFont}>
-                <ProfileRow icon={<Hash size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.healthRecordNumber")} value={getDisplayValue(profile?.healthRecordNumber, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Droplet size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.bloodGroup")} value={getDisplayValue(profile?.bloodGroup, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<HeartPulse size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.medicalConditions")} value={formatMedicalConditions(profile?.medicalConditions, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<AlertCircle size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.allergies")} value={getDisplayValue(profile?.allergies, notAdded)} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<MapPin size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.address")} value={address} onPress={() => navigation.navigate("EditPatientProfile")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} isLast />
+              <ProfileSection
+                title={t(
+                  "profile.healthProfile"
+                )}
+                surfaceColor={surfaceColor}
+                textColor={textColor}
+                scaleFont={scaleFont}
+              >
+                <ProfileRow
+                  icon={
+                    <Hash
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.healthRecordNumber"
+                  )}
+                  value={getDisplayValue(
+                    profile?.healthRecordNumber,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Droplet
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.bloodGroup"
+                  )}
+                  value={getDisplayValue(
+                    profile?.bloodGroup,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <HeartPulse
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.medicalConditions"
+                  )}
+                  value={formatMedicalConditions(
+                    profile?.medicalConditions,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <AlertCircle
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.allergies"
+                  )}
+                  value={getDisplayValue(
+                    profile?.allergies,
+                    notAdded
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <MapPin
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t("profile.address")}
+                  value={address}
+                  onPress={() =>
+                    navigation.navigate(
+                      "EditPatientProfile"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                  isLast
+                />
               </ProfileSection>
 
-              <ProfileSection title={t("profile.linkedUsers")} surfaceColor={surfaceColor} textColor={textColor} scaleFont={scaleFont}>
-                <ProfileRow icon={<Stethoscope size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.assignedDoctors")} value={assignedDoctorsText} onPress={() => navigation.navigate("SelectDoctor")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Crown size={20} color={WARNING} strokeWidth={2.5} />} title={t("profile.primaryDoctor")} value={primaryDoctor ? formatDoctorName(primaryDoctor.doctor.fullName) : t("common.notAssigned")} onPress={() => navigation.navigate("SelectDoctor")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Users size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.caregiver")} value={linkedUsers.caregiver ? linkedUsers.caregiver.fullName : t("common.notLinkedYet")} onPress={showComingSoon} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} isLast />
+              <ProfileSection
+                title={t(
+                  "profile.linkedUsers"
+                )}
+                surfaceColor={surfaceColor}
+                textColor={textColor}
+                scaleFont={scaleFont}
+              >
+                <ProfileRow
+                  icon={
+                    <Stethoscope
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.assignedDoctors"
+                  )}
+                  value={assignedDoctorsText}
+                  onPress={() =>
+                    navigation.navigate(
+                      "SelectDoctor"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Crown
+                      size={20}
+                      color={WARNING}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.primaryDoctor"
+                  )}
+                  value={
+                    primaryDoctor
+                      ? formatDoctorName(
+                          primaryDoctor.doctor
+                            .fullName
+                        )
+                      : t("common.notAssigned")
+                  }
+                  onPress={() =>
+                    navigation.navigate(
+                      "SelectDoctor"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Building2
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={pharmacyCopy.title}
+                  value={pharmacyCopy.value}
+                  onPress={() =>
+                    navigation.navigate(
+                      "MyPharmacies"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Users
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.caregiver"
+                  )}
+                  value={
+                    linkedUsers.caregiver
+                      ? linkedUsers.caregiver
+                          .fullName
+                      : t(
+                          "common.notLinkedYet"
+                        )
+                  }
+                  onPress={showComingSoon}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                  isLast
+                />
               </ProfileSection>
 
-              <ProfileSection title={t("profile.settings")} surfaceColor={surfaceColor} textColor={textColor} scaleFont={scaleFont}>
-                <ProfileRow icon={<Bell size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.notifications")} value={t("profile.notificationsValue")} onPress={() => navigation.navigate("NotificationPreferences")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Clock size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.reminders")} value={t("profile.remindersValue")} onPress={() => navigation.navigate("ReminderSettings")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<ShieldAlert size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.safety")} value={t("profile.safetyValue")} onPress={() => navigation.navigate("SafetyResponseSettings")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Languages size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.language")} value={t("profile.languageValue")} onPress={() => navigation.navigate("LanguageAccessibility")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} />
-                <ProfileRow icon={<Lock size={20} color={primaryColor} strokeWidth={2.5} />} title={t("profile.privacy")} value={t("profile.privacyValue")} onPress={() => navigation.navigate("PrivacySecurity")} textColor={textColor} mutedColor={mutedColor} borderColor={palette.border} primaryLightColor={primaryLightColor} scaleFont={scaleFont} isLast />
+              <ProfileSection
+                title={t("profile.settings")}
+                surfaceColor={surfaceColor}
+                textColor={textColor}
+                scaleFont={scaleFont}
+              >
+                <ProfileRow
+                  icon={
+                    <Bell
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.notifications"
+                  )}
+                  value={t(
+                    "profile.notificationsValue"
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "NotificationPreferences"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Clock
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.reminders"
+                  )}
+                  value={t(
+                    "profile.remindersValue"
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "ReminderSettings"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <ShieldAlert
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t("profile.safety")}
+                  value={t(
+                    "profile.safetyValue"
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "SafetyResponseSettings"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Languages
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t(
+                    "profile.language"
+                  )}
+                  value={t(
+                    "profile.languageValue"
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "LanguageAccessibility"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={
+                    <Lock
+                      size={20}
+                      color={primaryColor}
+                      strokeWidth={2.5}
+                    />
+                  }
+                  title={t("profile.privacy")}
+                  value={t(
+                    "profile.privacyValue"
+                  )}
+                  onPress={() =>
+                    navigation.navigate(
+                      "PrivacySecurity"
+                    )
+                  }
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={
+                    primaryLightColor
+                  }
+                  scaleFont={scaleFont}
+                  isLast
+                />
               </ProfileSection>
 
-              <TouchableOpacity style={[styles.logoutButton, { backgroundColor: surfaceColor }]} activeOpacity={0.86} onPress={handleLogout}><LogOut size={19} color={DANGER} strokeWidth={2.6} /><Text style={[styles.logoutText, { fontSize: scaleFont(15) }]}>{t("common.logout")}</Text></TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.logoutButton,
+                  {
+                    backgroundColor: surfaceColor,
+                  },
+                ]}
+                activeOpacity={0.86}
+                onPress={handleLogout}
+              >
+                <LogOut
+                  size={19}
+                  color={DANGER}
+                  strokeWidth={2.6}
+                />
+
+                <Text
+                  style={[
+                    styles.logoutText,
+                    {
+                      fontSize: scaleFont(15),
+                    },
+                  ]}
+                >
+                  {t("common.logout")}
+                </Text>
+              </TouchableOpacity>
             </>
           ) : null}
         </ScrollView>
@@ -202,15 +1529,163 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
   );
 };
 
-const ProfileStat = ({ value, label, textColor, mutedColor, scaleFont }: { value: string; label: string; textColor: string; mutedColor: string; scaleFont: (size: number) => number }) => <View style={styles.profileStat}><Text style={[styles.profileStatValue, { color: textColor, fontSize: scaleFont(18) }]}>{value}</Text><Text style={[styles.profileStatLabel, { color: mutedColor, fontSize: scaleFont(10) }]}>{label}</Text></View>;
+const ProfileStat = ({
+  value,
+  label,
+  textColor,
+  mutedColor,
+  scaleFont,
+}: {
+  value: string;
+  label: string;
+  textColor: string;
+  mutedColor: string;
+  scaleFont: (size: number) => number;
+}) => (
+  <View style={styles.profileStat}>
+    <Text
+      style={[
+        styles.profileStatValue,
+        {
+          color: textColor,
+          fontSize: scaleFont(18),
+        },
+      ]}
+    >
+      {value}
+    </Text>
 
-const ProfileSection = ({ title, children, surfaceColor, textColor, scaleFont }: { title: string; children: ReactNode; surfaceColor: string; textColor: string; scaleFont: (size: number) => number }) => <View style={[styles.sectionCard, { backgroundColor: surfaceColor }]}><Text style={[styles.sectionTitle, { color: textColor, fontSize: scaleFont(16) }]}>{title}</Text>{children}</View>;
+    <Text
+      style={[
+        styles.profileStatLabel,
+        {
+          color: mutedColor,
+          fontSize: scaleFont(10),
+        },
+      ]}
+    >
+      {label}
+    </Text>
+  </View>
+);
 
-const ProfileRow = ({ icon, title, value, onPress, isLast, textColor, mutedColor, borderColor, primaryLightColor, scaleFont }: { icon: ReactNode; title: string; value: string; onPress: () => void; isLast?: boolean; textColor: string; mutedColor: string; borderColor: string; primaryLightColor: string; scaleFont: (size: number) => number }) => (
-  <TouchableOpacity style={[styles.profileRow, { borderBottomColor: borderColor }, isLast ? styles.profileRowLast : undefined]} activeOpacity={0.82} onPress={onPress}>
-    <View style={[styles.rowIconCircle, { backgroundColor: primaryLightColor }]}>{icon}</View>
-    <View style={styles.rowTextBlock}><Text style={[styles.rowTitle, { color: textColor, fontSize: scaleFont(14) }]}>{title}</Text><Text style={[styles.rowValue, { color: mutedColor, fontSize: scaleFont(12) }]} numberOfLines={1}>{value}</Text></View>
-    <ChevronRight size={19} color="#B7C1D4" strokeWidth={2.4} />
+const ProfileSection = ({
+  title,
+  children,
+  surfaceColor,
+  textColor,
+  scaleFont,
+}: {
+  title: string;
+  children: ReactNode;
+  surfaceColor: string;
+  textColor: string;
+  scaleFont: (size: number) => number;
+}) => (
+  <View
+    style={[
+      styles.sectionCard,
+      {
+        backgroundColor: surfaceColor,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        styles.sectionTitle,
+        {
+          color: textColor,
+          fontSize: scaleFont(16),
+        },
+      ]}
+    >
+      {title}
+    </Text>
+
+    {children}
+  </View>
+);
+
+const ProfileRow = ({
+  icon,
+  title,
+  value,
+  onPress,
+  isLast,
+  textColor,
+  mutedColor,
+  borderColor,
+  primaryLightColor,
+  scaleFont,
+}: {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  onPress: () => void;
+  isLast?: boolean;
+  textColor: string;
+  mutedColor: string;
+  borderColor: string;
+  primaryLightColor: string;
+  scaleFont: (size: number) => number;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.profileRow,
+      {
+        borderBottomColor: borderColor,
+      },
+      isLast
+        ? styles.profileRowLast
+        : undefined,
+    ]}
+    activeOpacity={0.82}
+    onPress={onPress}
+  >
+    <View
+      style={[
+        styles.rowIconCircle,
+        {
+          backgroundColor:
+            primaryLightColor,
+        },
+      ]}
+    >
+      {icon}
+    </View>
+
+    <View style={styles.rowTextBlock}>
+      <Text
+        style={[
+          styles.rowTitle,
+          {
+            color: textColor,
+            fontSize: scaleFont(14),
+          },
+        ]}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={[
+          styles.rowValue,
+          {
+            color: mutedColor,
+            fontSize: scaleFont(12),
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+
+    <ChevronRight
+      size={19}
+      color="#B7C1D4"
+      strokeWidth={2.4}
+    />
   </TouchableOpacity>
 );
 
@@ -691,7 +2166,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth:
+      StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
 
