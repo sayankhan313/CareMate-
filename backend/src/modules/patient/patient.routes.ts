@@ -9,6 +9,7 @@ import { dashboardController } from "./dashboard.controller.js";
 import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
+import { pharmacyLinkController } from "./pharmacy-link.controller.js";
 import { profileController } from "./profile.controller.js";
 import { reportController } from "./report.controller.js";
 import { safetyController } from "./safety.controller.js";
@@ -46,6 +47,13 @@ router.post("/doctor-assignment", doctorAssignmentController.assignDoctor);
 router.post("/doctor-assignments", doctorAssignmentController.assignDoctor);
 router.patch("/doctor-assignments/:doctorId/primary", doctorAssignmentController.setPrimaryDoctor);
 router.delete("/doctor-assignments/:doctorId", doctorAssignmentController.removeDoctor);
+
+router.get("/pharmacies/saved", pharmacyLinkController.listSavedPharmacies);
+router.get("/pharmacies", pharmacyLinkController.listApprovedPharmacies);
+router.post("/pharmacies/:pharmacyId/save", pharmacyLinkController.savePharmacy);
+router.patch("/pharmacies/:pharmacyId/primary", pharmacyLinkController.setPrimaryPharmacy);
+router.patch("/pharmacies/:pharmacyId/charge-preference", pharmacyLinkController.updateChargePreference);
+router.delete("/pharmacies/:pharmacyId", pharmacyLinkController.removePharmacy);
 
 router.post("/reports", uploadSinglePatientReport, reportController.createReport);
 router.get("/reports", reportController.listReports);
