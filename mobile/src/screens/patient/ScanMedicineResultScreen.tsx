@@ -7,12 +7,10 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -37,6 +35,8 @@ import {
   Sparkles,
   Stethoscope,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import {
   medicineScanApi,

@@ -1,0 +1,38 @@
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { ComponentType } from "react";
+import { Building2, LayoutDashboard, Stethoscope, UsersRound } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useLanguage } from "../context/LanguageContext";
+import { AdminDashboardScreen } from "../screens/admin/AdminDashboardScreen";
+import { AdminDoctorListScreen } from "../screens/admin/AdminDoctorListScreen";
+import { AdminPharmacyListScreen } from "../screens/admin/AdminPharmacyListScreen";
+import { AdminUsersScreen } from "../screens/admin/AdminUsersScreen";
+import type { AdminTabParamList, RootStackParamList } from "../types/navigation";
+
+type AdminTabNavigatorProps = NativeStackScreenProps<RootStackParamList, "AdminTabs">;
+
+const Tab = createBottomTabNavigator<AdminTabParamList>();
+const SURFACE = "#FFFFFF";
+const MUTED = "#6D687B";
+const BORDER = "#E4E8F2";
+const ADMIN = "#6750D8";
+const AdminDashboardTabScreen = AdminDashboardScreen as ComponentType<any>;
+
+export const AdminTabNavigator = ({ route }: AdminTabNavigatorProps) => {
+  const insets = useSafeAreaInsets();
+  const { t, scaleFont } = useLanguage();
+  const user = route.params?.user;
+  const initialScreen = route.params?.screen || "Dashboard";
+  const bottomInset = Math.max(insets.bottom, 10);
+
+  return (
+    <Tab.Navigator initialRouteName={initialScreen} screenOptions={{ headerShown: false, tabBarActiveTintColor: ADMIN, tabBarInactiveTintColor: MUTED, tabBarStyle: { backgroundColor: SURFACE, borderTopColor: BORDER, height: 66 + bottomInset, paddingTop: 8, paddingBottom: bottomInset }, tabBarLabelStyle: { fontSize: scaleFont(11), fontWeight: "700", marginTop: 2 }, tabBarIconStyle: { marginTop: 2 } }}>
+      <Tab.Screen name="Dashboard" component={AdminDashboardTabScreen} initialParams={{ user }} options={{ title: t("tabs.admin.home"), tabBarIcon: ({ color }) => <LayoutDashboard size={22} color={color} strokeWidth={2.5} /> }} />
+      <Tab.Screen name="Doctors" component={AdminDoctorListScreen} options={{ title: t("tabs.admin.doctors"), tabBarIcon: ({ color }) => <Stethoscope size={22} color={color} strokeWidth={2.5} /> }} />
+      <Tab.Screen name="Pharmacies" component={AdminPharmacyListScreen} options={{ title: t("tabs.admin.pharmacy"), tabBarIcon: ({ color }) => <Building2 size={22} color={color} strokeWidth={2.5} /> }} />
+      <Tab.Screen name="Users" component={AdminUsersScreen} options={{ title: t("tabs.admin.users"), tabBarIcon: ({ color }) => <UsersRound size={22} color={color} strokeWidth={2.5} /> }} />
+    </Tab.Navigator>
+  );
+};

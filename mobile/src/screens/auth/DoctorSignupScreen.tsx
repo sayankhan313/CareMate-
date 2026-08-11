@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
@@ -27,11 +28,13 @@ import {
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   FileText,
   ShieldCheck,
   Stethoscope,
   UploadCloud,
+  X,
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "../../constants/api";
@@ -79,6 +82,26 @@ const WARNING_LIGHT = "#FFF3E2";
 
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
+
+const SPECIALIZATION_OPTIONS = [
+  "General Practice",
+  "Cardiology",
+  "Orthopaedics",
+  "Dentistry",
+  "Psychiatry",
+  "Dermatology",
+  "Neurology",
+  "Paediatrics",
+  "Obstetrics & Gynaecology",
+  "Endocrinology",
+  "Gastroenterology",
+  "Respiratory Medicine",
+  "Ophthalmology",
+  "ENT",
+  "Urology",
+  "Oncology",
+  "Emergency Medicine",
+];
 
 const initialForm: DoctorSignupForm = {
   fullName: "",
@@ -139,6 +162,7 @@ export const DoctorSignupScreen = ({
   const insets = useSafeAreaInsets();
 
   const [form, setForm] = useState<DoctorSignupForm>(initialForm);
+
   const [documents, setDocuments] = useState<
     Record<DoctorDocumentKey, DocumentPickerResponse | null>
   >({
@@ -146,43 +170,60 @@ export const DoctorSignupScreen = ({
     photoIdDocument: null,
     qualificationDocument: null,
   });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const updateField = (key: keyof DoctorSignupForm, value: string) => {
+  const [
+    isSpecializationModalVisible,
+    setIsSpecializationModalVisible,
+  ] = useState(false);
+
+  const updateField = (
+    key: keyof DoctorSignupForm,
+    value: string
+  ) => {
     setForm((current) => ({
       ...current,
       [key]: value,
     }));
   };
 
- const pickDocument = async (key: DoctorDocumentKey) => {
-  try {
-    const selectedFiles = await pick({
-      type: [types.pdf, types.images],
-      allowMultiSelection: false,
-    });
+  const pickDocument = async (key: DoctorDocumentKey) => {
+    try {
+      const selectedFiles = await pick({
+        type: [types.pdf, types.images],
+        allowMultiSelection: false,
+      });
 
-    const selectedFile = selectedFiles[0];
+      const selectedFile = selectedFiles[0];
 
-    if (!selectedFile) {
-      return;
+      if (!selectedFile) {
+        return;
+      }
+
+      setDocuments((current) => ({
+        ...current,
+        [key]: selectedFile,
+      }));
+    } catch (error) {
+      if (
+        isErrorWithCode(error) &&
+        error.code === errorCodes.OPERATION_CANCELED
+      ) {
+        return;
+      }
+
+      Alert.alert(
+        "Unable to select file",
+        "Please choose a PDF, JPG or PNG."
+      );
     }
+  };
 
-    setDocuments((current) => ({
-      ...current,
-      [key]: selectedFile,
-    }));
-  } catch (error) {
-    if (
-      isErrorWithCode(error) &&
-      error.code === errorCodes.OPERATION_CANCELED
-    ) {
-      return;
-    }
-
-    Alert.alert("Unable to select file", "Please choose a PDF, JPG or PNG.");
-  }
-};
+  const selectSpecialization = (specialization: string) => {
+    updateField("specialization", specialization);
+    setIsSpecializationModalVisible(false);
+  };
 
   const validateForm = () => {
     if (!form.fullName.trim()) {
@@ -228,7 +269,11 @@ export const DoctorSignupScreen = ({
     return "";
   };
 
-  const appendText = (formData: FormData, key: string, value: string) => {
+  const appendText = (
+    formData: FormData,
+    key: string,
+    value: string
+  ) => {
     const trimmedValue = value.trim();
 
     if (trimmedValue) {
@@ -236,22 +281,25 @@ export const DoctorSignupScreen = ({
     }
   };
 
-const appendFile = (
-  formData: FormData,
-  key: DoctorDocumentKey,
-  file: DocumentPickerResponse | null,
-  fallbackName: string
-) => {
-  if (!file) {
-    return;
-  }
+  const appendFile = (
+    formData: FormData,
+    key: DoctorDocumentKey,
+    file: DocumentPickerResponse | null,
+    fallbackName: string
+  ) => {
+    if (!file) {
+      return;
+    }
 
-  formData.append(key, {
-    uri: file.uri,
-    name: file.name || fallbackName,
-    type: file.type || "application/pdf",
-  } as any);
-};
+    formData.append(
+      key,
+      {
+        uri: file.uri,
+        name: file.name || fallbackName,
+        type: file.type || "application/pdf",
+      } as any
+    );
+  };
 
   const submitDoctorSignup = async () => {
     const validationMessage = validateForm();
@@ -283,12 +331,14 @@ const appendFile = (
         documents.gmcDocument,
         "gmc-registration-proof.pdf"
       );
+
       appendFile(
         formData,
         "photoIdDocument",
         documents.photoIdDocument,
         "photo-id-proof.pdf"
       );
+
       appendFile(
         formData,
         "qualificationDocument",
@@ -296,16 +346,19 @@ const appendFile = (
         "qualification-proof.pdf"
       );
 
-      const response = await fetch(`${API_BASE_URL}/auth/register/doctor`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/auth/register/doctor`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       let result: any = {};
 
       try {
         result = await response.json();
-      } catch (error) {
+      } catch {
         result = {};
       }
 
@@ -340,7 +393,10 @@ const appendFile = (
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+      <StatusBar
+        backgroundColor={BACKGROUND}
+        barStyle="dark-content"
+      />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -353,11 +409,18 @@ const appendFile = (
             onPress={() => navigation.goBack()}
             disabled={isSubmitting}
           >
-            <ArrowLeft size={21} color={TEXT} strokeWidth={2.6} />
+            <ArrowLeft
+              size={21}
+              color={TEXT}
+              strokeWidth={2.6}
+            />
           </TouchableOpacity>
 
           <View style={styles.appBarTextBlock}>
-            <Text style={styles.appBarTitle}>Doctor Signup</Text>
+            <Text style={styles.appBarTitle}>
+              Doctor Signup
+            </Text>
+
             <Text style={styles.appBarSubtitle}>
               Submit details for admin verification
             </Text>
@@ -369,7 +432,10 @@ const appendFile = (
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(insets.bottom + 26, 38),
+              paddingBottom: Math.max(
+                insets.bottom + 26,
+                38
+              ),
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -377,12 +443,21 @@ const appendFile = (
         >
           <View style={styles.statusCard}>
             <View style={styles.statusIconBox}>
-              <ShieldCheck size={18} color={WARNING} strokeWidth={2.6} />
+              <ShieldCheck
+                size={18}
+                color={WARNING}
+                strokeWidth={2.6}
+              />
             </View>
 
             <View style={styles.statusTextBlock}>
-              <Text style={styles.statusTitle}>Account status</Text>
-              <Text style={styles.statusText}>Pending Verification</Text>
+              <Text style={styles.statusTitle}>
+                Account status
+              </Text>
+
+              <Text style={styles.statusText}>
+                Pending Verification
+              </Text>
             </View>
           </View>
 
@@ -397,7 +472,10 @@ const appendFile = (
               </View>
 
               <View style={styles.formHeaderText}>
-                <Text style={styles.formTitle}>Professional details</Text>
+                <Text style={styles.formTitle}>
+                  Professional details
+                </Text>
+
                 <Text style={styles.formSubtitle}>
                   These details help admin verify your doctor account.
                 </Text>
@@ -408,7 +486,9 @@ const appendFile = (
               label="Full name"
               value={form.fullName}
               placeholder="Dr. Full Name"
-              onChangeText={(value) => updateField("fullName", value)}
+              onChangeText={(value) =>
+                updateField("fullName", value)
+              }
             />
 
             <FormInput
@@ -417,7 +497,9 @@ const appendFile = (
               placeholder="doctor@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
-              onChangeText={(value) => updateField("email", value)}
+              onChangeText={(value) =>
+                updateField("email", value)
+              }
             />
 
             <FormInput
@@ -425,7 +507,9 @@ const appendFile = (
               value={form.phoneNumber}
               placeholder="+44 7000 000000"
               keyboardType="phone-pad"
-              onChangeText={(value) => updateField("phoneNumber", value)}
+              onChangeText={(value) =>
+                updateField("phoneNumber", value)
+              }
             />
 
             <FormInput
@@ -433,7 +517,9 @@ const appendFile = (
               value={form.password}
               placeholder="Create a secure password"
               secureTextEntry
-              onChangeText={(value) => updateField("password", value)}
+              onChangeText={(value) =>
+                updateField("password", value)
+              }
             />
 
             <FormInput
@@ -441,28 +527,34 @@ const appendFile = (
               value={form.gmcNumber}
               placeholder="GMC or registration number"
               autoCapitalize="characters"
-              onChangeText={(value) => updateField("gmcNumber", value)}
+              onChangeText={(value) =>
+                updateField("gmcNumber", value)
+              }
             />
 
-            <FormInput
-              label="Specialisation"
+            <SpecializationSelect
               value={form.specialization}
-              placeholder="General Practitioner"
-              onChangeText={(value) => updateField("specialization", value)}
+              onPress={() =>
+                setIsSpecializationModalVisible(true)
+              }
             />
 
             <FormInput
               label="Clinic / hospital name"
               value={form.clinicName}
               placeholder="Name of your practice"
-              onChangeText={(value) => updateField("clinicName", value)}
+              onChangeText={(value) =>
+                updateField("clinicName", value)
+              }
             />
 
             <FormInput
               label="Clinic address"
               value={form.clinicAddress}
               placeholder="Leicester, UK"
-              onChangeText={(value) => updateField("clinicAddress", value)}
+              onChangeText={(value) =>
+                updateField("clinicAddress", value)
+              }
             />
 
             <FormInput
@@ -470,7 +562,9 @@ const appendFile = (
               value={form.yearsExperience}
               placeholder="Years in practice"
               keyboardType="number-pad"
-              onChangeText={(value) => updateField("yearsExperience", value)}
+              onChangeText={(value) =>
+                updateField("yearsExperience", value)
+              }
             />
 
             <FormInput
@@ -478,50 +572,84 @@ const appendFile = (
               value={form.bio}
               placeholder="Short professional summary"
               multiline
-              onChangeText={(value) => updateField("bio", value)}
+              onChangeText={(value) =>
+                updateField("bio", value)
+              }
             />
           </View>
 
           <View style={styles.documentsCard}>
-            <Text style={styles.documentsTitle}>Verification documents</Text>
+            <Text style={styles.documentsTitle}>
+              Verification documents
+            </Text>
+
             <Text style={styles.documentsSubtitle}>
-              3 documents are required before admin can approve your account.
+              3 documents are required before admin can approve your
+              account.
             </Text>
 
             <DocumentUploadRow
               documentKey="gmcDocument"
               file={documents.gmcDocument}
-              icon={<FileText size={19} color={DOCTOR_PRIMARY} />}
-              onPress={() => pickDocument("gmcDocument")}
+              icon={
+                <FileText
+                  size={19}
+                  color={DOCTOR_PRIMARY}
+                />
+              }
+              onPress={() =>
+                pickDocument("gmcDocument")
+              }
             />
 
             <DocumentUploadRow
               documentKey="photoIdDocument"
               file={documents.photoIdDocument}
-              icon={<ShieldCheck size={19} color={DOCTOR_PRIMARY} />}
-              onPress={() => pickDocument("photoIdDocument")}
+              icon={
+                <ShieldCheck
+                  size={19}
+                  color={DOCTOR_PRIMARY}
+                />
+              }
+              onPress={() =>
+                pickDocument("photoIdDocument")
+              }
             />
 
             <DocumentUploadRow
               documentKey="qualificationDocument"
               file={documents.qualificationDocument}
-              icon={<CheckCircle2 size={19} color={DOCTOR_PRIMARY} />}
-              onPress={() => pickDocument("qualificationDocument")}
+              icon={
+                <CheckCircle2
+                  size={19}
+                  color={DOCTOR_PRIMARY}
+                />
+              }
+              onPress={() =>
+                pickDocument("qualificationDocument")
+              }
             />
           </View>
 
           <View style={styles.infoCard}>
-            <ShieldCheck size={18} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
+            <ShieldCheck
+              size={18}
+              color={DOCTOR_PRIMARY}
+              strokeWidth={2.6}
+            />
+
             <Text style={styles.infoText}>
-              Doctor accounts require admin verification before accessing
-              patient data.
+              Doctor accounts require admin verification before
+              accessing patient data.
             </Text>
           </View>
 
           <TouchableOpacity
             style={[
               styles.submitButton,
-              isSubmitting ? styles.disabledButton : undefined,
+              isSubmitting
+                ? styles.disabledButton
+                : undefined,
             ]}
             activeOpacity={0.88}
             onPress={submitDoctorSignup}
@@ -534,11 +662,158 @@ const appendFile = (
                 <Text style={styles.submitButtonText}>
                   Submit for Verification
                 </Text>
-                <ChevronRight size={19} color={SURFACE} strokeWidth={2.8} />
+
+                <ChevronRight
+                  size={19}
+                  color={SURFACE}
+                  strokeWidth={2.8}
+                />
               </>
             )}
           </TouchableOpacity>
         </ScrollView>
+
+        <Modal
+          visible={isSpecializationModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() =>
+            setIsSpecializationModalVisible(false)
+          }
+        >
+          <View style={styles.modalBackdrop}>
+            <TouchableOpacity
+              style={styles.modalDismissArea}
+              activeOpacity={1}
+              onPress={() =>
+                setIsSpecializationModalVisible(false)
+              }
+            />
+
+            <View
+              style={[
+                styles.modalCard,
+                {
+                  paddingBottom: Math.max(
+                    insets.bottom + 14,
+                    24
+                  ),
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
+
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleBlock}>
+                  <View style={styles.modalIconBox}>
+                    <Stethoscope
+                      size={21}
+                      color={DOCTOR_PRIMARY}
+                      strokeWidth={2.5}
+                    />
+                  </View>
+
+                  <View style={styles.modalHeaderText}>
+                    <Text style={styles.modalTitle}>
+                      Select specialisation
+                    </Text>
+
+                    <Text style={styles.modalSubtitle}>
+                      Patients will use this category to find you
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    setIsSpecializationModalVisible(false)
+                  }
+                >
+                  <X
+                    size={20}
+                    color={TEXT}
+                    strokeWidth={2.6}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.specializationScroll}
+                showsVerticalScrollIndicator={false}
+              >
+                {SPECIALIZATION_OPTIONS.map(
+                  (specialization, index) => {
+                    const isSelected =
+                      form.specialization === specialization;
+
+                    return (
+                      <TouchableOpacity
+                        key={specialization}
+                        style={[
+                          styles.specializationOption,
+                          index ===
+                          SPECIALIZATION_OPTIONS.length - 1
+                            ? styles.specializationOptionLast
+                            : undefined,
+                          isSelected
+                            ? styles.selectedSpecializationOption
+                            : undefined,
+                        ]}
+                        activeOpacity={0.85}
+                        onPress={() =>
+                          selectSpecialization(specialization)
+                        }
+                      >
+                        <View
+                          style={
+                            styles.specializationOptionIcon
+                          }
+                        >
+                          <Stethoscope
+                            size={18}
+                            color={
+                              isSelected
+                                ? DOCTOR_PRIMARY
+                                : MUTED
+                            }
+                            strokeWidth={2.4}
+                          />
+                        </View>
+
+                        <Text
+                          style={[
+                            styles.specializationOptionText,
+                            isSelected
+                              ? styles.selectedSpecializationText
+                              : undefined,
+                          ]}
+                        >
+                          {specialization}
+                        </Text>
+
+                        {isSelected ? (
+                          <CheckCircle2
+                            size={20}
+                            color={DOCTOR_PRIMARY}
+                            strokeWidth={2.6}
+                          />
+                        ) : (
+                          <ChevronRight
+                            size={18}
+                            color="#A7B0C2"
+                            strokeWidth={2.4}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -559,8 +834,16 @@ const FormInput = ({
   placeholder: string;
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "phone-pad" | "number-pad";
-  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  keyboardType?:
+    | "default"
+    | "email-address"
+    | "phone-pad"
+    | "number-pad";
+  autoCapitalize?:
+    | "none"
+    | "sentences"
+    | "words"
+    | "characters";
   multiline?: boolean;
 }) => {
   return (
@@ -568,7 +851,12 @@ const FormInput = ({
       <Text style={styles.inputLabel}>{label}</Text>
 
       <TextInput
-        style={[styles.input, multiline ? styles.multilineInput : undefined]}
+        style={[
+          styles.input,
+          multiline
+            ? styles.multilineInput
+            : undefined,
+        ]}
         value={value}
         placeholder={placeholder}
         placeholderTextColor="#A7B0C2"
@@ -577,8 +865,69 @@ const FormInput = ({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         multiline={multiline}
-        textAlignVertical={multiline ? "top" : "center"}
+        textAlignVertical={
+          multiline ? "top" : "center"
+        }
       />
+    </View>
+  );
+};
+
+const SpecializationSelect = ({
+  value,
+  onPress,
+}: {
+  value: string;
+  onPress: () => void;
+}) => {
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>
+        Specialisation
+      </Text>
+
+      <TouchableOpacity
+        style={styles.specializationSelect}
+        activeOpacity={0.85}
+        onPress={onPress}
+      >
+        <View style={styles.specializationSelectLeft}>
+          <View style={styles.specializationSelectIcon}>
+            <Stethoscope
+              size={18}
+              color={DOCTOR_PRIMARY}
+              strokeWidth={2.5}
+            />
+          </View>
+
+          <View style={styles.specializationSelectTextBlock}>
+            <Text
+              style={[
+                styles.specializationSelectText,
+                !value
+                  ? styles.specializationPlaceholder
+                  : undefined,
+              ]}
+              numberOfLines={1}
+            >
+              {value || "Select your specialisation"}
+            </Text>
+
+            <Text
+              style={styles.specializationSelectHint}
+              numberOfLines={1}
+            >
+              Used for patient doctor categories
+            </Text>
+          </View>
+        </View>
+
+        <ChevronDown
+          size={21}
+          color={MUTED}
+          strokeWidth={2.6}
+        />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -602,22 +951,30 @@ const DocumentUploadRow = ({
       activeOpacity={0.86}
       onPress={onPress}
     >
-      <View style={styles.documentIconBox}>{icon}</View>
+      <View style={styles.documentIconBox}>
+        {icon}
+      </View>
 
       <View style={styles.documentTextBlock}>
         <View style={styles.documentTitleRow}>
-          <Text style={styles.documentTitle}>{getDocumentLabel(documentKey)}</Text>
+          <Text style={styles.documentTitle}>
+            {getDocumentLabel(documentKey)}
+          </Text>
 
           <View
             style={[
               styles.requiredPill,
-              isUploaded ? styles.uploadedPill : undefined,
+              isUploaded
+                ? styles.uploadedPill
+                : undefined,
             ]}
           >
             <Text
               style={[
                 styles.requiredPillText,
-                isUploaded ? styles.uploadedPillText : undefined,
+                isUploaded
+                  ? styles.uploadedPillText
+                  : undefined,
               ]}
             >
               {isUploaded ? "Uploaded" : "Required"}
@@ -625,7 +982,10 @@ const DocumentUploadRow = ({
           </View>
         </View>
 
-        <Text style={styles.documentHint} numberOfLines={2}>
+        <Text
+          style={styles.documentHint}
+          numberOfLines={2}
+        >
           {file?.name || getDocumentHint(documentKey)}
         </Text>
       </View>
@@ -633,7 +993,11 @@ const DocumentUploadRow = ({
       <View style={styles.uploadIconCircle}>
         <UploadCloud
           size={18}
-          color={isUploaded ? SUCCESS : DOCTOR_PRIMARY}
+          color={
+            isUploaded
+              ? SUCCESS
+              : DOCTOR_PRIMARY
+          }
           strokeWidth={2.6}
         />
       </View>
@@ -786,6 +1150,49 @@ const styles = StyleSheet.create({
     paddingTop: 13,
     lineHeight: 20,
   },
+  specializationSelect: {
+    minHeight: 58,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: SURFACE,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  specializationSelectLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 10,
+  },
+  specializationSelectIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  specializationSelectTextBlock: {
+    flex: 1,
+  },
+  specializationSelectText: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  specializationPlaceholder: {
+    color: "#A7B0C2",
+  },
+  specializationSelectHint: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 3,
+  },
   documentsCard: {
     backgroundColor: SURFACE,
     borderRadius: 22,
@@ -909,5 +1316,112 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
     marginRight: 7,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.42)",
+    justifyContent: "flex-end",
+  },
+  modalDismissArea: {
+    flex: 1,
+  },
+  modalCard: {
+    maxHeight: "78%",
+    backgroundColor: SURFACE,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#D4DAE6",
+    marginBottom: 14,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 12,
+  },
+  modalTitleBlock: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 10,
+  },
+  modalIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: DOCTOR_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  modalHeaderText: {
+    flex: 1,
+  },
+  modalTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  modalSubtitle: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  specializationScroll: {
+    flexGrow: 0,
+  },
+  specializationOption: {
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  specializationOptionLast: {
+    borderBottomWidth: 0,
+  },
+  selectedSpecializationOption: {
+    backgroundColor: DOCTOR_LIGHT,
+    borderRadius: 13,
+    borderBottomColor: "transparent",
+    marginBottom: 5,
+  },
+  specializationOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: SOFT_PANEL,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  specializationOptionText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  selectedSpecializationText: {
+    color: DOCTOR_DARK,
+    fontWeight: "900",
   },
 });

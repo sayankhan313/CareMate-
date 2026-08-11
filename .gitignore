@@ -19,6 +19,10 @@ mobile/.env
 mobile/.env.*
 !mobile/.env.example
 
+.env
+secrets/
+
+
 
 # =========================
 # Logs
@@ -146,3 +150,4 @@ keys/
 *.pk
 *.pubbackend/uploads/
 backend/uploads/
+backend/private-uploads/

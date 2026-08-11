@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../../services/tokenStorage";
 import type { RootStackParamList } from "../../types/navigation";
+import { getRoleHomeRoute, type AppUser } from "../../utils/roleNavigation";
 
 type SplashScreenProps = NativeStackScreenProps<RootStackParamList, "Splash">;
 
@@ -18,7 +19,11 @@ export const SplashScreen = ({ navigation }: SplashScreenProps) => {
         if (!token) {
           navigation.reset({
             index: 0,
-            routes: [{ name: "Welcome" }],
+            routes: [
+              {
+                name: "Welcome",
+              },
+            ],
           });
           return;
         }
@@ -32,33 +37,51 @@ export const SplashScreen = ({ navigation }: SplashScreenProps) => {
 
         const json = await response.json();
 
-        if (!response.ok || !json.success) {
+        if (!response.ok || !json.success || !json.data?.user) {
           await tokenStorage.removeToken();
 
           navigation.reset({
             index: 0,
-            routes: [{ name: "Login" }],
+            routes: [
+              {
+                name: "Login",
+              },
+            ],
+          });
+          return;
+        }
+
+        const user = json.data.user as AppUser;
+        const roleRoute = getRoleHomeRoute(user);
+
+        if (!roleRoute) {
+          await tokenStorage.removeToken();
+
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: "Login",
+              },
+            ],
           });
           return;
         }
 
         navigation.reset({
           index: 0,
-          routes: [
-            {
-              name: "PatientTabs",
-              params: {
-                user: json.data.user,
-              },
-            },
-          ],
+          routes: [roleRoute as any],
         });
       } catch (error) {
         await tokenStorage.removeToken();
 
         navigation.reset({
           index: 0,
-          routes: [{ name: "Login" }],
+          routes: [
+            {
+              name: "Login",
+            },
+          ],
         });
       }
     };

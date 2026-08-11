@@ -24,6 +24,15 @@ type LoginFormValues = {
 
 type LoginScreenProps = NativeStackScreenProps<RootStackParamList, "Login">;
 
+type LoggedInUser = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: "PATIENT" | "DOCTOR" | "CAREGIVER" | "PHARMACY" | "ADMIN";
+  accountStatus?: string;
+  isEmailVerified?: boolean;
+};
+
 const isApprovedAccount = (accountStatus?: string) => {
   return accountStatus === "ACTIVE" || accountStatus === "APPROVED";
 };
@@ -44,8 +53,13 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
     },
   });
 
-  const redirectByRole = async (user: any) => {
-    if (user?.role === "PATIENT") {
+  const clearTokenAndShowMessage = async (title: string, message: string) => {
+    await tokenStorage.removeToken();
+    Alert.alert(title, message);
+  };
+
+  const redirectByRole = async (user: LoggedInUser) => {
+    if (user.role === "PATIENT") {
       navigation.reset({
         index: 0,
         routes: [
@@ -60,7 +74,7 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
       return;
     }
 
-    if (user?.role === "DOCTOR") {
+    if (user.role === "DOCTOR") {
       if (isPendingAccount(user.accountStatus)) {
         navigation.reset({
           index: 0,
@@ -92,38 +106,77 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         return;
       }
 
-      await tokenStorage.removeToken();
-
-      Alert.alert(
+      await clearTokenAndShowMessage(
         "Doctor account unavailable",
         "Your doctor account is not active right now."
       );
       return;
     }
 
-    if (user?.role === "PHARMACY") {
-      await tokenStorage.removeToken();
+    if (user.role === "ADMIN") {
+      if (isApprovedAccount(user.accountStatus)) {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: "AdminTabs",
+              params: {
+                user,
+              },
+            },
+          ],
+        });
+        return;
+      }
 
-      Alert.alert(
-        "Pharmacy module coming next",
-        "Pharmacy login will be connected after admin verification is completed."
+      await clearTokenAndShowMessage(
+        "Admin account unavailable",
+        "Your admin account is not active right now."
       );
       return;
     }
+if (user.role === "PHARMACY") {
+  if (isPendingAccount(user.accountStatus)) {
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "PharmacyPendingApproval",
+          params: {
+            user,
+            email: user.email,
+          },
+        },
+      ],
+    });
+    return;
+  }
 
-    if (user?.role === "ADMIN") {
-      await tokenStorage.removeToken();
+  if (isApprovedAccount(user.accountStatus)) {
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "PharmacyDashboard",
+          params: {
+            user,
+          },
+        },
+      ],
+    });
+    return;
+  }
 
-      Alert.alert(
-        "Admin module coming next",
-        "Admin dashboard will be connected in the next module step."
-      );
-      return;
-    }
-
-    await tokenStorage.removeToken();
-
-    Alert.alert("Unsupported role", "This account role is not supported yet.");
+  await clearTokenAndShowMessage(
+    "Pharmacy account unavailable",
+    "Your pharmacy account is not active right now."
+  );
+  return;
+}
+    await clearTokenAndShowMessage(
+      "Unsupported role",
+      "This account role is not supported yet."
+    );
   };
 
   const onSubmit = async (formData: LoginFormValues) => {
@@ -145,7 +198,11 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
         throw new Error(loginJson.message || "Login failed.");
       }
 
-      const token = loginJson.data.token;
+      const token = loginJson.data?.token;
+
+      if (!token) {
+        throw new Error("Login token missing from server response.");
+      }
 
       await tokenStorage.saveToken(token);
 
@@ -158,11 +215,16 @@ export const LoginScreen = ({ navigation }: LoginScreenProps) => {
 
       const currentUserJson = await currentUserResponse.json();
 
-      if (!currentUserResponse.ok || !currentUserJson.success) {
+      if (
+        !currentUserResponse.ok ||
+        !currentUserJson.success ||
+        !currentUserJson.data?.user
+      ) {
+        await tokenStorage.removeToken();
         throw new Error(currentUserJson.message || "Could not load user.");
       }
 
-      await redirectByRole(currentUserJson.data.user);
+      await redirectByRole(currentUserJson.data.user as LoggedInUser);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong.";

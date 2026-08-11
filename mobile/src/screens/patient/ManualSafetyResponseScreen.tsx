@@ -1,11 +1,10 @@
 import { useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +23,8 @@ import {
   ShieldAlert,
   Thermometer,
 } from "lucide-react-native";
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedAlert as Alert } from "../../utils/localizedAlert";
 
 import type { RootStackParamList } from "../../types/navigation";
 import { vitalsApi } from "../../services/vitalsApi";
@@ -44,17 +45,28 @@ type ManualCriticalVitalOption = {
   hiddenCriticalPayload: Record<string, number>;
 };
 
-const BACKGROUND = "#FFF5F5";
+const BACKGROUND = "#FBF1F1";
 const SURFACE = "#FFFFFF";
-const TEXT = "#111827";
-const MUTED = "#6B7280";
-const BORDER = "#F4C7C7";
+const TEXT = "#1B1D2A";
+const MUTED = "#5F6270";
 
-const RED = "#DC2626";
-const RED_DARK = "#991B1B";
-const RED_LIGHT = "#FEE2E2";
-const RED_SOFT = "#FEF2F2";
-const RED_BORDER = "#FCA5A5";
+const RED = "#D9483F";
+const RED_DARK = "#A6332C";
+const RED_CONTAINER = "#F9DAD7";
+const ON_RED_CONTAINER = "#7A241F";
+const RED_SOFT = "#FCEBE9";
+
+const SURFACE_VARIANT = "#F2E4E2";
+const DIVIDER = "#F1DEDC";
+
+
+const elevate = (level: number) => ({
+  elevation: level,
+  shadowColor: "#1B1D2A",
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08 + level * 0.01,
+  shadowRadius: level * 1.6,
+  shadowOffset: { width: 0, height: level * 0.8 },
+});
 
 const criticalVitalOptions: ManualCriticalVitalOption[] = [
   {
@@ -64,7 +76,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Oxygen Level Concern",
     manualDisplayValue: "Patient reported oxygen level concern",
     manualReason: "Manual safety response selected for oxygen level concern",
-    icon: <Activity size={22} color={RED} strokeWidth={2.6} />,
+    icon: <Activity size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       spo2: 88,
     },
@@ -76,7 +88,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Heart Rate Concern",
     manualDisplayValue: "Patient reported heart rate concern",
     manualReason: "Manual safety response selected for heart rate concern",
-    icon: <HeartPulse size={22} color={RED} strokeWidth={2.6} />,
+    icon: <HeartPulse size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       heartRate: 135,
     },
@@ -88,7 +100,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Blood Pressure Concern",
     manualDisplayValue: "Patient reported blood pressure concern",
     manualReason: "Manual safety response selected for blood pressure concern",
-    icon: <Droplet size={22} color={RED} strokeWidth={2.6} />,
+    icon: <Droplet size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       bpSystolic: 180,
       bpDiastolic: 120,
@@ -101,7 +113,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Glucose Concern",
     manualDisplayValue: "Patient reported glucose concern",
     manualReason: "Manual safety response selected for glucose concern",
-    icon: <Droplet size={22} color={RED} strokeWidth={2.6} />,
+    icon: <Droplet size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       glucose: 260,
     },
@@ -113,7 +125,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Temperature Concern",
     manualDisplayValue: "Patient reported temperature concern",
     manualReason: "Manual safety response selected for temperature concern",
-    icon: <Thermometer size={22} color={RED} strokeWidth={2.6} />,
+    icon: <Thermometer size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       temperature: 39.2,
     },
@@ -125,7 +137,7 @@ const criticalVitalOptions: ManualCriticalVitalOption[] = [
     manualDisplayTitle: "Other Critical Concern",
     manualDisplayValue: "Patient reported another urgent safety concern",
     manualReason: "Manual safety response selected for another urgent concern",
-    icon: <ShieldAlert size={22} color={RED} strokeWidth={2.6} />,
+    icon: <ShieldAlert size={21} color={RED} strokeWidth={2.2} />,
     hiddenCriticalPayload: {
       heartRate: 135,
     },
@@ -192,7 +204,7 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
             onPress={() => navigation.goBack()}
             disabled={isSubmitting}
           >
-            <ArrowLeft size={22} color={TEXT} strokeWidth={2.7} />
+            <ArrowLeft size={22} color={TEXT} strokeWidth={2.2} />
           </TouchableOpacity>
 
           <View style={styles.appBarTextBlock}>
@@ -213,7 +225,7 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
         >
           <View style={styles.alertStrip}>
             <View style={styles.alertIconCircle}>
-              <ShieldAlert size={27} color={SURFACE} strokeWidth={2.7} />
+              <ShieldAlert size={25} color={SURFACE} strokeWidth={2.2} />
             </View>
 
             <View style={styles.alertTextBlock}>
@@ -227,7 +239,7 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
 
           {errorMessage ? (
             <View style={styles.errorCard}>
-              <AlertCircle size={19} color={RED_DARK} strokeWidth={2.6} />
+              <AlertCircle size={19} color={RED_DARK} strokeWidth={2.2} />
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
@@ -270,9 +282,9 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
                   ) : (
                     <View style={styles.actionCircle}>
                       <ChevronRight
-                        size={20}
+                        size={19}
                         color={RED}
-                        strokeWidth={2.8}
+                        strokeWidth={2.4}
                       />
                     </View>
                   )}
@@ -282,7 +294,7 @@ export const ManualSafetyResponseScreen = ({ navigation }: Props) => {
           </View>
 
           <View style={styles.noteBox}>
-            <AlertCircle size={18} color={RED_DARK} strokeWidth={2.5} />
+            <AlertCircle size={18} color={RED_DARK} strokeWidth={2.2} />
             <Text style={styles.noteText}>
               This does not show fake values to the patient. It only creates the
               required critical backend reading so the Safety Response workflow
@@ -312,29 +324,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 13,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   appBarTextBlock: {
     flex: 1,
   },
   appBarTitle: {
     color: TEXT,
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     marginTop: 3,
   },
   content: {
@@ -346,17 +357,18 @@ const styles = StyleSheet.create({
   },
   alertStrip: {
     backgroundColor: RED,
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 18,
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 14,
+    ...elevate(2),
   },
   alertIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 13,
@@ -366,32 +378,31 @@ const styles = StyleSheet.create({
   },
   alertTitle: {
     color: SURFACE,
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   alertText: {
-    color: "#FFECEC",
+    color: "#FCE6E4",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 19,
     marginTop: 6,
   },
   errorCard: {
     backgroundColor: RED_SOFT,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: RED_BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 14,
+    ...elevate(0.5),
   },
   errorText: {
     flex: 1,
     color: RED_DARK,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 19,
     marginLeft: 10,
   },
@@ -401,31 +412,30 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: TEXT,
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: -0.25,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   sectionSubtitle: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 19,
     marginTop: 3,
   },
   optionPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 22,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
+    ...elevate(1),
   },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3DADA",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: DIVIDER,
   },
   optionRowSelected: {
     opacity: 0.72,
@@ -434,10 +444,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   optionIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: RED_LIGHT,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: RED_CONTAINER,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -449,40 +459,37 @@ const styles = StyleSheet.create({
   optionTitle: {
     color: TEXT,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     marginBottom: 4,
   },
   optionSubtitle: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "500",
     lineHeight: 17,
   },
   actionCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: RED_SOFT,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: RED_LIGHT,
   },
   noteBox: {
     backgroundColor: SURFACE,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
     flexDirection: "row",
     alignItems: "flex-start",
     marginTop: 14,
+    ...elevate(1),
   },
   noteText: {
     flex: 1,
     color: RED_DARK,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 18,
     marginLeft: 10,
   },
