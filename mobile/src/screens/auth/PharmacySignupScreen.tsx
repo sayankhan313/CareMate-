@@ -12,21 +12,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  errorCodes,
+  isErrorWithCode,
+  pick,
+  types,
+  type DocumentPickerResponse,
+} from "@react-native-documents/picker";
 import {
   ArrowLeft,
   Building2,
   CheckCircle2,
   FileCheck2,
+  FileText,
   Mail,
   MapPin,
   Phone,
   ShieldCheck,
   Store,
+  UploadCloud,
   UserRound,
 } from "lucide-react-native";
 
@@ -37,6 +43,8 @@ type PharmacySignupScreenProps = NativeStackScreenProps<
   RootStackParamList,
   "PharmacySignup"
 >;
+
+type PharmacyDocumentKey = "licenseDocument" | "addressProofDocument";
 
 type PharmacySignupForm = {
   staffName: string;
@@ -76,6 +84,12 @@ const PHARMACY_DARK = "#0F6B3A";
 const PHARMACY_CONTAINER = "#ECFDF3";
 const ON_PHARMACY_CONTAINER = "#064E3B";
 
+const SUCCESS = "#42B883";
+const SUCCESS_LIGHT = "#EAF8F2";
+
+const DANGER = "#EF4D56";
+const DANGER_LIGHT = "#FFEDEE";
+
 const elevate = (level: number) => ({
   elevation: level,
   shadowColor: "#172033",
@@ -105,19 +119,91 @@ const getErrorMessage = (error: unknown) => {
   return error instanceof Error ? error.message : "Something went wrong.";
 };
 
+const getApiMessage = (result: any) => {
+  if (typeof result?.message === "string") {
+    return result.message;
+  }
+
+  if (Array.isArray(result?.message)) {
+    return result.message[0]?.message || "Pharmacy registration failed.";
+  }
+
+  if (Array.isArray(result?.errors)) {
+    return result.errors[0]?.message || "Pharmacy registration failed.";
+  }
+
+  return "Pharmacy registration failed.";
+};
+
+const getDocumentLabel = (key: PharmacyDocumentKey) => {
+  if (key === "licenseDocument") {
+    return "Pharmacy Licence Proof";
+  }
+
+  return "Address Proof";
+};
+
+const getDocumentHint = (key: PharmacyDocumentKey) => {
+  if (key === "licenseDocument") {
+    return "Upload pharmacy registration, licence or GPhC-style verification proof.";
+  }
+
+  return "Upload a document showing the pharmacy address.";
+};
+
 export const PharmacySignupScreen = ({
   navigation,
 }: PharmacySignupScreenProps) => {
   const insets = useSafeAreaInsets();
 
   const [form, setForm] = useState<PharmacySignupForm>(initialForm);
+
+  const [documents, setDocuments] = useState<
+    Record<PharmacyDocumentKey, DocumentPickerResponse | null>
+  >({
+    licenseDocument: null,
+    addressProofDocument: null,
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateField = (key: keyof PharmacySignupForm, value: string) => {
-    setForm((currentForm) => ({
+    setForm(currentForm => ({
       ...currentForm,
       [key]: value,
     }));
+  };
+
+  const pickDocument = async (key: PharmacyDocumentKey) => {
+    try {
+      const selectedFiles = await pick({
+        type: [types.pdf, types.images],
+        allowMultiSelection: false,
+      });
+
+      const selectedFile = selectedFiles[0];
+
+      if (!selectedFile) {
+        return;
+      }
+
+      setDocuments(current => ({
+        ...current,
+        [key]: selectedFile,
+      }));
+    } catch (error) {
+      if (
+        isErrorWithCode(error) &&
+        error.code === errorCodes.OPERATION_CANCELED
+      ) {
+        return;
+      }
+
+      Alert.alert(
+        "Unable to select file",
+        "Please choose a PDF, JPG or PNG file."
+      );
+    }
   };
 
   const validateForm = () => {
@@ -132,7 +218,10 @@ export const PharmacySignupScreen = ({
     }
 
     if (!form.pharmacyName.trim()) {
-      Alert.alert("Missing pharmacy name", "Please enter the pharmacy name.");
+      Alert.alert(
+        "Missing pharmacy name",
+        "Please enter the pharmacy name."
+      );
       return false;
     }
 
@@ -145,7 +234,10 @@ export const PharmacySignupScreen = ({
     }
 
     if (!form.phoneNumber.trim()) {
-      Alert.alert("Missing phone number", "Please enter pharmacy phone number.");
+      Alert.alert(
+        "Missing phone number",
+        "Please enter pharmacy phone number."
+      );
       return false;
     }
 
@@ -173,8 +265,27 @@ export const PharmacySignupScreen = ({
       return false;
     }
 
+    if (!documents.licenseDocument) {
+      Alert.alert(
+        "Licence document required",
+        "Please upload pharmacy licence or registration proof."
+      );
+      return false;
+    }
+
+    if (!documents.addressProofDocument) {
+      Alert.alert(
+        "Address proof required",
+        "Please upload pharmacy address proof."
+      );
+      return false;
+    }
+
     if (form.password.length < 8) {
-      Alert.alert("Weak password", "Password must be at least 8 characters.");
+      Alert.alert(
+        "Weak password",
+        "Password must be at least 8 characters."
+      );
       return false;
     }
 
@@ -209,7 +320,13 @@ export const PharmacySignupScreen = ({
       }
     );
 
-    const resendJson = await resendResponse.json();
+    let resendJson: any = {};
+
+    try {
+      resendJson = await resendResponse.json();
+    } catch {
+      resendJson = {};
+    }
 
     if (!resendResponse.ok || !resendJson.success) {
       throw new Error(
@@ -229,6 +346,31 @@ export const PharmacySignupScreen = ({
     );
   };
 
+  const appendText = (formData: FormData, key: string, value: string) => {
+    const trimmedValue = value.trim();
+
+    if (trimmedValue) {
+      formData.append(key, trimmedValue);
+    }
+  };
+
+  const appendFile = (
+    formData: FormData,
+    key: PharmacyDocumentKey,
+    file: DocumentPickerResponse | null,
+    fallbackName: string
+  ) => {
+    if (!file) {
+      return;
+    }
+
+    formData.append(key, {
+      uri: file.uri,
+      name: file.name || fallbackName,
+      type: file.type || "application/pdf",
+    } as any);
+  };
+
   const submitSignup = async () => {
     if (!validateForm() || isSubmitting) {
       return;
@@ -239,33 +381,52 @@ export const PharmacySignupScreen = ({
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fullName: form.staffName.trim(),
-          email,
-          password: form.password,
-          role: "PHARMACY",
+      const formData = new FormData();
 
-          phoneNumber: form.phoneNumber.trim(),
-          staffName: form.staffName.trim(),
-          pharmacyName: form.pharmacyName.trim(),
-          registrationNumber: form.registrationNumber.trim(),
-          licenseNumber: form.licenseNumber.trim(),
-          address: form.address.trim(),
-          city: form.city.trim(),
-          postcode: form.postcode.trim().toUpperCase(),
-          pharmacyEmail: email,
-        }),
-      });
+      appendText(formData, "fullName", form.staffName);
+      appendText(formData, "staffName", form.staffName);
+      appendText(formData, "pharmacyName", form.pharmacyName);
+      appendText(formData, "email", email);
+      appendText(formData, "password", form.password);
+      appendText(formData, "phoneNumber", form.phoneNumber);
+      appendText(formData, "registrationNumber", form.registrationNumber);
+      appendText(formData, "licenseNumber", form.licenseNumber);
+      appendText(formData, "address", form.address);
+      appendText(formData, "city", form.city);
+      appendText(formData, "postcode", form.postcode.toUpperCase());
 
-      const json = await response.json();
+      appendFile(
+        formData,
+        "licenseDocument",
+        documents.licenseDocument,
+        "pharmacy-licence-proof.pdf"
+      );
+
+      appendFile(
+        formData,
+        "addressProofDocument",
+        documents.addressProofDocument,
+        "pharmacy-address-proof.pdf"
+      );
+
+      const response = await fetch(
+        `${API_BASE_URL}/auth/pharmacy/signup`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      let json: any = {};
+
+      try {
+        json = await response.json();
+      } catch {
+        json = {};
+      }
 
       if (!response.ok || !json.success) {
-        throw new Error(json.message || "Pharmacy signup failed.");
+        throw new Error(getApiMessage(json));
       }
 
       Alert.alert(
@@ -286,7 +447,10 @@ export const PharmacySignupScreen = ({
           await resendVerificationEmail(email);
           return;
         } catch (resendError) {
-          Alert.alert("Signup failed", getErrorMessage(resendError));
+          Alert.alert(
+            "Signup failed",
+            getErrorMessage(resendError)
+          );
           return;
         }
       }
@@ -330,7 +494,11 @@ export const PharmacySignupScreen = ({
             autoCapitalize={autoCapitalize}
             multiline={multiline}
             textAlignVertical={multiline ? "top" : "center"}
-            style={[styles.input, multiline ? styles.textArea : undefined]}
+            editable={!isSubmitting}
+            style={[
+              styles.input,
+              multiline ? styles.textArea : undefined,
+            ]}
           />
         </View>
       </View>
@@ -379,6 +547,7 @@ export const PharmacySignupScreen = ({
 
             <View style={styles.heroTextBlock}>
               <Text style={styles.heroTitle}>Register pharmacy account</Text>
+
               <Text style={styles.heroSubtitle}>
                 Submit pharmacy details for admin verification before accessing
                 fulfilment workflows.
@@ -392,9 +561,10 @@ export const PharmacySignupScreen = ({
               color={ON_PHARMACY_CONTAINER}
               strokeWidth={2.6}
             />
+
             <Text style={styles.noticeText}>
               This account will remain pending until admin reviews the pharmacy
-              registration and licence details.
+              registration, licence and verification documents.
             </Text>
           </View>
 
@@ -404,7 +574,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Staff name",
               value: form.staffName,
-              onChangeText: (value) => updateField("staffName", value),
+              onChangeText: value => updateField("staffName", value),
               placeholder: "Enter responsible staff name",
               icon: (
                 <UserRound
@@ -419,7 +589,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Email address",
               value: form.email,
-              onChangeText: (value) => updateField("email", value),
+              onChangeText: value => updateField("email", value),
               placeholder: "pharmacy@example.com",
               icon: (
                 <Mail
@@ -435,7 +605,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Phone number",
               value: form.phoneNumber,
-              onChangeText: (value) => updateField("phoneNumber", value),
+              onChangeText: value => updateField("phoneNumber", value),
               placeholder: "Enter contact number",
               icon: (
                 <Phone
@@ -454,7 +624,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Pharmacy name",
               value: form.pharmacyName,
-              onChangeText: (value) => updateField("pharmacyName", value),
+              onChangeText: value => updateField("pharmacyName", value),
               placeholder: "Enter pharmacy name",
               icon: (
                 <Building2
@@ -469,7 +639,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Registration number",
               value: form.registrationNumber,
-              onChangeText: (value) =>
+              onChangeText: value =>
                 updateField("registrationNumber", value),
               placeholder: "Enter registration number",
               icon: (
@@ -485,7 +655,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Licence number",
               value: form.licenseNumber,
-              onChangeText: (value) => updateField("licenseNumber", value),
+              onChangeText: value => updateField("licenseNumber", value),
               placeholder: "Enter licence number",
               icon: (
                 <CheckCircle2
@@ -500,7 +670,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Address",
               value: form.address,
-              onChangeText: (value) => updateField("address", value),
+              onChangeText: value => updateField("address", value),
               placeholder: "Enter pharmacy address",
               icon: (
                 <MapPin
@@ -515,7 +685,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "City",
               value: form.city,
-              onChangeText: (value) => updateField("city", value),
+              onChangeText: value => updateField("city", value),
               placeholder: "Enter city",
               icon: (
                 <MapPin
@@ -530,7 +700,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Postcode",
               value: form.postcode,
-              onChangeText: (value) => updateField("postcode", value),
+              onChangeText: value => updateField("postcode", value),
               placeholder: "Enter postcode",
               icon: (
                 <MapPin
@@ -544,12 +714,49 @@ export const PharmacySignupScreen = ({
 
             <View style={styles.divider} />
 
+            <Text style={styles.sectionTitle}>Verification documents</Text>
+
+            <Text style={styles.sectionDescription}>
+              Upload both documents so the admin can review the pharmacy
+              registration.
+            </Text>
+
+            <DocumentUploadRow
+              documentKey="licenseDocument"
+              file={documents.licenseDocument}
+              icon={
+                <FileText
+                  size={19}
+                  color={PHARMACY}
+                  strokeWidth={2.5}
+                />
+              }
+              disabled={isSubmitting}
+              onPress={() => pickDocument("licenseDocument")}
+            />
+
+            <DocumentUploadRow
+              documentKey="addressProofDocument"
+              file={documents.addressProofDocument}
+              icon={
+                <MapPin
+                  size={19}
+                  color={PHARMACY}
+                  strokeWidth={2.5}
+                />
+              }
+              disabled={isSubmitting}
+              onPress={() => pickDocument("addressProofDocument")}
+            />
+
+            <View style={styles.divider} />
+
             <Text style={styles.sectionTitle}>Security</Text>
 
             {renderInput({
               label: "Password",
               value: form.password,
-              onChangeText: (value) => updateField("password", value),
+              onChangeText: value => updateField("password", value),
               placeholder: "Create password",
               icon: (
                 <ShieldCheck
@@ -565,7 +772,7 @@ export const PharmacySignupScreen = ({
             {renderInput({
               label: "Confirm password",
               value: form.confirmPassword,
-              onChangeText: (value) => updateField("confirmPassword", value),
+              onChangeText: value => updateField("confirmPassword", value),
               placeholder: "Confirm password",
               icon: (
                 <ShieldCheck
@@ -613,14 +820,79 @@ export const PharmacySignupScreen = ({
   );
 };
 
+const DocumentUploadRow = ({
+  documentKey,
+  file,
+  icon,
+  onPress,
+  disabled,
+}: {
+  documentKey: PharmacyDocumentKey;
+  file: DocumentPickerResponse | null;
+  icon: ReactNode;
+  onPress: () => void;
+  disabled: boolean;
+}) => {
+  const isUploaded = Boolean(file);
+
+  return (
+    <TouchableOpacity
+      style={styles.documentRow}
+      activeOpacity={0.86}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <View style={styles.documentIconBox}>{icon}</View>
+
+      <View style={styles.documentTextBlock}>
+        <View style={styles.documentTitleRow}>
+          <Text style={styles.documentTitle}>
+            {getDocumentLabel(documentKey)}
+          </Text>
+
+          <View
+            style={[
+              styles.requiredPill,
+              isUploaded ? styles.uploadedPill : undefined,
+            ]}
+          >
+            <Text
+              style={[
+                styles.requiredPillText,
+                isUploaded ? styles.uploadedPillText : undefined,
+              ]}
+            >
+              {isUploaded ? "Uploaded" : "Required"}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.documentHint} numberOfLines={2}>
+          {file?.name || getDocumentHint(documentKey)}
+        </Text>
+      </View>
+
+      <View style={styles.uploadIconCircle}>
+        <UploadCloud
+          size={18}
+          color={isUploaded ? SUCCESS : PHARMACY}
+          strokeWidth={2.6}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   keyboardView: {
     flex: 1,
   },
+
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -629,6 +901,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: BACKGROUND,
   },
+
   backIconButton: {
     width: 42,
     height: 42,
@@ -638,28 +911,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...elevate(2),
   },
+
   topTitleBlock: {
     flex: 1,
     paddingLeft: 12,
   },
+
   kicker: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 2,
   },
+
   topTitle: {
     color: TEXT,
     fontSize: 22,
     fontWeight: "700",
   },
+
   scrollView: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   content: {
     paddingHorizontal: 18,
   },
+
   heroCard: {
     backgroundColor: SURFACE,
     borderRadius: 18,
@@ -669,6 +948,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...elevate(2),
   },
+
   heroIconBox: {
     width: 58,
     height: 58,
@@ -678,21 +958,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
+
   heroTextBlock: {
     flex: 1,
   },
+
   heroTitle: {
     color: TEXT,
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 4,
   },
+
   heroSubtitle: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "500",
     lineHeight: 18,
   },
+
   noticeCard: {
     backgroundColor: PHARMACY_CONTAINER,
     borderRadius: 16,
@@ -701,6 +985,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 12,
   },
+
   noticeText: {
     flex: 1,
     color: ON_PHARMACY_CONTAINER,
@@ -709,27 +994,41 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginLeft: 9,
   },
+
   formCard: {
     backgroundColor: SURFACE,
     borderRadius: 18,
     padding: 16,
     ...elevate(2),
   },
+
   sectionTitle: {
     color: TEXT,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 12,
   },
+
+  sectionDescription: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 17,
+    marginTop: -5,
+    marginBottom: 5,
+  },
+
   inputGroup: {
     marginBottom: 13,
   },
+
   label: {
     color: TEXT,
     fontSize: 12,
     fontWeight: "700",
     marginBottom: 7,
   },
+
   inputShell: {
     minHeight: 50,
     borderRadius: 13,
@@ -738,11 +1037,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
   },
+
   textAreaShell: {
     minHeight: 88,
     alignItems: "flex-start",
     paddingTop: 12,
   },
+
   inputIconBox: {
     width: 32,
     height: 32,
@@ -752,6 +1053,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
+
   input: {
     flex: 1,
     color: TEXT,
@@ -759,37 +1061,119 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     paddingVertical: 0,
   },
+
   textArea: {
     minHeight: 64,
     paddingTop: 5,
     paddingBottom: 8,
   },
+
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: BORDER,
-    marginVertical: 6,
+    marginVertical: 10,
   },
+
+  documentRow: {
+    backgroundColor: SOFT_PANEL,
+    borderRadius: 15,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  documentIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: PHARMACY_CONTAINER,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  documentTextBlock: {
+    flex: 1,
+  },
+
+  documentTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 4,
+  },
+
+  documentTitle: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+    marginRight: 8,
+  },
+
+  requiredPill: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+
+  requiredPillText: {
+    color: DANGER,
+    fontSize: 8,
+    fontWeight: "700",
+  },
+
+  uploadedPill: {
+    backgroundColor: SUCCESS_LIGHT,
+  },
+
+  uploadedPillText: {
+    color: "#167A58",
+  },
+
+  documentHint: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "500",
+    lineHeight: 15,
+  },
+
+  uploadIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+
   submitButton: {
     height: 52,
     borderRadius: 14,
     backgroundColor: PHARMACY,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,
+    marginTop: 10,
     ...elevate(2),
   },
+
   disabledButton: {
     opacity: 0.65,
   },
+
   submitButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "700",
   },
+
   loginLinkButton: {
     alignItems: "center",
     paddingVertical: 16,
   },
+
   loginLinkText: {
     color: PHARMACY_DARK,
     fontSize: 13,

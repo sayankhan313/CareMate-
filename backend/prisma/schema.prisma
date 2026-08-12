@@ -391,14 +391,17 @@ model User {
   medicineOrderStatusChanges MedicineOrderStatusHistory[] @relation("MedicineOrderStatusChanges")
   pharmacyOrderNotes         PharmacyOrderNote[]          @relation("PharmacyOrderNotes")
 
-  savedPharmacies                 PatientPharmacyLink[]           @relation("PatientSavedPharmacies")
-  pharmacySavedByPatients         PatientPharmacyLink[]           @relation("PharmacySavedByPatients")
-  pharmacyInventoryItems          PharmacyInventoryItem[]         @relation("PharmacyInventoryItems")
-  patientPrescriptionSubmissions  PatientPrescriptionSubmission[] @relation("PatientPrescriptionSubmissions")
-  pharmacyPrescriptionSubmissions PatientPrescriptionSubmission[] @relation("PharmacyPrescriptionSubmissions")
-  pharmacyReviewedSubmissions     PatientPrescriptionSubmission[] @relation("PharmacyReviewedPrescriptionSubmissions")
-  pharmacyExemptionClaims         PrescriptionExemptionClaim[]    @relation("PharmacyExemptionClaims")
-  pharmacyVerifiedExemptionClaims PrescriptionExemptionClaim[]    @relation("PharmacyVerifiedExemptionClaims")
+  savedPharmacies                          PatientPharmacyLink[]              @relation("PatientSavedPharmacies")
+  pharmacySavedByPatients                  PatientPharmacyLink[]              @relation("PharmacySavedByPatients")
+  patientPharmacyExemptionEvidence         PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidencePatient")
+  pharmacyPatientExemptionEvidence         PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidencePharmacy")
+  pharmacyVerifiedPatientExemptionEvidence PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidenceVerifier")
+  pharmacyInventoryItems                   PharmacyInventoryItem[]            @relation("PharmacyInventoryItems")
+  patientPrescriptionSubmissions           PatientPrescriptionSubmission[]    @relation("PatientPrescriptionSubmissions")
+  pharmacyPrescriptionSubmissions          PatientPrescriptionSubmission[]    @relation("PharmacyPrescriptionSubmissions")
+  pharmacyReviewedSubmissions              PatientPrescriptionSubmission[]    @relation("PharmacyReviewedPrescriptionSubmissions")
+  pharmacyExemptionClaims                  PrescriptionExemptionClaim[]       @relation("PharmacyExemptionClaims")
+  pharmacyVerifiedExemptionClaims          PrescriptionExemptionClaim[]       @relation("PharmacyVerifiedExemptionClaims")
 
   patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
   doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
@@ -626,13 +629,46 @@ model PatientPharmacyLink {
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @updatedAt
 
-  patient  User @relation("PatientSavedPharmacies", fields: [patientId], references: [id], onDelete: Cascade)
-  pharmacy User @relation("PharmacySavedByPatients", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  patient           User                               @relation("PatientSavedPharmacies", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy          User                               @relation("PharmacySavedByPatients", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  exemptionEvidence PatientPharmacyExemptionEvidence[]
 
   @@unique([patientId, pharmacyId])
   @@index([patientId, isPrimary])
   @@index([pharmacyId])
   @@index([chargePreference])
+}
+
+model PatientPharmacyExemptionEvidence {
+  id                   String                       @id @default(uuid())
+  linkId               String?
+  patientId            String
+  pharmacyId           String
+  verifiedByPharmacyId String?
+  chargePreference     PrescriptionChargePreference
+  exemptionType        PrescriptionExemptionType
+  referenceNumber      String?
+  evidenceDocumentUrls String[]
+  expiresAt            DateTime?
+  status               ExemptionVerificationStatus  @default(PENDING)
+  verifiedAt           DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  link               PatientPharmacyLink? @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  patient            User                 @relation("PatientPharmacyExemptionEvidencePatient", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy           User                 @relation("PatientPharmacyExemptionEvidencePharmacy", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  verifiedByPharmacy User?                @relation("PatientPharmacyExemptionEvidenceVerifier", fields: [verifiedByPharmacyId], references: [id], onDelete: SetNull)
+
+  @@index([linkId, createdAt])
+  @@index([patientId, pharmacyId, status])
+  @@index([pharmacyId, status])
+  @@index([verifiedByPharmacyId])
+  @@index([chargePreference])
+  @@index([exemptionType])
+  @@index([expiresAt])
 }
 
 model PharmacyInventoryItem {

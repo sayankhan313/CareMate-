@@ -42,6 +42,7 @@ const pharmacySelect = {
   id: true,
   fullName: true,
   email: true,
+  role:true,
   accountStatus: true,
   isEmailVerified: true,
   pharmacyProfile: {
