@@ -3,6 +3,17 @@ import { AppError } from "../../utils/AppError.js";
 
 type PrescriptionChargePreference = "CHARGEABLE" | "EXEMPT" | "PPC";
 
+type ExemptionChargePreference = "EXEMPT" | "PPC";
+
+type PrescriptionExemptionType =
+  | "AGE_BASED"
+  | "MEDICAL_EXEMPTION"
+  | "MATERNITY_EXEMPTION"
+  | "LOW_INCOME_HC2"
+  | "UNIVERSAL_CREDIT"
+  | "PPC"
+  | "OTHER";
+
 type ListApprovedPharmaciesOptions = {
   search?: string;
   city?: string;
@@ -12,6 +23,14 @@ type ListApprovedPharmaciesOptions = {
 
 type SavePharmacyOptions = {
   chargePreference: PrescriptionChargePreference;
+};
+
+type SubmitExemptionEvidenceInput = {
+  chargePreference: ExemptionChargePreference;
+  exemptionType: PrescriptionExemptionType;
+  referenceNumber?: string;
+  expiresAt?: string;
+  evidenceDocumentUrls: string[];
 };
 
 const approvedPharmacyWhere: any = {
@@ -42,12 +61,27 @@ const pharmacySelect = {
   id: true,
   fullName: true,
   email: true,
-  role:true,
+  role: true,
   accountStatus: true,
   isEmailVerified: true,
   pharmacyProfile: {
     select: pharmacyProfileSelect,
   },
+};
+
+const exemptionEvidenceSelect = {
+  id: true,
+  chargePreference: true,
+  exemptionType: true,
+  referenceNumber: true,
+  evidenceDocumentUrls: true,
+  expiresAt: true,
+  status: true,
+  verifiedAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+  updatedAt: true,
 };
 
 const normalizeOptionalText = (value?: string) => value?.trim() || undefined;
@@ -85,6 +119,38 @@ const formatPharmacy = (pharmacy: any, link?: any | null) => {
   };
 };
 
+const formatExemptionEvidence = (evidence: {
+  id: string;
+  chargePreference: PrescriptionChargePreference;
+  exemptionType: string;
+  referenceNumber: string | null;
+  evidenceDocumentUrls: string[];
+  expiresAt: Date | null;
+  status: string;
+  verifiedAt: Date | null;
+  rejectedAt: Date | null;
+  rejectionReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: evidence.id,
+  chargePreference: evidence.chargePreference,
+  exemptionType: evidence.exemptionType,
+  referenceNumber: evidence.referenceNumber,
+  expiresAt: evidence.expiresAt,
+  status: evidence.status,
+  verifiedAt: evidence.verifiedAt,
+  rejectedAt: evidence.rejectedAt,
+  rejectionReason: evidence.rejectionReason,
+  documentCount: evidence.evidenceDocumentUrls.length,
+  documents: evidence.evidenceDocumentUrls.map((storedPath, index) => ({
+    index,
+    fileName: storedPath.split("/").pop() || `Document ${index + 1}`,
+  })),
+  submittedAt: evidence.createdAt,
+  updatedAt: evidence.updatedAt,
+});
+
 const getPatientOrThrow = async (patientId: string) => {
   const patient = await prisma.user.findFirst({
     where: {
@@ -97,7 +163,9 @@ const getPatientOrThrow = async (patientId: string) => {
     },
   });
 
-  if (!patient) throw new AppError("Patient account not found", 404);
+  if (!patient) {
+    throw new AppError("Patient account not found", 404);
+  }
 
   return patient;
 };
@@ -112,7 +180,10 @@ const getApprovedPharmacy = async (pharmacyId: string) => {
   });
 
   if (!pharmacy || !pharmacy.pharmacyProfile) {
-    throw new AppError("Pharmacy not found or pharmacy account is not approved yet", 404);
+    throw new AppError(
+      "Pharmacy not found or pharmacy account is not approved yet",
+      404
+    );
   }
 
   return pharmacy;
@@ -142,6 +213,38 @@ const getPatientPharmacyLink = async (patientId: string, pharmacyId: string) => 
       },
     },
   });
+};
+
+const getSavedPharmacyLinkOrThrow = async (
+  patientId: string,
+  pharmacyId: string
+) => {
+  const link = await prisma.patientPharmacyLink.findUnique({
+    where: {
+      patientId_pharmacyId: {
+        patientId,
+        pharmacyId,
+      },
+    },
+    select: {
+      id: true,
+      patientId: true,
+      pharmacyId: true,
+      isPrimary: true,
+      chargePreference: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!link) {
+    throw new AppError(
+      "This pharmacy must be saved before exemption evidence can be submitted",
+      404
+    );
+  }
+
+  return link;
 };
 
 const ensureSinglePrimaryPharmacy = async (patientId: string) => {
@@ -218,8 +321,43 @@ const ensureSinglePrimaryPharmacy = async (patientId: string) => {
   return selectedPrimary.pharmacyId;
 };
 
+const validateExemptionEvidence = (input: SubmitExemptionEvidenceInput) => {
+  if (
+    input.evidenceDocumentUrls.length < 1 ||
+    input.evidenceDocumentUrls.length > 3
+  ) {
+    throw new AppError(
+      "Between one and three exemption evidence documents are required",
+      400
+    );
+  }
+
+  if (
+    input.chargePreference === "PPC" &&
+    input.exemptionType !== "PPC"
+  ) {
+    throw new AppError(
+      "PPC evidence must use exemption type PPC",
+      400
+    );
+  }
+
+  if (
+    input.chargePreference === "EXEMPT" &&
+    input.exemptionType === "PPC"
+  ) {
+    throw new AppError(
+      "PPC must be submitted using charge preference PPC",
+      400
+    );
+  }
+};
+
 export const pharmacyLinkService = {
-  async listApprovedPharmacies(patientId: string, options: ListApprovedPharmaciesOptions = {}) {
+  async listApprovedPharmacies(
+    patientId: string,
+    options: ListApprovedPharmaciesOptions = {}
+  ) {
     await getPatientOrThrow(patientId);
 
     const search = normalizeOptionalText(options.search);
@@ -333,13 +471,26 @@ export const pharmacyLinkService = {
             },
           });
 
-    const linkMap = new Map(links.map(link => [link.pharmacyId, link]));
+    const linkMap = new Map(
+      links.map(link => [link.pharmacyId, link])
+    );
 
     const formattedPharmacies = pharmacies
-      .map(pharmacy => formatPharmacy(pharmacy, linkMap.get(pharmacy.id)))
+      .map(pharmacy =>
+        formatPharmacy(
+          pharmacy,
+          linkMap.get(pharmacy.id)
+        )
+      )
       .sort((first, second) => {
-        if (first.isPrimary !== second.isPrimary) return first.isPrimary ? -1 : 1;
-        if (first.isSaved !== second.isSaved) return first.isSaved ? -1 : 1;
+        if (first.isPrimary !== second.isPrimary) {
+          return first.isPrimary ? -1 : 1;
+        }
+
+        if (first.isSaved !== second.isSaved) {
+          return first.isSaved ? -1 : 1;
+        }
+
         return first.pharmacyName.localeCompare(second.pharmacyName);
       });
 
@@ -382,8 +533,14 @@ export const pharmacyLinkService = {
     const pharmacies = links
       .map(link => formatPharmacy(link.pharmacy, link))
       .sort((first, second) => {
-        if (first.isPrimary !== second.isPrimary) return first.isPrimary ? -1 : 1;
-        if (first.isAvailable !== second.isAvailable) return first.isAvailable ? -1 : 1;
+        if (first.isPrimary !== second.isPrimary) {
+          return first.isPrimary ? -1 : 1;
+        }
+
+        if (first.isAvailable !== second.isAvailable) {
+          return first.isAvailable ? -1 : 1;
+        }
+
         return first.pharmacyName.localeCompare(second.pharmacyName);
       });
 
@@ -394,12 +551,17 @@ export const pharmacyLinkService = {
     };
   },
 
-  async savePharmacy(patientId: string, pharmacyId: string, options: SavePharmacyOptions) {
+  async savePharmacy(
+    patientId: string,
+    pharmacyId: string,
+    options: SavePharmacyOptions
+  ) {
     await getPatientOrThrow(patientId);
 
     const pharmacy = await getApprovedPharmacy(pharmacyId);
 
-    const currentPrimaryPharmacyId = await ensureSinglePrimaryPharmacy(patientId);
+    const currentPrimaryPharmacyId =
+      await ensureSinglePrimaryPharmacy(patientId);
 
     const existingLink = await prisma.patientPharmacyLink.findUnique({
       where: {
@@ -455,14 +617,27 @@ export const pharmacyLinkService = {
       });
     });
 
-    const primaryPharmacyId = await ensureSinglePrimaryPharmacy(patientId);
-    const link = await getPatientPharmacyLink(patientId, pharmacyId);
+    const primaryPharmacyId =
+      await ensureSinglePrimaryPharmacy(patientId);
 
-    if (!link) throw new AppError("Pharmacy could not be saved", 500);
+    const link = await getPatientPharmacyLink(
+      patientId,
+      pharmacyId
+    );
+
+    if (!link) {
+      throw new AppError(
+        "Pharmacy could not be saved",
+        500
+      );
+    }
 
     return {
       primaryPharmacyId,
-      pharmacy: formatPharmacy(pharmacy, link),
+      pharmacy: formatPharmacy(
+        pharmacy,
+        link
+      ),
       link: {
         id: link.id,
         pharmacyId: link.pharmacyId,
@@ -474,7 +649,10 @@ export const pharmacyLinkService = {
     };
   },
 
-  async setPrimaryPharmacy(patientId: string, pharmacyId: string) {
+  async setPrimaryPharmacy(
+    patientId: string,
+    pharmacyId: string
+  ) {
     await getPatientOrThrow(patientId);
 
     const pharmacy = await getApprovedPharmacy(pharmacyId);
@@ -493,7 +671,10 @@ export const pharmacyLinkService = {
     });
 
     if (!link) {
-      throw new AppError("This pharmacy must be saved before setting it as primary", 404);
+      throw new AppError(
+        "This pharmacy must be saved before setting it as primary",
+        404
+      );
     }
 
     if (!link.isPrimary) {
@@ -519,14 +700,27 @@ export const pharmacyLinkService = {
       });
     }
 
-    const primaryPharmacyId = await ensureSinglePrimaryPharmacy(patientId);
-    const updatedLink = await getPatientPharmacyLink(patientId, pharmacyId);
+    const primaryPharmacyId =
+      await ensureSinglePrimaryPharmacy(patientId);
 
-    if (!updatedLink) throw new AppError("Primary pharmacy could not be updated", 500);
+    const updatedLink = await getPatientPharmacyLink(
+      patientId,
+      pharmacyId
+    );
+
+    if (!updatedLink) {
+      throw new AppError(
+        "Primary pharmacy could not be updated",
+        500
+      );
+    }
 
     return {
       primaryPharmacyId,
-      pharmacy: formatPharmacy(pharmacy, updatedLink),
+      pharmacy: formatPharmacy(
+        pharmacy,
+        updatedLink
+      ),
       link: {
         id: updatedLink.id,
         pharmacyId: updatedLink.pharmacyId,
@@ -545,19 +739,25 @@ export const pharmacyLinkService = {
   ) {
     await getPatientOrThrow(patientId);
 
-    const existingLink = await prisma.patientPharmacyLink.findUnique({
-      where: {
-        patientId_pharmacyId: {
-          patientId,
-          pharmacyId,
+    const existingLink =
+      await prisma.patientPharmacyLink.findUnique({
+        where: {
+          patientId_pharmacyId: {
+            patientId,
+            pharmacyId,
+          },
         },
-      },
-      select: {
-        id: true,
-      },
-    });
+        select: {
+          id: true,
+        },
+      });
 
-    if (!existingLink) throw new AppError("Saved pharmacy not found", 404);
+    if (!existingLink) {
+      throw new AppError(
+        "Saved pharmacy not found",
+        404
+      );
+    }
 
     await prisma.patientPharmacyLink.update({
       where: {
@@ -568,18 +768,162 @@ export const pharmacyLinkService = {
       },
     });
 
-    const link = await getPatientPharmacyLink(patientId, pharmacyId);
+    const link = await getPatientPharmacyLink(
+      patientId,
+      pharmacyId
+    );
 
-    if (!link) throw new AppError("Prescription charge preference could not be updated", 500);
+    if (!link) {
+      throw new AppError(
+        "Prescription charge preference could not be updated",
+        500
+      );
+    }
 
     return {
-      primaryPharmacyId: await ensureSinglePrimaryPharmacy(patientId),
-      pharmacy: formatPharmacy(link.pharmacy, link),
+      primaryPharmacyId:
+        await ensureSinglePrimaryPharmacy(patientId),
+      pharmacy: formatPharmacy(
+        link.pharmacy,
+        link
+      ),
       chargePreference: link.chargePreference,
     };
   },
 
-  async removePharmacy(patientId: string, pharmacyId: string) {
+  async submitExemptionEvidence(
+    patientId: string,
+    pharmacyId: string,
+    input: SubmitExemptionEvidenceInput
+  ) {
+    await getPatientOrThrow(patientId);
+
+    await getApprovedPharmacy(pharmacyId);
+
+    validateExemptionEvidence(input);
+
+    const link = await getSavedPharmacyLinkOrThrow(
+      patientId,
+      pharmacyId
+    );
+
+    const existingPending =
+      await prisma.patientPharmacyExemptionEvidence.findFirst({
+        where: {
+          patientId,
+          pharmacyId,
+          status: "PENDING",
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    if (existingPending) {
+      throw new AppError(
+        "Exemption evidence is already awaiting review by this pharmacy",
+        409
+      );
+    }
+
+    const expiresAt = input.expiresAt
+      ? new Date(input.expiresAt)
+      : null;
+
+    if (
+      expiresAt &&
+      Number.isNaN(expiresAt.getTime())
+    ) {
+      throw new AppError(
+        "Invalid exemption expiry date",
+        400
+      );
+    }
+
+    const evidence = await prisma.$transaction(
+      async transaction => {
+        await transaction.patientPharmacyLink.update({
+          where: {
+            id: link.id,
+          },
+          data: {
+            chargePreference: input.chargePreference,
+          },
+        });
+
+        return transaction.patientPharmacyExemptionEvidence.create({
+          data: {
+            linkId: link.id,
+            patientId,
+            pharmacyId,
+            chargePreference: input.chargePreference,
+            exemptionType: input.exemptionType,
+            referenceNumber:
+              normalizeOptionalText(input.referenceNumber) || null,
+            evidenceDocumentUrls: input.evidenceDocumentUrls,
+            expiresAt,
+            status: "PENDING",
+          },
+          select: exemptionEvidenceSelect,
+        });
+      }
+    );
+
+    return {
+      pharmacyId,
+      chargePreference: input.chargePreference,
+      verificationRequired: true,
+      evidence: formatExemptionEvidence(evidence),
+    };
+  },
+
+  async listExemptionEvidence(
+    patientId: string,
+    pharmacyId: string
+  ) {
+    await getPatientOrThrow(patientId);
+
+    const link = await getSavedPharmacyLinkOrThrow(
+      patientId,
+      pharmacyId
+    );
+
+    const evidence =
+      await prisma.patientPharmacyExemptionEvidence.findMany({
+        where: {
+          patientId,
+          pharmacyId,
+        },
+        select: exemptionEvidenceSelect,
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    const formattedEvidence = evidence.map(
+      formatExemptionEvidence
+    );
+
+    return {
+      pharmacyId,
+      currentChargePreference: link.chargePreference,
+      evidenceRequired:
+        link.chargePreference === "EXEMPT" ||
+        link.chargePreference === "PPC",
+      latestEvidence: formattedEvidence[0] || null,
+      total: formattedEvidence.length,
+      evidence: formattedEvidence,
+    };
+  },
+
+  async removePharmacy(
+    patientId: string,
+    pharmacyId: string
+  ) {
     await getPatientOrThrow(patientId);
 
     const link = await prisma.patientPharmacyLink.findUnique({
@@ -597,7 +941,12 @@ export const pharmacyLinkService = {
       },
     });
 
-    if (!link) throw new AppError("Saved pharmacy not found", 404);
+    if (!link) {
+      throw new AppError(
+        "Saved pharmacy not found",
+        404
+      );
+    }
 
     await prisma.patientPharmacyLink.delete({
       where: {
@@ -605,7 +954,8 @@ export const pharmacyLinkService = {
       },
     });
 
-    const primaryPharmacyId = await ensureSinglePrimaryPharmacy(patientId);
+    const primaryPharmacyId =
+      await ensureSinglePrimaryPharmacy(patientId);
 
     return {
       removedPharmacyId: pharmacyId,
