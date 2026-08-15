@@ -1,11 +1,38 @@
+import path from "node:path";
+
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
-import type { PharmacyDashboardResponse, PharmacyOrderListItem, PharmacyOrdersResponse, PharmacyOrderSource, PharmacyOrderStatus } from "./pharmacy.types.js";
+import type {
+  PharmacyDashboardResponse,
+  PharmacyExemptionReviewDetail,
+  PharmacyExemptionReviewListItem,
+  PharmacyExemptionReviewsResponse,
+  PharmacyExemptionStatus,
+  PharmacyOrderListItem,
+  PharmacyOrdersResponse,
+  PharmacyOrderSource,
+  PharmacyOrderStatus,
+} from "./pharmacy.types.js";
 
 const ensureApprovedPharmacy = async (pharmacyId: string) => {
   const pharmacy = await prisma.user.findUnique({
     where: { id: pharmacyId },
-    select: { id: true, fullName: true, email: true, role: true, accountStatus: true, isEmailVerified: true, pharmacyProfile: { select: { pharmacyName: true, registrationNumber: true, city: true, postcode: true } } },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      role: true,
+      accountStatus: true,
+      isEmailVerified: true,
+      pharmacyProfile: {
+        select: {
+          pharmacyName: true,
+          registrationNumber: true,
+          city: true,
+          postcode: true,
+        },
+      },
+    },
   });
 
   if (!pharmacy) throw new AppError("Pharmacy account not found", 404);
@@ -14,8 +41,7 @@ const ensureApprovedPharmacy = async (pharmacyId: string) => {
   if (pharmacy.accountStatus !== "ACTIVE" && pharmacy.accountStatus !== "APPROVED") throw new AppError("Pharmacy account is not approved yet", 403);
   if (!pharmacy.pharmacyProfile) throw new AppError("Pharmacy profile is unavailable", 404);
 
-  const pharmacyProfile = pharmacy.pharmacyProfile;
-  return { ...pharmacy, pharmacyProfile };
+  return { ...pharmacy, pharmacyProfile: pharmacy.pharmacyProfile };
 };
 
 const orderListInclude = {
@@ -38,14 +64,108 @@ const formatOrderListItem = (order: any): PharmacyOrderListItem => ({
   updatedAt: order.updatedAt,
   patient: { id: order.patient.id, fullName: order.patient.fullName },
   doctor: order.doctor ? { id: order.doctor.id, fullName: order.doctor.fullName } : null,
-  payment: order.payment ? { chargePreference: order.payment.chargePreference, status: order.payment.status, amountPence: order.payment.amountPence, currency: order.payment.currency } : null,
+  payment: order.payment
+    ? {
+        chargePreference: order.payment.chargePreference,
+        status: order.payment.status,
+        amountPence: order.payment.amountPence,
+        currency: order.payment.currency,
+      }
+    : null,
 });
+
+const exemptionListSelect = {
+  id: true,
+  chargePreference: true,
+  exemptionType: true,
+  referenceNumber: true,
+  evidenceDocumentUrls: true,
+  expiresAt: true,
+  status: true,
+  verifiedAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+  updatedAt: true,
+  patient: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      patientProfile: {
+        select: {
+          phoneNumber: true,
+          addressLine: true,
+          postcode: true,
+        },
+      },
+    },
+  },
+} as const;
+
+const getDocumentFileName = (storedPath: string) => path.basename(storedPath);
+
+const formatExemptionListItem = (evidence: any): PharmacyExemptionReviewListItem => ({
+  id: evidence.id,
+  chargePreference: evidence.chargePreference,
+  exemptionType: evidence.exemptionType,
+  referenceNumber: evidence.referenceNumber,
+  expiresAt: evidence.expiresAt,
+  status: evidence.status,
+  documentCount: evidence.evidenceDocumentUrls.length,
+  createdAt: evidence.createdAt,
+  updatedAt: evidence.updatedAt,
+  patient: {
+    id: evidence.patient.id,
+    fullName: evidence.patient.fullName,
+    email: evidence.patient.email,
+  },
+});
+
+const formatExemptionDetail = (evidence: any): PharmacyExemptionReviewDetail => ({
+  ...formatExemptionListItem(evidence),
+  verifiedAt: evidence.verifiedAt,
+  rejectedAt: evidence.rejectedAt,
+  rejectionReason: evidence.rejectionReason,
+  documents: evidence.evidenceDocumentUrls.map((storedPath: string, index: number) => ({
+    index,
+    fileName: getDocumentFileName(storedPath),
+  })),
+  patient: {
+    id: evidence.patient.id,
+    fullName: evidence.patient.fullName,
+    email: evidence.patient.email,
+    phoneNumber: evidence.patient.patientProfile?.phoneNumber ?? null,
+    addressLine: evidence.patient.patientProfile?.addressLine ?? null,
+    postcode: evidence.patient.patientProfile?.postcode ?? null,
+  },
+});
+
+const getExemptionEvidenceOrThrow = async (pharmacyId: string, evidenceId: string) => {
+  const evidence = await prisma.patientPharmacyExemptionEvidence.findFirst({
+    where: { id: evidenceId, pharmacyId },
+    select: exemptionListSelect,
+  });
+
+  if (!evidence) throw new AppError("Exemption evidence was not found for this pharmacy", 404);
+  return evidence;
+};
 
 export const pharmacyService = {
   async getDashboard(pharmacyId: string): Promise<PharmacyDashboardResponse> {
     const pharmacy = await ensureApprovedPharmacy(pharmacyId);
 
-    const [newOrders, preparing, ready, completed, doctorPrescriptions, patientSubmissions, paymentPending, recentOrders] = await Promise.all([
+    const [
+      newOrders,
+      preparing,
+      ready,
+      completed,
+      doctorPrescriptions,
+      patientSubmissions,
+      paymentPending,
+      exemptionPending,
+      recentOrders,
+    ] = await Promise.all([
       prisma.medicineOrder.count({ where: { pharmacyId, status: "RECEIVED" } }),
       prisma.medicineOrder.count({ where: { pharmacyId, status: "PREPARING" } }),
       prisma.medicineOrder.count({ where: { pharmacyId, status: "READY" } }),
@@ -53,7 +173,13 @@ export const pharmacyService = {
       prisma.medicineOrder.count({ where: { pharmacyId, orderSource: "DOCTOR_PRESCRIPTION" } }),
       prisma.medicineOrder.count({ where: { pharmacyId, orderSource: "PATIENT_SUBMISSION" } }),
       prisma.prescriptionPayment.count({ where: { order: { pharmacyId }, status: "PENDING" } }),
-      prisma.medicineOrder.findMany({ where: { pharmacyId }, include: orderListInclude, orderBy: { createdAt: "desc" }, take: 5 }),
+      prisma.patientPharmacyExemptionEvidence.count({ where: { pharmacyId, status: "PENDING" } }),
+      prisma.medicineOrder.findMany({
+        where: { pharmacyId },
+        include: orderListInclude,
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
     ]);
 
     return {
@@ -65,12 +191,24 @@ export const pharmacyService = {
         city: pharmacy.pharmacyProfile.city,
         postcode: pharmacy.pharmacyProfile.postcode,
       },
-      counts: { newOrders, preparing, ready, completed, doctorPrescriptions, patientSubmissions, paymentPending },
+      counts: {
+        newOrders,
+        preparing,
+        ready,
+        completed,
+        doctorPrescriptions,
+        patientSubmissions,
+        paymentPending,
+        exemptionPending,
+      },
       recentOrders: recentOrders.map(formatOrderListItem),
     };
   },
 
-  async listOrders(pharmacyId: string, options: { source?: PharmacyOrderSource; status?: PharmacyOrderStatus; limit: number }): Promise<PharmacyOrdersResponse> {
+  async listOrders(
+    pharmacyId: string,
+    options: { source?: PharmacyOrderSource; status?: PharmacyOrderStatus; limit: number },
+  ): Promise<PharmacyOrdersResponse> {
     await ensureApprovedPharmacy(pharmacyId);
 
     const where = {
@@ -81,7 +219,12 @@ export const pharmacyService = {
 
     const [total, orders] = await Promise.all([
       prisma.medicineOrder.count({ where }),
-      prisma.medicineOrder.findMany({ where, include: orderListInclude, orderBy: { createdAt: "desc" }, take: options.limit }),
+      prisma.medicineOrder.findMany({
+        where,
+        include: orderListInclude,
+        orderBy: { createdAt: "desc" },
+        take: options.limit,
+      }),
     ]);
 
     return { total, orders: orders.map(formatOrderListItem) };
@@ -116,7 +259,13 @@ export const pharmacyService = {
             id: true,
             fullName: true,
             email: true,
-            patientProfile: { select: { phoneNumber: true, addressLine: true, postcode: true } },
+            patientProfile: {
+              select: {
+                phoneNumber: true,
+                addressLine: true,
+                postcode: true,
+              },
+            },
           },
         },
 
@@ -209,7 +358,113 @@ export const pharmacyService = {
     });
 
     if (!order) throw new AppError("Order not found for this pharmacy", 404);
-
     return { order };
+  },
+
+  async listExemptionReviews(
+    pharmacyId: string,
+    options: { status: PharmacyExemptionStatus; limit: number },
+  ): Promise<PharmacyExemptionReviewsResponse> {
+    await ensureApprovedPharmacy(pharmacyId);
+
+    const where = { pharmacyId, status: options.status };
+
+    const [total, reviews] = await Promise.all([
+      prisma.patientPharmacyExemptionEvidence.count({ where }),
+      prisma.patientPharmacyExemptionEvidence.findMany({
+        where,
+        select: exemptionListSelect,
+        orderBy: { createdAt: "desc" },
+        take: options.limit,
+      }),
+    ]);
+
+    return { total, reviews: reviews.map(formatExemptionListItem) };
+  },
+
+  async getExemptionReview(pharmacyId: string, evidenceId: string) {
+    await ensureApprovedPharmacy(pharmacyId);
+    const evidence = await getExemptionEvidenceOrThrow(pharmacyId, evidenceId);
+    return { review: formatExemptionDetail(evidence) };
+  },
+
+  async getExemptionEvidenceDocument(pharmacyId: string, evidenceId: string, documentIndex: number) {
+    await ensureApprovedPharmacy(pharmacyId);
+    const evidence = await getExemptionEvidenceOrThrow(pharmacyId, evidenceId);
+
+    const storedPath = evidence.evidenceDocumentUrls[documentIndex];
+    if (!storedPath) throw new AppError("Evidence document was not found", 404);
+
+    return {
+      storedPath,
+      fileName: getDocumentFileName(storedPath),
+    };
+  },
+
+  async verifyExemptionEvidence(pharmacyId: string, evidenceId: string) {
+    await ensureApprovedPharmacy(pharmacyId);
+    const current = await getExemptionEvidenceOrThrow(pharmacyId, evidenceId);
+
+    if (current.status !== "PENDING") throw new AppError("Only pending exemption evidence can be verified", 409);
+
+    if (current.expiresAt && current.expiresAt.getTime() < Date.now()) {
+      throw new AppError("This exemption evidence has expired and cannot be verified", 409);
+    }
+
+    const now = new Date();
+
+    const updated = await prisma.$transaction(async tx => {
+      const result = await tx.patientPharmacyExemptionEvidence.updateMany({
+        where: { id: evidenceId, pharmacyId, status: "PENDING" },
+        data: {
+          status: "VERIFIED",
+          verifiedByPharmacyId: pharmacyId,
+          verifiedAt: now,
+          rejectedAt: null,
+          rejectionReason: null,
+        },
+      });
+
+      if (result.count === 0) throw new AppError("This exemption evidence has already been reviewed", 409);
+
+      return tx.patientPharmacyExemptionEvidence.findFirstOrThrow({
+        where: { id: evidenceId, pharmacyId },
+        select: exemptionListSelect,
+      });
+    });
+
+    return { review: formatExemptionDetail(updated) };
+  },
+
+  async rejectExemptionEvidence(pharmacyId: string, evidenceId: string, reason: string) {
+    await ensureApprovedPharmacy(pharmacyId);
+    const current = await getExemptionEvidenceOrThrow(pharmacyId, evidenceId);
+
+    if (current.status !== "PENDING") throw new AppError("Only pending exemption evidence can be rejected", 409);
+
+    const rejectionReason = reason.trim();
+    const now = new Date();
+
+    const updated = await prisma.$transaction(async tx => {
+      const result = await tx.patientPharmacyExemptionEvidence.updateMany({
+        where: { id: evidenceId, pharmacyId, status: "PENDING" },
+        data: {
+          status: "REJECTED",
+          verifiedByPharmacyId: pharmacyId,
+          verifiedAt: null,
+          rejectedAt: now,
+          rejectionReason,
+        },
+      });
+
+      if (result.count === 0) throw new AppError("This exemption evidence has already been reviewed", 409);
+
+      return tx.patientPharmacyExemptionEvidence.findFirstOrThrow({
+        where: { id: evidenceId, pharmacyId },
+        select: exemptionListSelect,
+      });
+    });
+
+    return { review: formatExemptionDetail(updated) };
   },
 };
