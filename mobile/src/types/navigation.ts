@@ -74,6 +74,11 @@ export type PharmacyOrderSource =
   | "REFILL_REQUEST"
   | "MANUAL_REQUEST";
 
+export type PharmacyExemptionStatus =
+  | "PENDING"
+  | "VERIFIED"
+  | "REJECTED";
+
 export type RootStackParamList = {
   Splash: undefined;
   Welcome: undefined;
@@ -84,8 +89,20 @@ export type RootStackParamList = {
   PharmacySignup: undefined;
   EmailVerification: { email?: string };
   ForgotPassword: undefined;
-  DoctorPendingApproval: { user?: any; email?: string } | undefined;
-  PharmacyPendingApproval: { user?: any; email?: string } | undefined;
+
+  DoctorPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
+  PharmacyPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
 
   PatientTabs:
     | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
@@ -110,6 +127,16 @@ export type RootStackParamList = {
 
   PharmacyOrderDetail: {
     orderId: string;
+  };
+
+  PharmacyExemptionReviews:
+    | {
+        status?: PharmacyExemptionStatus;
+      }
+    | undefined;
+
+  PharmacyExemptionReview: {
+    evidenceId: string;
   };
 
   Notifications: undefined;

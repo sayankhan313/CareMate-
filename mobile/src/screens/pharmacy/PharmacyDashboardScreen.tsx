@@ -31,10 +31,7 @@ import {
   Truck,
   Upload,
 } from "lucide-react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   pharmacyApi,
@@ -44,10 +41,7 @@ import {
 import { tokenStorage } from "../../services/tokenStorage";
 import type { RootStackParamList } from "../../types/navigation";
 
-type Props = NativeStackScreenProps<
-  RootStackParamList,
-  "PharmacyDashboard"
->;
+type Props = NativeStackScreenProps<RootStackParamList, "PharmacyDashboard">;
 
 type PharmacyQuickAction = {
   key: string;
@@ -87,10 +81,7 @@ const elevate = (level: 1 | 2 | 3 = 2) => {
   return {
     elevation,
     shadowColor: "#172033",
-    shadowOffset: {
-      width: 0,
-      height: level === 1 ? 2 : 4,
-    },
+    shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
     shadowOpacity: Platform.OS === "android" ? 0 : level === 1 ? 0.06 : 0.1,
     shadowRadius: level === 1 ? 4 : 9,
   };
@@ -101,16 +92,13 @@ const getGreetingText = () => {
 
   if (currentHour < 12) return "Good morning";
   if (currentHour < 18) return "Good afternoon";
-
   return "Good evening";
 };
 
 const formatDateTime = (value: string) => {
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "Recently";
-  }
+  if (Number.isNaN(date.getTime())) return "Recently";
 
   return date.toLocaleString("en-GB", {
     day: "2-digit",
@@ -120,134 +108,67 @@ const formatDateTime = (value: string) => {
   });
 };
 
-const getSourceLabel = (
-  source: PharmacyOrderListItem["source"]
-) => {
-  if (source === "DOCTOR_PRESCRIPTION") {
-    return "Doctor prescription";
-  }
-
-  if (source === "PATIENT_SUBMISSION") {
-    return "Patient submission";
-  }
-
-  if (source === "REFILL_REQUEST") {
-    return "Refill request";
-  }
-
+const getSourceLabel = (source: PharmacyOrderListItem["source"]) => {
+  if (source === "DOCTOR_PRESCRIPTION") return "Doctor prescription";
+  if (source === "PATIENT_SUBMISSION") return "Patient submission";
+  if (source === "REFILL_REQUEST") return "Refill request";
   return "Manual request";
 };
 
-const getStatusTone = (
-  status: PharmacyOrderListItem["status"]
-) => {
-  if (
-    status === "READY" ||
-    status === "COLLECTED" ||
-    status === "DELIVERED"
-  ) {
-    return {
-      background: SUCCESS_LIGHT,
-      text: "#167A58",
-    };
+const getStatusTone = (status: PharmacyOrderListItem["status"]) => {
+  if (status === "READY" || status === "COLLECTED" || status === "DELIVERED") {
+    return { background: SUCCESS_LIGHT, text: "#167A58" };
   }
 
-  if (
-    status === "RECEIVED" ||
-    status === "PREPARING" ||
-    status === "ACCEPTED"
-  ) {
-    return {
-      background: WARNING_LIGHT,
-      text: WARNING_DARK,
-    };
+  if (status === "RECEIVED" || status === "PREPARING" || status === "ACCEPTED") {
+    return { background: WARNING_LIGHT, text: WARNING_DARK };
   }
 
-  if (
-    status === "REJECTED" ||
-    status === "CANCELLED" ||
-    status === "OUT_OF_STOCK"
-  ) {
-    return {
-      background: DANGER_LIGHT,
-      text: "#B42318",
-    };
+  if (status === "REJECTED" || status === "CANCELLED" || status === "OUT_OF_STOCK") {
+    return { background: DANGER_LIGHT, text: "#B42318" };
   }
 
-  return {
-    background: BLUE_LIGHT,
-    text: BLUE_DARK,
-  };
+  return { background: BLUE_LIGHT, text: BLUE_DARK };
 };
 
-const formatStatus = (
-  status: PharmacyOrderListItem["status"]
-) => {
+const formatStatus = (status: PharmacyOrderListItem["status"]) => {
   return status
     .toLowerCase()
     .split("_")
-    .map(part => {
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 };
 
-export const PharmacyDashboardScreen = ({
-  navigation,
-  route,
-}: Props) => {
+export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
 
-  const [dashboard, setDashboard] =
-    useState<PharmacyDashboardData | null>(null);
+  const [dashboard, setDashboard] = useState<PharmacyDashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const [isLoading, setIsLoading] =
-    useState(true);
+  const loadDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    try {
+      if (mode === "initial") setIsLoading(true);
+      if (mode === "refresh") setIsRefreshing(true);
 
-  const [isRefreshing, setIsRefreshing] =
-    useState(false);
+      setErrorMessage("");
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
-
-  const loadDashboard = useCallback(
-    async (
-      mode: "initial" | "refresh" = "initial"
-    ) => {
-      try {
-        if (mode === "initial") {
-          setIsLoading(true);
-        }
-
-        if (mode === "refresh") {
-          setIsRefreshing(true);
-        }
-
-        setErrorMessage("");
-
-        const result =
-          await pharmacyApi.getDashboard();
-
-        setDashboard(result);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to load pharmacy dashboard.";
-
-        setErrorMessage(message);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    []
-  );
+      const result = await pharmacyApi.getDashboard();
+      setDashboard(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load pharmacy dashboard.";
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       void loadDashboard("initial");
-    }, [loadDashboard])
+    }, [loadDashboard]),
   );
 
   const logout = async () => {
@@ -256,12 +177,8 @@ export const PharmacyDashboardScreen = ({
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [
-          {
-            name: "Login",
-          },
-        ],
-      })
+        routes: [{ name: "Login" }],
+      }),
     );
   };
 
@@ -286,26 +203,22 @@ export const PharmacyDashboardScreen = ({
   };
 
   const openPaymentChecks = () => {
-    Alert.alert(
-      "Payment checks",
-      "Payment and exemption management will be connected in the next pharmacy workflow step."
-    );
+    navigation.navigate("PharmacyExemptionReviews", {
+      status: "PENDING",
+    });
   };
 
   const openInventory = () => {
     Alert.alert(
       "Inventory",
-      "Pharmacy inventory management will be connected in the next workflow step."
+      "Pharmacy inventory management will be connected in the next workflow step.",
     );
   };
 
-  const openOrderDetail = (
-    order: PharmacyOrderListItem
-  ) => {
-    Alert.alert(
-      "Order details",
-      `Order details for ${order.patient.fullName} will be connected in the next step.`
-    );
+  const openOrderDetail = (order: PharmacyOrderListItem) => {
+    navigation.navigate("PharmacyOrderDetail", {
+      orderId: order.id,
+    });
   };
 
   const pharmacyName =
@@ -326,102 +239,60 @@ export const PharmacyDashboardScreen = ({
       doctorPrescriptions: 0,
       patientSubmissions: 0,
       paymentPending: 0,
+      exemptionPending: 0,
     };
 
   const quickActions: PharmacyQuickAction[] = [
     {
       key: "doctor-prescriptions",
       title: "Doctor Rx",
-      icon: (
-        <BadgeCheck
-          size={23}
-          color={PHARMACY_PRIMARY}
-          strokeWidth={2.6}
-        />
-      ),
+      icon: <BadgeCheck size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
       badgeCount: counts.doctorPrescriptions,
       onPress: openDoctorPrescriptions,
     },
     {
       key: "patient-submissions",
       title: "Uploads",
-      icon: (
-        <Upload
-          size={23}
-          color={PHARMACY_PRIMARY}
-          strokeWidth={2.6}
-        />
-      ),
+      icon: <Upload size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
       badgeCount: counts.patientSubmissions,
       onPress: openPatientSubmissions,
     },
     {
       key: "orders",
       title: "Orders",
-      icon: (
-        <ClipboardList
-          size={23}
-          color={PHARMACY_PRIMARY}
-          strokeWidth={2.6}
-        />
-      ),
+      icon: <ClipboardList size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
       badgeCount: counts.newOrders,
       onPress: openAllOrders,
     },
     {
-      key: "payments",
-      title: "Payments",
-      icon: (
-        <CreditCard
-          size={23}
-          color={WARNING}
-          strokeWidth={2.6}
-        />
-      ),
-      badgeCount: counts.paymentPending,
+      key: "exemptions",
+      title: "Exemptions",
+      icon: <CreditCard size={23} color={WARNING} strokeWidth={2.6} />,
+      badgeCount: counts.exemptionPending,
       onPress: openPaymentChecks,
     },
     {
       key: "inventory",
       title: "Inventory",
-      icon: (
-        <Pill
-          size={23}
-          color={PHARMACY_PRIMARY}
-          strokeWidth={2.6}
-        />
-      ),
+      icon: <Pill size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
       onPress: openInventory,
     },
   ];
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={["top"]}
-    >
-      <StatusBar
-        backgroundColor={BACKGROUND}
-        barStyle="dark-content"
-      />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
 
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>
-              {getGreetingText()}
-            </Text>
+            <Text style={styles.greeting}>{getGreetingText()}</Text>
 
-            <Text
-              style={styles.pharmacyName}
-              numberOfLines={1}
-            >
+            <Text style={styles.pharmacyName} numberOfLines={1}>
               {pharmacyName}
             </Text>
 
-            <Text style={styles.headerSubtitle}>
-              {pharmacyLocation}
-            </Text>
+            <Text style={styles.headerSubtitle}>{pharmacyLocation}</Text>
           </View>
 
           <TouchableOpacity
@@ -429,11 +300,7 @@ export const PharmacyDashboardScreen = ({
             activeOpacity={0.86}
             onPress={logout}
           >
-            <LogOut
-              size={20}
-              color={PHARMACY_PRIMARY}
-              strokeWidth={2.6}
-            />
+            <LogOut size={20} color={PHARMACY_PRIMARY} strokeWidth={2.6} />
           </TouchableOpacity>
         </View>
 
@@ -441,20 +308,13 @@ export const PharmacyDashboardScreen = ({
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            {
-              paddingBottom: Math.max(
-                insets.bottom + 40,
-                56
-              ),
-            },
+            { paddingBottom: Math.max(insets.bottom + 40, 56) },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() =>
-                void loadDashboard("refresh")
-              }
+              onRefresh={() => void loadDashboard("refresh")}
               tintColor={PHARMACY_PRIMARY}
               colors={[PHARMACY_PRIMARY]}
             />
@@ -462,98 +322,51 @@ export const PharmacyDashboardScreen = ({
         >
           {isLoading ? (
             <View style={styles.stateCard}>
-              <ActivityIndicator
-                color={PHARMACY_PRIMARY}
-              />
-
-              <Text style={styles.stateText}>
-                Loading pharmacy dashboard...
-              </Text>
+              <ActivityIndicator color={PHARMACY_PRIMARY} />
+              <Text style={styles.stateText}>Loading pharmacy dashboard...</Text>
             </View>
           ) : null}
 
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
               <View style={styles.errorIcon}>
-                <RefreshCw
-                  size={25}
-                  color={DANGER}
-                  strokeWidth={2.6}
-                />
+                <RefreshCw size={25} color={DANGER} strokeWidth={2.6} />
               </View>
 
-              <Text style={styles.errorTitle}>
-                Unable to load dashboard
-              </Text>
-
-              <Text style={styles.errorText}>
-                {errorMessage}
-              </Text>
+              <Text style={styles.errorTitle}>Unable to load dashboard</Text>
+              <Text style={styles.errorText}>{errorMessage}</Text>
 
               <TouchableOpacity
                 style={styles.retryButton}
                 activeOpacity={0.86}
-                onPress={() =>
-                  void loadDashboard("initial")
-                }
+                onPress={() => void loadDashboard("initial")}
               >
-                <RefreshCw
-                  size={17}
-                  color={SURFACE}
-                  strokeWidth={2.5}
-                />
-
-                <Text style={styles.retryText}>
-                  Retry
-                </Text>
+                <RefreshCw size={17} color={SURFACE} strokeWidth={2.5} />
+                <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
-          {!isLoading &&
-          !errorMessage &&
-          dashboard ? (
+          {!isLoading && !errorMessage && dashboard ? (
             <>
               <LinearGradient
-                colors={[
-                  PHARMACY_PRIMARY,
-                  PHARMACY_SECONDARY,
-                ]}
-                start={{
-                  x: 0,
-                  y: 0,
-                }}
-                end={{
-                  x: 1,
-                  y: 1,
-                }}
+                colors={[PHARMACY_PRIMARY, PHARMACY_SECONDARY]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.heroCard}
               >
                 <View style={styles.heroTopRow}>
                   <View style={styles.heroIcon}>
-                    <Store
-                      size={26}
-                      color={PHARMACY_PRIMARY}
-                      strokeWidth={2.7}
-                    />
+                    <Store size={26} color={PHARMACY_PRIMARY} strokeWidth={2.7} />
                   </View>
 
                   <View style={styles.heroBadge}>
-                    <ShieldCheck
-                      size={14}
-                      color={SURFACE}
-                      strokeWidth={2.5}
-                    />
-
-                    <Text style={styles.heroBadgeText}>
-                      Verified Workspace
-                    </Text>
+                    <ShieldCheck size={14} color={SURFACE} strokeWidth={2.5} />
+                    <Text style={styles.heroBadgeText}>Verified Workspace</Text>
                   </View>
                 </View>
 
-                <Text style={styles.heroTitle}>
-                  Pharmacy Dashboard
-                </Text>
+                <Text style={styles.heroTitle}>Pharmacy Dashboard</Text>
 
                 <Text style={styles.heroDescription}>
                   Review prescriptions, manage medicine orders and monitor
@@ -561,24 +374,15 @@ export const PharmacyDashboardScreen = ({
                 </Text>
 
                 <View style={styles.heroStats}>
-                  <HeroStat
-                    value={counts.newOrders}
-                    label="New orders"
-                  />
+                  <HeroStat value={counts.newOrders} label="New orders" />
 
                   <View style={styles.heroDivider} />
 
-                  <HeroStat
-                    value={counts.preparing}
-                    label="Preparing"
-                  />
+                  <HeroStat value={counts.preparing} label="Preparing" />
 
                   <View style={styles.heroDivider} />
 
-                  <HeroStat
-                    value={counts.ready}
-                    label="Ready"
-                  />
+                  <HeroStat value={counts.ready} label="Ready" />
                 </View>
               </LinearGradient>
 
@@ -605,10 +409,7 @@ export const PharmacyDashboardScreen = ({
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>
-                    Recent Orders
-                  </Text>
-
+                  <Text style={styles.sectionTitle}>Recent Orders</Text>
                   <Text style={styles.sectionSubtitle}>
                     Latest prescriptions assigned to your pharmacy
                   </Text>
@@ -618,9 +419,7 @@ export const PharmacyDashboardScreen = ({
                   activeOpacity={0.8}
                   onPress={openAllOrders}
                 >
-                  <Text style={styles.sectionLink}>
-                    View all
-                  </Text>
+                  <Text style={styles.sectionLink}>View all</Text>
                 </TouchableOpacity>
               </View>
 
@@ -630,24 +429,17 @@ export const PharmacyDashboardScreen = ({
                     <OrderCard
                       key={order.id}
                       order={order}
-                      onPress={() =>
-                        openOrderDetail(order)
-                      }
+                      onPress={() => openOrderDetail(order)}
                     />
                   ))
                 ) : (
-                  <EmptyOrders
-                    onPress={openAllOrders}
-                  />
+                  <EmptyOrders onPress={openAllOrders} />
                 )}
               </View>
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>
-                    Fulfilment
-                  </Text>
-
+                  <Text style={styles.sectionTitle}>Fulfilment</Text>
                   <Text style={styles.sectionSubtitle}>
                     Current pharmacy order progress
                   </Text>
@@ -721,13 +513,8 @@ const HeroStat = ({
 }) => {
   return (
     <View style={styles.heroStat}>
-      <Text style={styles.heroStatValue}>
-        {value}
-      </Text>
-
-      <Text style={styles.heroStatLabel}>
-        {label}
-      </Text>
+      <Text style={styles.heroStatValue}>{value}</Text>
+      <Text style={styles.heroStatLabel}>{label}</Text>
     </View>
   );
 };
@@ -752,22 +539,16 @@ const QuickAction = ({
       <View style={styles.quickActionIcon}>
         {icon}
 
-        {badgeCount !== undefined &&
-        badgeCount > 0 ? (
+        {badgeCount !== undefined && badgeCount > 0 ? (
           <View style={styles.quickActionBadge}>
             <Text style={styles.quickActionBadgeText}>
-              {badgeCount > 99
-                ? "99+"
-                : badgeCount}
+              {badgeCount > 99 ? "99+" : badgeCount}
             </Text>
           </View>
         ) : null}
       </View>
 
-      <Text
-        style={styles.quickActionText}
-        numberOfLines={1}
-      >
+      <Text style={styles.quickActionText} numberOfLines={1}>
         {title}
       </Text>
     </TouchableOpacity>
@@ -781,12 +562,8 @@ const OrderCard = ({
   order: PharmacyOrderListItem;
   onPress: () => void;
 }) => {
-  const statusTone =
-    getStatusTone(order.status);
-
-  const isDoctorPrescription =
-    order.source ===
-    "DOCTOR_PRESCRIPTION";
+  const statusTone = getStatusTone(order.status);
+  const isDoctorPrescription = order.source === "DOCTOR_PRESCRIPTION";
 
   return (
     <TouchableOpacity
@@ -818,26 +595,16 @@ const OrderCard = ({
       </View>
 
       <View style={styles.orderContent}>
-        <Text
-          style={styles.orderPatient}
-          numberOfLines={1}
-        >
+        <Text style={styles.orderPatient} numberOfLines={1}>
           {order.patient.fullName}
         </Text>
 
-        <Text
-          style={styles.orderMedicine}
-          numberOfLines={1}
-        >
+        <Text style={styles.orderMedicine} numberOfLines={1}>
           {order.medicineName}
         </Text>
 
-        <Text
-          style={styles.orderMeta}
-          numberOfLines={1}
-        >
-          {getSourceLabel(order.source)} ·{" "}
-          {formatDateTime(order.createdAt)}
+        <Text style={styles.orderMeta} numberOfLines={1}>
+          {getSourceLabel(order.source)} · {formatDateTime(order.createdAt)}
         </Text>
       </View>
 
@@ -845,19 +612,13 @@ const OrderCard = ({
         <View
           style={[
             styles.statusChip,
-            {
-              backgroundColor:
-                statusTone.background,
-            },
+            { backgroundColor: statusTone.background },
           ]}
         >
           <Text
             style={[
               styles.statusChipText,
-              {
-                color:
-                  statusTone.text,
-              },
+              { color: statusTone.text },
             ]}
           >
             {formatStatus(order.status)}
@@ -898,29 +659,19 @@ const FulfilmentRow = ({
       <View
         style={[
           styles.fulfilmentIcon,
-          {
-            backgroundColor:
-              iconBackground,
-          },
+          { backgroundColor: iconBackground },
         ]}
       >
         {icon}
       </View>
 
       <View style={styles.fulfilmentText}>
-        <Text style={styles.fulfilmentTitle}>
-          {title}
-        </Text>
-
-        <Text style={styles.fulfilmentSubtitle}>
-          {subtitle}
-        </Text>
+        <Text style={styles.fulfilmentTitle}>{title}</Text>
+        <Text style={styles.fulfilmentSubtitle}>{subtitle}</Text>
       </View>
 
       <View style={styles.fulfilmentValue}>
-        <Text style={styles.fulfilmentValueText}>
-          {value}
-        </Text>
+        <Text style={styles.fulfilmentValueText}>{value}</Text>
       </View>
 
       <ChevronRight
@@ -951,9 +702,7 @@ const EmptyOrders = ({
         />
       </View>
 
-      <Text style={styles.emptyTitle}>
-        No pharmacy orders yet
-      </Text>
+      <Text style={styles.emptyTitle}>No pharmacy orders yet</Text>
 
       <Text style={styles.emptyText}>
         Doctor prescriptions and patient submissions routed to this pharmacy

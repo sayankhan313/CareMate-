@@ -75,6 +75,8 @@ import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
 import { PharmacyDashboardScreen } from "../screens/pharmacy/PharmacyDashboardScreen";
 import PharmacyOrdersScreen from "../screens/pharmacy/PharmacyOrdersScreen";
 import PharmacyOrderDetailScreen from "../screens/pharmacy/PharmacyOrderDetailScreen";
+import PharmacyExemptionReviewsScreen from "../screens/pharmacy/PharmacyExemptionReviewsScreen";
+import PharmacyExemptionReviewScreen from "../screens/pharmacy/PharmacyExemptionReviewScreen";
 
 import { NotificationsScreen } from "../screens/common/NotificationsScreen";
 import { FCMInitializer } from "../components/common/FCMInitializer";
@@ -112,41 +114,29 @@ const DoctorAlertDetailStackScreen = DoctorAlertDetailScreen as ComponentType<an
 const DoctorPatientReportsStackScreen = DoctorPatientReportsScreen as ComponentType<any>;
 const DoctorReportReviewsStackScreen = DoctorReportReviewsScreen as ComponentType<any>;
 const DoctorReportReviewStackScreen = DoctorReportReviewScreen as ComponentType<any>;
-const DoctorSelectPrescriptionPatientStackScreen =
-  DoctorSelectPrescriptionPatientScreen as ComponentType<any>;
+const DoctorSelectPrescriptionPatientStackScreen = DoctorSelectPrescriptionPatientScreen as ComponentType<any>;
 const DoctorPrescriptionStackScreen = DoctorPrescriptionScreen as ComponentType<any>;
-const DoctorSelectNotePatientStackScreen =
-  DoctorSelectNotePatientScreen as ComponentType<any>;
+const DoctorSelectNotePatientStackScreen = DoctorSelectNotePatientScreen as ComponentType<any>;
 const DoctorAddNoteStackScreen = DoctorAddNoteScreen as ComponentType<any>;
-const DoctorAvailabilityStackScreen =
-  DoctorAvailabilityScreen as ComponentType<any>;
-const DoctorMedicineReviewPoolStackScreen =
-  DoctorMedicineReviewPoolScreen as ComponentType<any>;
-const DoctorMedicineReviewPoolDetailStackScreen =
-  DoctorMedicineReviewPoolDetailScreen as ComponentType<any>;
+const DoctorAvailabilityStackScreen = DoctorAvailabilityScreen as ComponentType<any>;
+const DoctorMedicineReviewPoolStackScreen = DoctorMedicineReviewPoolScreen as ComponentType<any>;
+const DoctorMedicineReviewPoolDetailStackScreen = DoctorMedicineReviewPoolDetailScreen as ComponentType<any>;
 const DoctorProfileStackScreen = DoctorProfileScreen as ComponentType<any>;
 
-const PharmacyOrdersStackScreen =
-  PharmacyOrdersScreen as ComponentType<any>;
-  const PharmacyOrderDetailStackScreen =
-  PharmacyOrderDetailScreen as ComponentType<any>;
+const PharmacyOrdersStackScreen = PharmacyOrdersScreen as ComponentType<any>;
+const PharmacyOrderDetailStackScreen = PharmacyOrderDetailScreen as ComponentType<any>;
+const PharmacyExemptionReviewsStackScreen = PharmacyExemptionReviewsScreen as ComponentType<any>;
+const PharmacyExemptionReviewStackScreen = PharmacyExemptionReviewScreen as ComponentType<any>;
 
 const AdminProfileStackScreen = AdminProfileScreen as ComponentType<any>;
 const ReminderSettingsStackScreen = ReminderSettingsScreen as ComponentType<any>;
-const SafetyResponseSettingsStackScreen =
-  SafetyResponseSettingsScreen as ComponentType<any>;
-const LanguageAccessibilityStackScreen =
-  LanguageAccessibilityScreen as ComponentType<any>;
-const PrivacySecurityStackScreen =
-  PrivacySecurityScreen as ComponentType<any>;
-const AdminAuditLogsStackScreen =
-  AdminAuditLogsScreen as ComponentType<any>;
-const AdminAuditLogDetailStackScreen =
-  AdminAuditLogDetailScreen as ComponentType<any>;
-const NotificationsStackScreen =
-  NotificationsScreen as ComponentType<any>;
-const ConsultationEndedStackScreen =
-  ConsultationEndedScreen as ComponentType<any>;
+const SafetyResponseSettingsStackScreen = SafetyResponseSettingsScreen as ComponentType<any>;
+const LanguageAccessibilityStackScreen = LanguageAccessibilityScreen as ComponentType<any>;
+const PrivacySecurityStackScreen = PrivacySecurityScreen as ComponentType<any>;
+const AdminAuditLogsStackScreen = AdminAuditLogsScreen as ComponentType<any>;
+const AdminAuditLogDetailStackScreen = AdminAuditLogDetailScreen as ComponentType<any>;
+const NotificationsStackScreen = NotificationsScreen as ComponentType<any>;
+const ConsultationEndedStackScreen = ConsultationEndedScreen as ComponentType<any>;
 
 const SESSION_CHECK_INTERVAL_MS = 15_000;
 const SESSION_PREFERENCE_REFRESH_MS = 60_000;
@@ -204,13 +194,11 @@ const NON_PATIENT_SESSION_ROUTES = new Set([
   "PharmacyDashboard",
   "PharmacyOrders",
   "PharmacyOrderDetail",
+  "PharmacyExemptionReviews",
+  "PharmacyExemptionReview",
 ]);
 
-const PatientSessionBoundary = ({
-  children,
-}: {
-  children: ReactNode;
-}) => {
+const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
   const activeTokenRef = useRef<string | null>(null);
   const timeoutMsRef = useRef<number | null>(null);
   const lastActivityAtRef = useRef(Date.now());
@@ -234,10 +222,7 @@ const PatientSessionBoundary = ({
       return;
     }
 
-    if (
-      (!currentRoute || !PATIENT_SESSION_ROUTES.has(currentRoute)) &&
-      timeoutMsRef.current === null
-    ) {
+    if ((!currentRoute || !PATIENT_SESSION_ROUTES.has(currentRoute)) && timeoutMsRef.current === null) {
       return;
     }
 
@@ -247,8 +232,7 @@ const PatientSessionBoundary = ({
       if (activeTokenRef.current !== token) return;
 
       patientSessionEnabledRef.current = true;
-      timeoutMsRef.current =
-        result.settings.sessionTimeoutMinutes * 60_000;
+      timeoutMsRef.current = result.settings.sessionTimeoutMinutes * 60_000;
     } catch {
       if (activeTokenRef.current !== token) return;
 
@@ -312,10 +296,7 @@ const PatientSessionBoundary = ({
       return;
     }
 
-    if (
-      Date.now() - lastActivityAtRef.current >=
-      timeoutMsRef.current
-    ) {
+    if (Date.now() - lastActivityAtRef.current >= timeoutMsRef.current) {
       void expirePatientSession();
     }
   }, [expirePatientSession]);
@@ -337,9 +318,7 @@ const PatientSessionBoundary = ({
     const applyToken = async (token: string | null) => {
       if (!mounted) return;
 
-      const tokenChanged =
-        activeTokenRef.current !== token;
-
+      const tokenChanged = activeTokenRef.current !== token;
       activeTokenRef.current = token;
 
       if (!token) {
@@ -355,31 +334,21 @@ const PatientSessionBoundary = ({
       await refreshPrivacySettings(token);
     };
 
-    void tokenStorage
-      .getToken()
-      .then(token => applyToken(token));
+    void tokenStorage.getToken().then(token => applyToken(token));
 
-    const unsubscribeToken =
-      tokenStorage.subscribe(token => {
-        void applyToken(token);
-      });
+    const unsubscribeToken = tokenStorage.subscribe(token => {
+      void applyToken(token);
+    });
 
-    const appStateSubscription =
-      AppState.addEventListener("change", nextState => {
-        if (
-          nextState === "active" &&
-          activeTokenRef.current
-        ) {
-          checkSessionExpiry();
-          void refreshPrivacySettings(activeTokenRef.current);
-        }
-      });
+    const appStateSubscription = AppState.addEventListener("change", nextState => {
+      if (nextState === "active" && activeTokenRef.current) {
+        checkSessionExpiry();
+        void refreshPrivacySettings(activeTokenRef.current);
+      }
+    });
 
     const sessionCheckTimer = setInterval(() => {
-      if (
-        activeTokenRef.current &&
-        timeoutMsRef.current === null
-      ) {
+      if (activeTokenRef.current && timeoutMsRef.current === null) {
         void refreshPrivacySettings(activeTokenRef.current);
       }
 
@@ -399,44 +368,31 @@ const PatientSessionBoundary = ({
       clearInterval(sessionCheckTimer);
       clearInterval(preferenceRefreshTimer);
     };
-  }, [
-    checkSessionExpiry,
-    refreshPrivacySettings,
-  ]);
+  }, [checkSessionExpiry, refreshPrivacySettings]);
 
   return (
-    <View
-      style={styles.sessionBoundary}
-      onTouchStart={registerActivity}
-    >
+    <View style={styles.sessionBoundary} onTouchStart={registerActivity}>
       {children}
     </View>
   );
 };
 
 const CriticalVitalWatcher = () => {
-  const { lastSyncedReading } =
-    useHealthConnectDevice();
-
-  const lastHandledReadingIdRef =
-    useRef<string | null>(null);
+  const { lastSyncedReading } = useHealthConnectDevice();
+  const lastHandledReadingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!lastSyncedReading) return;
     if (lastSyncedReading.status !== "CRITICAL") return;
     if (!lastSyncedReading.id) return;
 
-    if (
-      lastHandledReadingIdRef.current ===
-      lastSyncedReading.id
-    ) {
+    if (lastHandledReadingIdRef.current === lastSyncedReading.id) {
       return;
     }
 
     if (!navigationRef.isReady()) return;
 
-    const currentRoute =
-      navigationRef.getCurrentRoute();
+    const currentRoute = navigationRef.getCurrentRoute();
 
     if (
       currentRoute?.name === "SafetyResponse" ||
@@ -446,8 +402,7 @@ const CriticalVitalWatcher = () => {
       return;
     }
 
-    lastHandledReadingIdRef.current =
-      lastSyncedReading.id;
+    lastHandledReadingIdRef.current = lastSyncedReading.id;
 
     navigationRef.navigate("SafetyResponse", {
       vitalReading: lastSyncedReading,
@@ -472,309 +427,77 @@ export const AppNavigator = () => {
                 initialRouteName="Splash"
                 screenOptions={{ headerShown: false }}
               >
-                <Stack.Screen
-                  name="Splash"
-                  component={SplashScreen}
-                />
+                <Stack.Screen name="Splash" component={SplashScreen} />
+                <Stack.Screen name="Welcome" component={WelcomeScreen} />
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+                <Stack.Screen name="PatientSignup" component={PatientSignupScreen} />
+                <Stack.Screen name="DoctorSignup" component={DoctorSignupScreen} />
+                <Stack.Screen name="PharmacySignup" component={PharmacySignupScreen} />
+                <Stack.Screen name="PharmacyPendingApproval" component={PharmacyPendingApprovalScreen} />
+                <Stack.Screen name="DoctorPendingApproval" component={DoctorPendingApprovalScreen} />
+                <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
-                <Stack.Screen
-                  name="Welcome"
-                  component={WelcomeScreen}
-                />
+                <Stack.Screen name="PatientTabs" component={PatientTabNavigator} />
+                <Stack.Screen name="DoctorTabs" component={DoctorTabNavigator} />
 
-                <Stack.Screen
-                  name="Login"
-                  component={LoginScreen}
-                />
+                <Stack.Screen name="DoctorProfile" component={DoctorProfileStackScreen} />
+                <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailStackScreen} />
+                <Stack.Screen name="DoctorAlertDetail" component={DoctorAlertDetailStackScreen} />
+                <Stack.Screen name="DoctorPatientReports" component={DoctorPatientReportsStackScreen} />
+                <Stack.Screen name="DoctorReportReviews" component={DoctorReportReviewsStackScreen} />
+                <Stack.Screen name="DoctorReportReview" component={DoctorReportReviewStackScreen} />
+                <Stack.Screen name="DoctorSelectPrescriptionPatient" component={DoctorSelectPrescriptionPatientStackScreen} />
+                <Stack.Screen name="DoctorPrescription" component={DoctorPrescriptionStackScreen} />
+                <Stack.Screen name="DoctorSelectNotePatient" component={DoctorSelectNotePatientStackScreen} />
+                <Stack.Screen name="DoctorAddNote" component={DoctorAddNoteStackScreen} />
+                <Stack.Screen name="DoctorAvailability" component={DoctorAvailabilityStackScreen} />
+                <Stack.Screen name="DoctorMedicineReviewPool" component={DoctorMedicineReviewPoolStackScreen} />
+                <Stack.Screen name="DoctorMedicineReviewPoolDetail" component={DoctorMedicineReviewPoolDetailStackScreen} />
 
-                <Stack.Screen
-                  name="RoleSelection"
-                  component={RoleSelectionScreen}
-                />
+                <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
+                <Stack.Screen name="AdminProfile" component={AdminProfileStackScreen} />
 
-                <Stack.Screen
-                  name="PatientSignup"
-                  component={PatientSignupScreen}
-                />
+                <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />
+                <Stack.Screen name="PharmacyOrders" component={PharmacyOrdersStackScreen} />
+                <Stack.Screen name="PharmacyOrderDetail" component={PharmacyOrderDetailStackScreen} />
+                <Stack.Screen name="PharmacyExemptionReviews" component={PharmacyExemptionReviewsStackScreen} />
+                <Stack.Screen name="PharmacyExemptionReview" component={PharmacyExemptionReviewStackScreen} />
 
-                <Stack.Screen
-                  name="DoctorSignup"
-                  component={DoctorSignupScreen}
-                />
+                <Stack.Screen name="Notifications" component={NotificationsStackScreen} />
 
-                <Stack.Screen
-                  name="PharmacySignup"
-                  component={PharmacySignupScreen}
-                />
+                <Stack.Screen name="AdminDashboard" component={AdminTabsLegacyScreen} />
+                <Stack.Screen name="AdminDoctorVerificationDetail" component={AdminDoctorVerificationDetailScreen} />
+                <Stack.Screen name="AdminPharmacyVerificationDetail" component={AdminPharmacyVerificationDetailScreen} />
+                <Stack.Screen name="AdminAuditLogs" component={AdminAuditLogsStackScreen} />
+                <Stack.Screen name="AdminAuditLogDetail" component={AdminAuditLogDetailStackScreen} />
+                <Stack.Screen name="AdminRegisterWebView" component={AdminRegisterWebViewScreen} />
 
-                <Stack.Screen
-                  name="PharmacyPendingApproval"
-                  component={PharmacyPendingApprovalScreen}
-                />
+                <Stack.Screen name="PatientProfile" component={PatientProfileScreen} />
+                <Stack.Screen name="EditPatientProfile" component={EditPatientProfileStackScreen} />
+                <Stack.Screen name="MyPharmacies" component={MyPharmaciesStackScreen} />
+                <Stack.Screen name="NotificationPreferences" component={NotificationPreferencesStackScreen} />
+                <Stack.Screen name="ReminderSettings" component={ReminderSettingsStackScreen} />
+                <Stack.Screen name="SafetyResponseSettings" component={SafetyResponseSettingsStackScreen} />
+                <Stack.Screen name="LanguageAccessibility" component={LanguageAccessibilityStackScreen} />
+                <Stack.Screen name="PrivacySecurity" component={PrivacySecurityStackScreen} />
+                <Stack.Screen name="SelectDoctor" component={SelectDoctorStackScreen} />
+                <Stack.Screen name="PatientActiveCalls" component={PatientActiveCallsStackScreen} />
+                <Stack.Screen name="MedicineUpdates" component={MedicineUpdatesStackScreen} />
+                <Stack.Screen name="PatientReports" component={PatientReportsStackScreen} />
+                <Stack.Screen name="PatientUploadReport" component={PatientUploadReportStackScreen} />
 
-                <Stack.Screen
-                  name="DoctorPendingApproval"
-                  component={DoctorPendingApprovalScreen}
-                />
-
-                <Stack.Screen
-                  name="EmailVerification"
-                  component={EmailVerificationScreen}
-                />
-
-                <Stack.Screen
-                  name="ForgotPassword"
-                  component={ForgotPasswordScreen}
-                />
-
-                <Stack.Screen
-                  name="PatientTabs"
-                  component={PatientTabNavigator}
-                />
-
-                <Stack.Screen
-                  name="DoctorTabs"
-                  component={DoctorTabNavigator}
-                />
-
-                <Stack.Screen
-                  name="DoctorProfile"
-                  component={DoctorProfileStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorPatientDetail"
-                  component={DoctorPatientDetailStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorAlertDetail"
-                  component={DoctorAlertDetailStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorPatientReports"
-                  component={DoctorPatientReportsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorReportReviews"
-                  component={DoctorReportReviewsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorReportReview"
-                  component={DoctorReportReviewStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorSelectPrescriptionPatient"
-                  component={DoctorSelectPrescriptionPatientStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorPrescription"
-                  component={DoctorPrescriptionStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorSelectNotePatient"
-                  component={DoctorSelectNotePatientStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorAddNote"
-                  component={DoctorAddNoteStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorAvailability"
-                  component={DoctorAvailabilityStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorMedicineReviewPool"
-                  component={DoctorMedicineReviewPoolStackScreen}
-                />
-
-                <Stack.Screen
-                  name="DoctorMedicineReviewPoolDetail"
-                  component={DoctorMedicineReviewPoolDetailStackScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminTabs"
-                  component={AdminTabNavigator}
-                />
-
-                <Stack.Screen
-                  name="AdminProfile"
-                  component={AdminProfileStackScreen}
-                />
-
-                <Stack.Screen
-                  name="PharmacyDashboard"
-                  component={PharmacyDashboardScreen}
-                />
-
-                <Stack.Screen
-                  name="PharmacyOrders"
-                  component={PharmacyOrdersStackScreen}
-                />
-                <Stack.Screen
-                  name="PharmacyOrderDetail"
-                  component={PharmacyOrderDetailStackScreen}
-                />
-
-                <Stack.Screen
-                  name="Notifications"
-                  component={NotificationsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminDashboard"
-                  component={AdminTabsLegacyScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminDoctorVerificationDetail"
-                  component={AdminDoctorVerificationDetailScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminPharmacyVerificationDetail"
-                  component={AdminPharmacyVerificationDetailScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminAuditLogs"
-                  component={AdminAuditLogsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminAuditLogDetail"
-                  component={AdminAuditLogDetailStackScreen}
-                />
-
-                <Stack.Screen
-                  name="AdminRegisterWebView"
-                  component={AdminRegisterWebViewScreen}
-                />
-
-                <Stack.Screen
-                  name="PatientProfile"
-                  component={PatientProfileScreen}
-                />
-
-                <Stack.Screen
-                  name="EditPatientProfile"
-                  component={EditPatientProfileStackScreen}
-                />
-
-                <Stack.Screen
-                  name="MyPharmacies"
-                  component={MyPharmaciesStackScreen}
-                />
-
-                <Stack.Screen
-                  name="NotificationPreferences"
-                  component={NotificationPreferencesStackScreen}
-                />
-
-                <Stack.Screen
-                  name="ReminderSettings"
-                  component={ReminderSettingsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="SafetyResponseSettings"
-                  component={SafetyResponseSettingsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="LanguageAccessibility"
-                  component={LanguageAccessibilityStackScreen}
-                />
-
-                <Stack.Screen
-                  name="PrivacySecurity"
-                  component={PrivacySecurityStackScreen}
-                />
-
-                <Stack.Screen
-                  name="SelectDoctor"
-                  component={SelectDoctorStackScreen}
-                />
-
-                <Stack.Screen
-                  name="PatientActiveCalls"
-                  component={PatientActiveCallsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="MedicineUpdates"
-                  component={MedicineUpdatesStackScreen}
-                />
-
-                <Stack.Screen
-                  name="PatientReports"
-                  component={PatientReportsStackScreen}
-                />
-
-                <Stack.Screen
-                  name="PatientUploadReport"
-                  component={PatientUploadReportStackScreen}
-                />
-
-                <Stack.Screen
-                  name="AddMedicine"
-                  component={AddMedicineScreen}
-                />
-
-                <Stack.Screen
-                  name="ConfirmReminder"
-                  component={ConfirmReminderScreen}
-                />
-
-                <Stack.Screen
-                  name="ScanMedicine"
-                  component={ScanMedicineScreen}
-                />
-
-                <Stack.Screen
-                  name="ScanMedicineResult"
-                  component={ScanMedicineResultScreen}
-                />
-
-                <Stack.Screen
-                  name="PrescriptionScanResult"
-                  component={PrescriptionScanResultScreen}
-                />
-
-                <Stack.Screen
-                  name="ConnectedDevice"
-                  component={ConnectedDeviceStackScreen}
-                />
-
-                <Stack.Screen
-                  name="ManualSafetyResponse"
-                  component={ManualSafetyResponseScreen}
-                />
-
-                <Stack.Screen
-                  name="SafetyResponse"
-                  component={SafetyResponseScreen}
-                />
-
-                <Stack.Screen
-                  name="VideoConsultation"
-                  component={VideoConsultationScreen}
-                />
-
-                <Stack.Screen
-                  name="ConsultationEnded"
-                  component={ConsultationEndedStackScreen}
-                />
+                <Stack.Screen name="AddMedicine" component={AddMedicineScreen} />
+                <Stack.Screen name="ConfirmReminder" component={ConfirmReminderScreen} />
+                <Stack.Screen name="ScanMedicine" component={ScanMedicineScreen} />
+                <Stack.Screen name="ScanMedicineResult" component={ScanMedicineResultScreen} />
+                <Stack.Screen name="PrescriptionScanResult" component={PrescriptionScanResultScreen} />
+                <Stack.Screen name="ConnectedDevice" component={ConnectedDeviceStackScreen} />
+                <Stack.Screen name="ManualSafetyResponse" component={ManualSafetyResponseScreen} />
+                <Stack.Screen name="SafetyResponse" component={SafetyResponseScreen} />
+                <Stack.Screen name="VideoConsultation" component={VideoConsultationScreen} />
+                <Stack.Screen name="ConsultationEnded" component={ConsultationEndedStackScreen} />
               </Stack.Navigator>
             </NavigationContainer>
           </PatientSessionBoundary>

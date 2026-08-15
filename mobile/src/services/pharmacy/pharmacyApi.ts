@@ -1,36 +1,21 @@
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../tokenStorage";
 
-export type PharmacyOrderSource =
-  | "DOCTOR_PRESCRIPTION"
-  | "PATIENT_SUBMISSION"
-  | "REFILL_REQUEST"
-  | "MANUAL_REQUEST";
+export type PharmacyOrderSource = "DOCTOR_PRESCRIPTION" | "PATIENT_SUBMISSION" | "REFILL_REQUEST" | "MANUAL_REQUEST";
+export type PharmacyOrderStatus = "RECEIVED" | "ACCEPTED" | "REJECTED" | "PREPARING" | "READY" | "OUT_FOR_DELIVERY" | "DELIVERED" | "COLLECTED" | "DELAYED" | "OUT_OF_STOCK" | "CANCELLED";
+export type PharmacyPaymentStatus = "PENDING" | "PAID" | "FAILED" | "NOT_REQUIRED" | "REFUNDED";
+export type PrescriptionChargePreference = "CHARGEABLE" | "EXEMPT" | "PPC";
 
-export type PharmacyOrderStatus =
-  | "RECEIVED"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "PREPARING"
-  | "READY"
-  | "OUT_FOR_DELIVERY"
-  | "DELIVERED"
-  | "COLLECTED"
-  | "DELAYED"
-  | "OUT_OF_STOCK"
-  | "CANCELLED";
-
-export type PharmacyPaymentStatus =
-  | "PENDING"
-  | "PAID"
-  | "FAILED"
-  | "NOT_REQUIRED"
-  | "REFUNDED";
-
-export type PrescriptionChargePreference =
-  | "CHARGEABLE"
-  | "EXEMPT"
-  | "PPC";
+export type PharmacyExemptionStatus = "PENDING" | "VERIFIED" | "REJECTED";
+export type PharmacyExemptionChargePreference = "EXEMPT" | "PPC";
+export type PharmacyExemptionType =
+  | "AGE_BASED"
+  | "MEDICAL_EXEMPTION"
+  | "MATERNITY_EXEMPTION"
+  | "LOW_INCOME_HC2"
+  | "UNIVERSAL_CREDIT"
+  | "PPC"
+  | "OTHER";
 
 export type PharmacyOrderListItem = {
   id: string;
@@ -43,14 +28,8 @@ export type PharmacyOrderListItem = {
   fulfilmentAllowed: boolean;
   createdAt: string;
   updatedAt: string;
-  patient: {
-    id: string;
-    fullName: string;
-  };
-  doctor: {
-    id: string;
-    fullName: string;
-  } | null;
+  patient: { id: string; fullName: string };
+  doctor: { id: string; fullName: string } | null;
   payment: {
     chargePreference: PrescriptionChargePreference;
     status: PharmacyPaymentStatus;
@@ -76,6 +55,7 @@ export type PharmacyDashboardData = {
     doctorPrescriptions: number;
     patientSubmissions: number;
     paymentPending: number;
+    exemptionPending: number;
   };
   recentOrders: PharmacyOrderListItem[];
 };
@@ -113,9 +93,7 @@ export type PharmacyOrderDetail = {
   doctor: {
     id: string;
     fullName: string;
-    doctorProfile: {
-      specialization: string | null;
-    } | null;
+    doctorProfile: { specialization: string | null } | null;
   } | null;
 
   prescription: {
@@ -183,6 +161,43 @@ export type PharmacyOrderDetail = {
   }[];
 };
 
+export type PharmacyExemptionReviewListItem = {
+  id: string;
+  chargePreference: PharmacyExemptionChargePreference;
+  exemptionType: PharmacyExemptionType;
+  referenceNumber: string | null;
+  expiresAt: string | null;
+  status: PharmacyExemptionStatus;
+  documentCount: number;
+  createdAt: string;
+  updatedAt: string;
+  patient: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+};
+
+export type PharmacyExemptionDocument = {
+  index: number;
+  fileName: string;
+};
+
+export type PharmacyExemptionReviewDetail = PharmacyExemptionReviewListItem & {
+  verifiedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  documents: PharmacyExemptionDocument[];
+  patient: {
+    id: string;
+    fullName: string;
+    email: string;
+    phoneNumber: string | null;
+    addressLine: string | null;
+    postcode: string | null;
+  };
+};
+
 type ApiResponse<T> = {
   success: boolean;
   message?: string;
@@ -191,24 +206,19 @@ type ApiResponse<T> = {
 
 const getErrorMessage = (result: any) => {
   if (typeof result?.message === "string") return result.message;
-
-  if (Array.isArray(result?.message)) {
-    return result.message[0]?.message || "Unable to complete request";
-  }
-
+  if (Array.isArray(result?.message)) return result.message[0]?.message || "Unable to complete request";
   return "Unable to complete request";
 };
 
-const getAuthHeaders = async () => {
+const getToken = async () => {
   const token = await tokenStorage.getToken();
+  if (!token) throw new Error("Authentication required");
+  return token;
+};
 
-  if (!token) {
-    throw new Error("Authentication required");
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+const getAuthHeaders = async () => {
+  const token = await getToken();
+  return { Authorization: `Bearer ${token}` };
 };
 
 const readResponse = async <T>(response: Response): Promise<T> => {
@@ -220,10 +230,7 @@ const readResponse = async <T>(response: Response): Promise<T> => {
     result = {};
   }
 
-  if (!response.ok) {
-    throw new Error(getErrorMessage(result));
-  }
-
+  if (!response.ok) throw new Error(getErrorMessage(result));
   return result.data;
 };
 
@@ -237,52 +244,85 @@ export const pharmacyApi = {
     return readResponse<PharmacyDashboardData>(response);
   },
 
-  async getOrders(options?: {
-    source?: PharmacyOrderSource;
-    status?: PharmacyOrderStatus;
-    limit?: number;
-  }) {
+  async getOrders(options?: { source?: PharmacyOrderSource; status?: PharmacyOrderStatus; limit?: number }) {
     const params = new URLSearchParams();
 
-    if (options?.source) {
-      params.set("source", options.source);
-    }
-
-    if (options?.status) {
-      params.set("status", options.status);
-    }
-
-    if (options?.limit) {
-      params.set("limit", String(options.limit));
-    }
+    if (options?.source) params.set("source", options.source);
+    if (options?.status) params.set("status", options.status);
+    if (options?.limit) params.set("limit", String(options.limit));
 
     const query = params.toString();
 
-    const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders${query ? `?${query}` : ""}`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/pharmacy/orders${query ? `?${query}` : ""}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
 
-    return readResponse<{
-      total: number;
-      orders: PharmacyOrderListItem[];
-    }>(response);
+    return readResponse<{ total: number; orders: PharmacyOrderListItem[] }>(response);
   },
 
   async getOrderDetail(orderId: string) {
-    const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}`,
-      {
-        method: "GET",
-        headers: await getAuthHeaders(),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
 
-    return readResponse<{
-      order: PharmacyOrderDetail;
-    }>(response);
+    return readResponse<{ order: PharmacyOrderDetail }>(response);
+  },
+
+  async getExemptionReviews(options?: { status?: PharmacyExemptionStatus; limit?: number }) {
+    const params = new URLSearchParams();
+
+    if (options?.status) params.set("status", options.status);
+    if (options?.limit) params.set("limit", String(options.limit));
+
+    const query = params.toString();
+
+    const response = await fetch(`${API_BASE_URL}/pharmacy/exemption-reviews${query ? `?${query}` : ""}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+
+    return readResponse<{ total: number; reviews: PharmacyExemptionReviewListItem[] }>(response);
+  },
+
+  async getExemptionReview(evidenceId: string) {
+    const response = await fetch(`${API_BASE_URL}/pharmacy/exemption-reviews/${encodeURIComponent(evidenceId)}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+
+    return readResponse<{ review: PharmacyExemptionReviewDetail }>(response);
+  },
+
+  async verifyExemptionEvidence(evidenceId: string) {
+    const response = await fetch(`${API_BASE_URL}/pharmacy/exemption-reviews/${encodeURIComponent(evidenceId)}/verify`, {
+      method: "PATCH",
+      headers: await getAuthHeaders(),
+    });
+
+    return readResponse<{ review: PharmacyExemptionReviewDetail }>(response);
+  },
+
+  async rejectExemptionEvidence(evidenceId: string, reason: string) {
+    const response = await fetch(`${API_BASE_URL}/pharmacy/exemption-reviews/${encodeURIComponent(evidenceId)}/reject`, {
+      method: "PATCH",
+      headers: {
+        ...(await getAuthHeaders()),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason }),
+    });
+
+    return readResponse<{ review: PharmacyExemptionReviewDetail }>(response);
+  },
+
+  async getExemptionDocumentSource(evidenceId: string, documentIndex: number) {
+    const token = await getToken();
+
+    return {
+      uri: `${API_BASE_URL}/pharmacy/exemption-reviews/${encodeURIComponent(evidenceId)}/documents/${documentIndex}`,
+      headers: { Authorization: `Bearer ${token}` },
+    };
   },
 };
