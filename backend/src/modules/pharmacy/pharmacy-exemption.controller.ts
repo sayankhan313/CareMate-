@@ -5,15 +5,13 @@ import type { NextFunction, Request, Response } from "express";
 
 import { patientPharmacyExemptionUploadDir } from "../../middleware/exemption-upload.middleware.js";
 import { AppError } from "../../utils/AppError.js";
-import { pharmacyService } from "./pharmacy.service.js";
+import { pharmacyExemptionService } from "./pharmacy-exemption.service.js";
 import {
   pharmacyExemptionDocumentParamsSchema,
   pharmacyExemptionEvidenceParamsSchema,
   pharmacyExemptionReviewsQuerySchema,
-  pharmacyOrderParamsSchema,
-  pharmacyOrdersQuerySchema,
   rejectPharmacyExemptionEvidenceSchema,
-} from "./pharmacy.validation.js";
+} from "./pharmacy-exemption.validation.js";
 
 const getPharmacyId = (req: Request) => {
   if (!req.user) throw new AppError("Authentication required", 401);
@@ -32,10 +30,11 @@ const getValidationMessage = (error: unknown) => {
 
 const getSafeEvidencePath = async (storedPath: string) => {
   const uploadRoot = path.resolve(patientPharmacyExemptionUploadDir);
-  const absolutePath = path.isAbsolute(storedPath) ? path.resolve(storedPath) : path.resolve(process.cwd(), storedPath);
-  const allowedPrefix = `${uploadRoot}${path.sep}`;
+  const absolutePath = path.isAbsolute(storedPath)
+    ? path.resolve(storedPath)
+    : path.resolve(process.cwd(), storedPath);
 
-  if (absolutePath !== uploadRoot && !absolutePath.startsWith(allowedPrefix)) {
+  if (absolutePath !== uploadRoot && !absolutePath.startsWith(`${uploadRoot}${path.sep}`)) {
     throw new AppError("Invalid exemption evidence path", 403);
   }
 
@@ -50,70 +49,37 @@ const getSafeEvidencePath = async (storedPath: string) => {
   return absolutePath;
 };
 
-export const pharmacyController = {
-  async getDashboard(req: Request, res: Response, next: NextFunction) {
-    try {
-      const data = await pharmacyService.getDashboard(getPharmacyId(req));
-      return res.status(200).json({ success: true, message: "Pharmacy dashboard fetched successfully", data });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  async listOrders(req: Request, res: Response, next: NextFunction) {
-    try {
-      const parsed = pharmacyOrdersQuerySchema.safeParse(req.query);
-      if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
-
-      const data = await pharmacyService.listOrders(getPharmacyId(req), parsed.data);
-      return res.status(200).json({ success: true, message: "Pharmacy orders fetched successfully", data });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  async getOrderDetail(req: Request, res: Response, next: NextFunction) {
-    try {
-      const parsed = pharmacyOrderParamsSchema.safeParse(req.params);
-      if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
-
-      const data = await pharmacyService.getOrderDetail(getPharmacyId(req), parsed.data.orderId);
-      return res.status(200).json({ success: true, message: "Pharmacy order fetched successfully", data });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  async listExemptionReviews(req: Request, res: Response, next: NextFunction) {
+export const pharmacyExemptionController = {
+  async listReviews(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = pharmacyExemptionReviewsQuerySchema.safeParse(req.query);
       if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
 
-      const data = await pharmacyService.listExemptionReviews(getPharmacyId(req), parsed.data);
+      const data = await pharmacyExemptionService.listReviews(getPharmacyId(req), parsed.data);
       return res.status(200).json({ success: true, message: "Exemption reviews fetched successfully", data });
     } catch (error) {
       next(error);
     }
   },
 
-  async getExemptionReview(req: Request, res: Response, next: NextFunction) {
+  async getReview(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = pharmacyExemptionEvidenceParamsSchema.safeParse(req.params);
       if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
 
-      const data = await pharmacyService.getExemptionReview(getPharmacyId(req), parsed.data.evidenceId);
+      const data = await pharmacyExemptionService.getReview(getPharmacyId(req), parsed.data.evidenceId);
       return res.status(200).json({ success: true, message: "Exemption review fetched successfully", data });
     } catch (error) {
       next(error);
     }
   },
 
-  async getExemptionDocument(req: Request, res: Response, next: NextFunction) {
+  async getDocument(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = pharmacyExemptionDocumentParamsSchema.safeParse(req.params);
       if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
 
-      const document = await pharmacyService.getExemptionEvidenceDocument(
+      const document = await pharmacyExemptionService.getDocument(
         getPharmacyId(req),
         parsed.data.evidenceId,
         parsed.data.documentIndex,
@@ -133,12 +99,12 @@ export const pharmacyController = {
     }
   },
 
-  async verifyExemptionEvidence(req: Request, res: Response, next: NextFunction) {
+  async verify(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = pharmacyExemptionEvidenceParamsSchema.safeParse(req.params);
       if (!parsed.success) throw new AppError(getValidationMessage(parsed.error), 400);
 
-      const data = await pharmacyService.verifyExemptionEvidence(getPharmacyId(req), parsed.data.evidenceId);
+      const data = await pharmacyExemptionService.verify(getPharmacyId(req), parsed.data.evidenceId);
 
       return res.status(200).json({
         success: true,
@@ -150,7 +116,7 @@ export const pharmacyController = {
     }
   },
 
-  async rejectExemptionEvidence(req: Request, res: Response, next: NextFunction) {
+  async reject(req: Request, res: Response, next: NextFunction) {
     try {
       const params = pharmacyExemptionEvidenceParamsSchema.safeParse(req.params);
       if (!params.success) throw new AppError(getValidationMessage(params.error), 400);
@@ -158,7 +124,7 @@ export const pharmacyController = {
       const body = rejectPharmacyExemptionEvidenceSchema.safeParse(req.body);
       if (!body.success) throw new AppError(getValidationMessage(body.error), 400);
 
-      const data = await pharmacyService.rejectExemptionEvidence(
+      const data = await pharmacyExemptionService.reject(
         getPharmacyId(req),
         params.data.evidenceId,
         body.data.reason,
