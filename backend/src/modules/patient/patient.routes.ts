@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { uploadPatientPharmacyExemptionEvidence } from "../../middleware/exemption-upload.middleware.js";
+import { uploadPatientRefillEvidence } from "../../middleware/refill-evidence-upload.middleware.js";
 import { uploadSinglePatientReport } from "../../middleware/report-upload.middleware.js";
 import { authorizeRoles } from "../../middleware/role.middleware.js";
 
@@ -63,7 +64,16 @@ router.post(
 router.get("/pharmacies/:pharmacyId/exemption-evidence", pharmacyLinkController.listExemptionEvidence);
 router.delete("/pharmacies/:pharmacyId", pharmacyLinkController.removePharmacy);
 
-router.post("/pharmacy-refills", pharmacyRefillController.createRefillRequest);
+router.get(
+  "/pharmacy-refills/active",
+  pharmacyRefillController.listActiveRefillRequests,
+);
+
+router.post(
+  "/pharmacy-refills",
+  uploadPatientRefillEvidence,
+  pharmacyRefillController.createRefillRequest,
+);
 
 router.post("/reports", uploadSinglePatientReport, reportController.createReport);
 router.get("/reports", reportController.listReports);

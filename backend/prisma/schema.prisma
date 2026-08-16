@@ -193,6 +193,28 @@ enum PatientPrescriptionSubmissionStatus {
   REJECTED
 }
 
+enum PatientRefillVerificationPath {
+  CAREMATE_PRESCRIPTION
+  ASSIGNED_DOCTOR
+  EXTERNAL_EVIDENCE
+}
+
+enum PatientRefillDoctorVerificationStatus {
+  NOT_REQUIRED
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum PatientMedicineEvidenceType {
+  NHS_APP_SCREENSHOT
+  EPS_TOKEN
+  GP_REPEAT_MEDICATION_RECORD
+  HOSPITAL_OR_CLINIC_LETTER
+  PHARMACY_LABELLED_MEDICINE
+  OTHER
+}
+
 enum MedicineOrderSource {
   DOCTOR_PRESCRIPTION
   PATIENT_SUBMISSION
@@ -359,6 +381,9 @@ enum NotificationType {
   ORDER_CANCELLED
   PHARMACY_EXEMPTION_VERIFIED
   PHARMACY_EXEMPTION_REJECTED
+  REFILL_DOCTOR_VERIFICATION_REQUESTED
+  REFILL_DOCTOR_VERIFICATION_CONFIRMED
+  REFILL_DOCTOR_VERIFICATION_REJECTED
 }
 
 model User {
@@ -391,10 +416,11 @@ model User {
   vitalReadings    PatientVitalReading[]
   doctorNotes      PatientDoctorNote[]
 
-  medicineOrders          MedicineOrder[] @relation("PatientMedicineOrders")
-  pharmacyMedicineOrders  MedicineOrder[] @relation("PharmacyMedicineOrders")
-  doctorMedicineOrders    MedicineOrder[] @relation("DoctorMedicineOrders")
-  caregiverMedicineOrders MedicineOrder[] @relation("CaregiverMedicineOrders")
+  medicineOrders             MedicineOrder[]                 @relation("PatientMedicineOrders")
+  pharmacyMedicineOrders     MedicineOrder[]                 @relation("PharmacyMedicineOrders")
+  doctorMedicineOrders       MedicineOrder[]                 @relation("DoctorMedicineOrders")
+  caregiverMedicineOrders    MedicineOrder[]                 @relation("CaregiverMedicineOrders")
+  refillVerificationRequests PatientPrescriptionSubmission[] @relation("PatientRefillVerificationDoctor")
 
   medicineOrderStatusChanges MedicineOrderStatusHistory[] @relation("MedicineOrderStatusChanges")
   pharmacyOrderNotes         PharmacyOrderNote[]          @relation("PharmacyOrderNotes")
@@ -792,30 +818,48 @@ model PrescriptionItem {
 }
 
 model PatientPrescriptionSubmission {
-  id                   String                              @id @default(uuid())
+  id                   String  @id @default(uuid())
   patientId            String
   pharmacyId           String
   reviewedByPharmacyId String?
-  requestType          PatientPharmacyRequestType          @default(PRESCRIPTION_UPLOAD)
-  imageUrl             String?
-  notes                String?
-  rawDetectedText      String?
-  ocrConfidence        Float?
-  status               PatientPrescriptionSubmissionStatus @default(SUBMITTED)
-  reviewNote           String?
-  reviewedAt           DateTime?
-  createdAt            DateTime                            @default(now())
-  updatedAt            DateTime                            @updatedAt
+  verificationDoctorId String?
 
-  patient            User                                @relation("PatientPrescriptionSubmissions", fields: [patientId], references: [id], onDelete: Cascade)
-  pharmacy           User                                @relation("PharmacyPrescriptionSubmissions", fields: [pharmacyId], references: [id], onDelete: Restrict)
-  reviewedByPharmacy User?                               @relation("PharmacyReviewedPrescriptionSubmissions", fields: [reviewedByPharmacyId], references: [id], onDelete: SetNull)
-  items              PatientPrescriptionSubmissionItem[]
-  medicineOrder      MedicineOrder?
+  requestType PatientPharmacyRequestType @default(PRESCRIPTION_UPLOAD)
+
+  verificationPath              PatientRefillVerificationPath?
+  doctorVerificationStatus      PatientRefillDoctorVerificationStatus @default(NOT_REQUIRED)
+  doctorVerificationRequestedAt DateTime?
+  doctorVerificationNote        String?
+  doctorVerifiedAt              DateTime?
+
+  evidenceType PatientMedicineEvidenceType?
+  imageUrl     String?
+
+  notes           String?
+  rawDetectedText String?
+  ocrConfidence   Float?
+
+  status     PatientPrescriptionSubmissionStatus @default(SUBMITTED)
+  reviewNote String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  patient            User  @relation("PatientPrescriptionSubmissions", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy           User  @relation("PharmacyPrescriptionSubmissions", fields: [pharmacyId], references: [id], onDelete: Restrict)
+  reviewedByPharmacy User? @relation("PharmacyReviewedPrescriptionSubmissions", fields: [reviewedByPharmacyId], references: [id], onDelete: SetNull)
+  verificationDoctor User? @relation("PatientRefillVerificationDoctor", fields: [verificationDoctorId], references: [id], onDelete: SetNull)
+
+  items         PatientPrescriptionSubmissionItem[]
+  medicineOrder MedicineOrder?
 
   @@index([patientId, status])
   @@index([pharmacyId, status])
   @@index([reviewedByPharmacyId])
+  @@index([verificationDoctorId, doctorVerificationStatus])
+  @@index([verificationPath, doctorVerificationStatus])
+  @@index([evidenceType])
   @@index([requestType])
   @@index([createdAt])
 }
