@@ -1,7 +1,13 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 import { notificationService } from "../notification/notification.service.js";
-import type { CreateMedicineInput, RequestMedicineDeletionInput, ResubmitMedicineReviewInput, SnoozeMedicineInput, UpdateMedicineInput } from "./medicine.types.js";
+import type {
+  CreateMedicineInput,
+  RequestMedicineDeletionInput,
+  ResubmitMedicineReviewInput,
+  SnoozeMedicineInput,
+  UpdateMedicineInput,
+} from "./medicine.types.js";
 
 type ReviewDoctor = {
   id: string;
@@ -36,9 +42,12 @@ const parseDate = (dateText: string) => {
   const year = Number(parts[2]);
   const parsedDate = new Date(Date.UTC(year, month - 1, day));
 
-  const invalidDate = parsedDate.getUTCFullYear() !== year || parsedDate.getUTCMonth() !== month - 1 || parsedDate.getUTCDate() !== day;
-  if (invalidDate) throw new AppError("Please enter a valid date", 400);
+  const invalidDate =
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day;
 
+  if (invalidDate) throw new AppError("Please enter a valid date", 400);
   return parsedDate;
 };
 
@@ -112,6 +121,44 @@ const buildSummary = (items: any[]) => {
 const getTodayAvailabilityDate = () => {
   const now = new Date();
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+};
+
+const getSelectedTimes = (data: CreateMedicineInput) => {
+  const times = data.selectedTimes?.length ? data.selectedTimes : data.timeOfDay ? [data.timeOfDay] : [];
+  return [...new Set(times)].sort();
+};
+
+const getCreateStockData = (data: CreateMedicineInput) => {
+  if (data.hasMedicineOnHand === false) {
+    return {
+      hasMedicineOnHand: false,
+      currentStock: 0,
+      stockUnit: data.stockUnit?.trim() || null,
+      lowStockThreshold: data.lowStockThreshold ?? null,
+    };
+  }
+
+  if (data.hasMedicineOnHand === true) {
+    return {
+      hasMedicineOnHand: true,
+      currentStock: data.currentStock ?? 0,
+      stockUnit: data.stockUnit?.trim() || null,
+      lowStockThreshold: data.lowStockThreshold ?? null,
+    };
+  }
+
+  return {
+    hasMedicineOnHand: null,
+    currentStock: null,
+    stockUnit: data.stockUnit?.trim() || null,
+    lowStockThreshold: data.lowStockThreshold ?? null,
+  };
+};
+
+const shouldActivateReminderForStock = (hasMedicineOnHand: boolean | null | undefined, currentStock: number | null | undefined) => {
+  if (hasMedicineOnHand === false) return false;
+  if (currentStock === 0) return false;
+  return true;
 };
 
 const getActiveReviewDoctorAssignments = async (patientId: string) => {
@@ -289,6 +336,10 @@ const formatReviewRequest = (request: any) => {
           instructions: request.medicine.instructions,
           source: request.medicine.source,
           isActive: request.medicine.isActive,
+          hasMedicineOnHand: request.medicine.hasMedicineOnHand,
+          currentStock: request.medicine.currentStock,
+          stockUnit: request.medicine.stockUnit,
+          lowStockThreshold: request.medicine.lowStockThreshold,
           frequency: reminder?.frequency || null,
           customFrequency: reminder?.customFrequency || null,
           timeOfDay: reminder?.timeOfDay || null,
@@ -312,6 +363,14 @@ const formatMedicine = (medicine: any) => {
     instructions: medicine.instructions,
     source: medicine.source,
     isActive: medicine.isActive,
+    hasMedicineOnHand: medicine.hasMedicineOnHand,
+    currentStock: medicine.currentStock,
+    stockUnit: medicine.stockUnit,
+    lowStockThreshold: medicine.lowStockThreshold,
+    isLowStock:
+      medicine.currentStock !== null &&
+      medicine.lowStockThreshold !== null &&
+      medicine.currentStock <= medicine.lowStockThreshold,
     createdAt: medicine.createdAt,
     updatedAt: medicine.updatedAt,
     reminders: medicine.reminders.map(formatReminder),
@@ -417,9 +476,16 @@ export const medicineService = {
     const endDate = data.endDate ? parseDate(data.endDate) : null;
     validateDateRange(startDate, endDate);
 
+    const selectedTimes = getSelectedTimes(data);
+    if (selectedTimes.length === 0) throw new AppError("At least one reminder time is required", 400);
+
     const requestingReview = data.sendToDoctorForReview === true;
     const routing = requestingReview ? await getMedicineReviewRouting(patientId) : null;
     const reviewDoctor = routing?.doctor || null;
+    const stockData = getCreateStockData(data);
+    const remindersActive =
+      !requestingReview &&
+      shouldActivateReminderForStock(stockData.hasMedicineOnHand, stockData.currentStock);
 
     const result = await prisma.$transaction(async tx => {
       const createdMedicine = await tx.medicine.create({
@@ -430,21 +496,22 @@ export const medicineService = {
           instructions: data.instructions?.trim() || null,
           source: data.source || "MANUAL",
           isActive: !requestingReview,
+          ...stockData,
           reminders: {
-            create: {
+            create: selectedTimes.map(time => ({
               frequency: data.frequency,
               customFrequency: data.customFrequency?.trim() || null,
-              timeOfDay: data.timeOfDay,
+              timeOfDay: time,
               startDate,
               endDate,
-              isActive: !requestingReview,
+              isActive: remindersActive,
               sendToDoctorForReview: requestingReview,
               reviewStatus: requestingReview ? "PENDING" : "NOT_REQUESTED",
               reviewDoctorId: reviewDoctor?.id || null,
               reviewedByDoctorId: null,
               reviewedAt: null,
               reviewNote: null,
-            },
+            })),
           },
         },
       });
@@ -498,7 +565,6 @@ export const medicineService = {
       where: { patientId, isActive: true },
       include: {
         reminders: {
-          where: { isActive: true },
           include: reminderRelations,
           orderBy: { timeOfDay: "asc" },
         },
@@ -581,6 +647,14 @@ export const medicineService = {
             snoozedUntil: doseLog?.snoozedUntil || null,
             deletionReviewPending: Boolean(deletionRequest),
             pendingDeletionRequestId: deletionRequest?.id || null,
+            hasMedicineOnHand: medicine.hasMedicineOnHand,
+            currentStock: medicine.currentStock,
+            stockUnit: medicine.stockUnit,
+            lowStockThreshold: medicine.lowStockThreshold,
+            isLowStock:
+              medicine.currentStock !== null &&
+              medicine.lowStockThreshold !== null &&
+              medicine.currentStock <= medicine.lowStockThreshold,
           });
         }
 
@@ -610,6 +684,22 @@ export const medicineService = {
 
     if (requestingReview) await ensureNoPendingRequest(patientId, medicineId);
 
+    const nextHasMedicineOnHand =
+      data.hasMedicineOnHand !== undefined
+        ? data.hasMedicineOnHand
+        : data.currentStock !== undefined
+          ? data.currentStock > 0
+          : medicine.hasMedicineOnHand;
+
+    const nextCurrentStock =
+      data.hasMedicineOnHand === false
+        ? 0
+        : data.currentStock !== undefined
+          ? data.currentStock
+          : medicine.currentStock;
+
+    const stockAllowsReminder = shouldActivateReminderForStock(nextHasMedicineOnHand, nextCurrentStock);
+
     const reviewRequestId = await prisma.$transaction(async tx => {
       await tx.medicine.update({
         where: { id: medicineId },
@@ -617,6 +707,14 @@ export const medicineService = {
           ...(data.name !== undefined ? { name: data.name.trim() } : {}),
           ...(data.dose !== undefined ? { dose: data.dose.trim() } : {}),
           ...(data.instructions !== undefined ? { instructions: data.instructions.trim() || null } : {}),
+          ...(data.hasMedicineOnHand !== undefined || data.currentStock !== undefined
+            ? {
+                hasMedicineOnHand: nextHasMedicineOnHand,
+                currentStock: nextCurrentStock,
+              }
+            : {}),
+          ...(data.stockUnit !== undefined ? { stockUnit: data.stockUnit?.trim() || null } : {}),
+          ...(data.lowStockThreshold !== undefined ? { lowStockThreshold: data.lowStockThreshold } : {}),
           ...(requestingReview
             ? { isActive: false }
             : data.isActive !== undefined
@@ -644,7 +742,9 @@ export const medicineService = {
               reviewedAt: null,
               reviewNote: null,
             }
-          : {}),
+          : data.hasMedicineOnHand !== undefined || data.currentStock !== undefined
+            ? { isActive: stockAllowsReminder }
+            : {}),
       };
 
       if (reminder) {
@@ -721,9 +821,10 @@ export const medicineService = {
     await notifyDoctorAboutMedicineReview(request.id);
 
     return {
-      message: routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
-        ? "Medicine deletion request sent for administrator-assisted review routing."
-        : "Medicine deletion request sent for doctor review.",
+      message:
+        routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
+          ? "Medicine deletion request sent for administrator-assisted review routing."
+          : "Medicine deletion request sent for doctor review.",
       request: formatReviewRequest(request),
     };
   },
@@ -763,13 +864,13 @@ export const medicineService = {
   async applyApprovedMedicineReview(patientId: string, requestId: string) {
     const request = await getReviewRequestForPatient(patientId, requestId);
 
-    if (request.requestType !== "ADD") {
-      throw new AppError("Only approved medicine additions can be applied.", 400);
-    }
+    if (request.requestType !== "ADD") throw new AppError("Only approved medicine additions can be applied.", 400);
+    if (request.status !== "APPROVED") throw new AppError("Only approved medicine reviews can be applied.", 400);
 
-    if (request.status !== "APPROVED") {
-      throw new AppError("Only approved medicine reviews can be applied.", 400);
-    }
+    const reminderShouldBeActive = shouldActivateReminderForStock(
+      request.medicine.hasMedicineOnHand,
+      request.medicine.currentStock,
+    );
 
     await prisma.$transaction(async tx => {
       await tx.medicine.update({
@@ -779,7 +880,7 @@ export const medicineService = {
 
       await tx.medicineReminder.updateMany({
         where: { medicineId: request.medicineId },
-        data: { isActive: true },
+        data: { isActive: reminderShouldBeActive },
       });
 
       await tx.medicineReviewRequest.update({
@@ -795,7 +896,9 @@ export const medicineService = {
     const updatedRequest = await getReviewRequestForPatient(patientId, requestId);
 
     return {
-      message: "Medicine added to your active medication schedule.",
+      message: reminderShouldBeActive
+        ? "Medicine added to your active medication schedule."
+        : "Medicine approved and saved. Reminders will remain inactive until medicine stock is available.",
       request: formatReviewRequest(updatedRequest),
     };
   },
@@ -803,13 +906,8 @@ export const medicineService = {
   async resubmitMedicineReview(patientId: string, requestId: string, data: ResubmitMedicineReviewInput) {
     const request = await getReviewRequestForPatient(patientId, requestId);
 
-    if (request.requestType !== "ADD") {
-      throw new AppError("Only rejected medicine additions can be resubmitted.", 400);
-    }
-
-    if (request.status !== "REJECTED") {
-      throw new AppError("Only rejected medicine reviews can be resubmitted.", 400);
-    }
+    if (request.requestType !== "ADD") throw new AppError("Only rejected medicine additions can be resubmitted.", 400);
+    if (request.status !== "REJECTED") throw new AppError("Only rejected medicine reviews can be resubmitted.", 400);
 
     await ensureNoPendingRequest(patientId, request.medicineId);
 
@@ -851,9 +949,7 @@ export const medicineService = {
       if (reminder) {
         await tx.medicineReminder.update({ where: { id: reminder.id }, data: reminderData });
       } else {
-        await tx.medicineReminder.create({
-          data: { medicineId: request.medicineId, ...reminderData },
-        });
+        await tx.medicineReminder.create({ data: { medicineId: request.medicineId, ...reminderData } });
       }
 
       await tx.medicineReviewRequest.update({
@@ -880,9 +976,10 @@ export const medicineService = {
     await notifyDoctorAboutMedicineReview(newRequest.id);
 
     return {
-      message: routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
-        ? "Updated medicine sent for administrator-assisted review routing."
-        : "Updated medicine sent for doctor review.",
+      message:
+        routing.routingStatus === "ADMIN_REVIEW_REQUIRED"
+          ? "Updated medicine sent for administrator-assisted review routing."
+          : "Updated medicine sent for doctor review.",
       request: formatReviewRequest(newRequest),
     };
   },
@@ -897,23 +994,115 @@ export const medicineService = {
 
     const scheduledFor = getScheduledDateTimeForDate(today, reminder.timeOfDay);
 
-    const doseLog = await prisma.medicineDoseLog.upsert({
-      where: { reminderId_scheduledFor: { reminderId, scheduledFor } },
-      update: {
-        status: "TAKEN",
-        takenAt: new Date(),
-        snoozedUntil: null,
-      },
-      create: {
-        reminderId,
-        patientId,
-        scheduledFor,
-        status: "TAKEN",
-        takenAt: new Date(),
-      },
+    const result = await prisma.$transaction(async tx => {
+      const existingDoseLog = await tx.medicineDoseLog.findUnique({
+        where: { reminderId_scheduledFor: { reminderId, scheduledFor } },
+        select: { id: true, status: true },
+      });
+
+      const alreadyTaken = existingDoseLog?.status === "TAKEN";
+
+      const medicineStock = await tx.medicine.findUnique({
+        where: { id: reminder.medicineId },
+        select: {
+          id: true,
+          hasMedicineOnHand: true,
+          currentStock: true,
+          stockUnit: true,
+          lowStockThreshold: true,
+        },
+      });
+
+      if (!medicineStock) throw new AppError("Medicine not found", 404);
+
+      const stockIsTracked = medicineStock.currentStock !== null;
+
+      if (!alreadyTaken && stockIsTracked && medicineStock.currentStock! <= 0) {
+        throw new AppError("No medicine stock is available. Request more medicine from your pharmacy before marking this dose as taken.", 400);
+      }
+
+      const doseLog = await tx.medicineDoseLog.upsert({
+        where: { reminderId_scheduledFor: { reminderId, scheduledFor } },
+        update: {
+          status: "TAKEN",
+          takenAt: new Date(),
+          snoozedUntil: null,
+        },
+        create: {
+          reminderId,
+          patientId,
+          scheduledFor,
+          status: "TAKEN",
+          takenAt: new Date(),
+        },
+      });
+
+      let updatedStock = medicineStock;
+
+      if (!alreadyTaken && stockIsTracked) {
+        const stockUpdate = await tx.medicine.updateMany({
+          where: {
+            id: reminder.medicineId,
+            currentStock: { gt: 0 },
+          },
+          data: {
+            currentStock: { decrement: 1 },
+          },
+        });
+
+        if (stockUpdate.count !== 1) {
+          throw new AppError("Medicine stock changed before this dose could be recorded. Please refresh and try again.", 409);
+        }
+
+        const refreshedStock = await tx.medicine.findUnique({
+          where: { id: reminder.medicineId },
+          select: {
+            id: true,
+            hasMedicineOnHand: true,
+            currentStock: true,
+            stockUnit: true,
+            lowStockThreshold: true,
+          },
+        });
+
+        if (!refreshedStock) throw new AppError("Medicine not found", 404);
+        updatedStock = refreshedStock;
+
+        if (refreshedStock.currentStock === 0) {
+          await tx.medicine.update({
+            where: { id: reminder.medicineId },
+            data: { hasMedicineOnHand: false },
+          });
+
+          await tx.medicineReminder.updateMany({
+            where: { medicineId: reminder.medicineId },
+            data: { isActive: false },
+          });
+
+          updatedStock = { ...refreshedStock, hasMedicineOnHand: false };
+        }
+      }
+
+      return { doseLog, stock: updatedStock };
     });
 
-    return { message: "Medicine marked as taken", doseLog };
+    return {
+      message:
+        result.stock.currentStock === 0
+          ? "Medicine marked as taken. Your recorded stock is now empty."
+          : "Medicine marked as taken",
+      doseLog: result.doseLog,
+      stock: {
+        hasMedicineOnHand: result.stock.hasMedicineOnHand,
+        currentStock: result.stock.currentStock,
+        stockUnit: result.stock.stockUnit,
+        lowStockThreshold: result.stock.lowStockThreshold,
+        isLowStock:
+          result.stock.currentStock !== null &&
+          result.stock.lowStockThreshold !== null &&
+          result.stock.currentStock <= result.stock.lowStockThreshold,
+      },
+    };
   },
 
   async snoozeReminder(patientId: string, reminderId: string, data: SnoozeMedicineInput) {

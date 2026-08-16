@@ -903,8 +903,14 @@ model Medicine {
   instructions         String?
   source               MedicineSource @default(MANUAL)
   isActive             Boolean        @default(true)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+
+  hasMedicineOnHand Boolean?
+  currentStock      Int?
+  stockUnit         String?
+  lowStockThreshold Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   patient            User                                @relation(fields: [patientId], references: [id], onDelete: Cascade)
   prescribedByDoctor User?                               @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
