@@ -43,10 +43,7 @@ export type MedicineFrequency =
   | "AS_NEEDED"
   | "CUSTOM";
 
-export type MedicineFlowMode =
-  | "CREATE"
-  | "EDIT_DRAFT"
-  | "RESUBMIT_REVIEW";
+export type MedicineFlowMode = "CREATE" | "EDIT_DRAFT" | "RESUBMIT_REVIEW";
 
 export type MedicineDraft = {
   name: string;
@@ -60,6 +57,10 @@ export type MedicineDraft = {
   endDate?: string;
   prescriptionPattern?: string | null;
   sendToDoctorForReview: boolean;
+  hasMedicineOnHand?: boolean;
+  currentStock?: number;
+  stockUnit?: string;
+  lowStockThreshold?: number;
 };
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
@@ -74,10 +75,7 @@ export type PharmacyOrderSource =
   | "REFILL_REQUEST"
   | "MANUAL_REQUEST";
 
-export type PharmacyExemptionStatus =
-  | "PENDING"
-  | "VERIFIED"
-  | "REJECTED";
+export type PharmacyExemptionStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -90,31 +88,12 @@ export type RootStackParamList = {
   EmailVerification: { email?: string };
   ForgotPassword: undefined;
 
-  DoctorPendingApproval:
-    | {
-        user?: any;
-        email?: string;
-      }
-    | undefined;
+  DoctorPendingApproval: { user?: any; email?: string } | undefined;
+  PharmacyPendingApproval: { user?: any; email?: string } | undefined;
 
-  PharmacyPendingApproval:
-    | {
-        user?: any;
-        email?: string;
-      }
-    | undefined;
-
-  PatientTabs:
-    | (NavigatorScreenParams<PatientTabParamList> & { user?: any })
-    | undefined;
-
-  DoctorTabs:
-    | (NavigatorScreenParams<DoctorTabParamList> & { user?: any })
-    | undefined;
-
-  AdminTabs:
-    | (NavigatorScreenParams<AdminTabParamList> & { user?: any })
-    | undefined;
+  PatientTabs: (NavigatorScreenParams<PatientTabParamList> & { user?: any }) | undefined;
+  DoctorTabs: (NavigatorScreenParams<DoctorTabParamList> & { user?: any }) | undefined;
+  AdminTabs: (NavigatorScreenParams<AdminTabParamList> & { user?: any }) | undefined;
 
   PharmacyDashboard: { user?: any } | undefined;
   PharmacyInventory: undefined;
@@ -141,9 +120,7 @@ export type RootStackParamList = {
   };
 
   Notifications: undefined;
-
   DoctorProfile: undefined;
-
   AdminProfile: undefined;
   AdminDashboard: undefined;
   AdminDoctorVerificationDetail: { doctorId: string };
