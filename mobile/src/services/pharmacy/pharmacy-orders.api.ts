@@ -1,8 +1,5 @@
 import { API_BASE_URL } from "../../constants/api";
-import {
-  getPharmacyAuthHeaders,
-  readPharmacyResponse,
-} from "./pharmacy-api.utils";
+import { getPharmacyAuthHeaders, readPharmacyResponse } from "./pharmacy-api.utils";
 
 export type PharmacyOrderSource =
   | "DOCTOR_PRESCRIPTION"
@@ -23,22 +20,11 @@ export type PharmacyOrderStatus =
   | "OUT_OF_STOCK"
   | "CANCELLED";
 
-export type PharmacyPaymentStatus =
-  | "PENDING"
-  | "PAID"
-  | "FAILED"
-  | "NOT_REQUIRED"
-  | "REFUNDED";
+export type PharmacyPaymentStatus = "PENDING" | "PAID" | "FAILED" | "NOT_REQUIRED" | "REFUNDED";
 
-export type PrescriptionChargePreference =
-  | "CHARGEABLE"
-  | "EXEMPT"
-  | "PPC";
+export type PrescriptionChargePreference = "CHARGEABLE" | "EXEMPT" | "PPC";
 
-export type InventoryCandidateMatchQuality =
-  | "EXACT"
-  | "REVIEW_REQUIRED"
-  | "POSSIBLE";
+export type InventoryCandidateMatchQuality = "EXACT" | "REVIEW_REQUIRED" | "POSSIBLE";
 
 export type InventoryCandidateComparison =
   | "MATCH"
@@ -194,6 +180,9 @@ export type PharmacyOrderDetail = {
     status: string;
     imageUrl: string | null;
     notes: string | null;
+    reviewedByPharmacyId: string | null;
+    reviewNote: string | null;
+    reviewedAt: string | null;
     createdAt: string;
   } | null;
 
@@ -252,6 +241,11 @@ export type PharmacyOrderDetail = {
   }[];
 };
 
+type PharmacyOrderDetailResponse = {
+  order: PharmacyOrderDetail;
+  allowedNextStatuses: PharmacyOrderStatus[];
+};
+
 export const pharmacyOrdersApi = {
   async getOrders(options?: {
     source?: PharmacyOrderSource;
@@ -265,13 +259,10 @@ export const pharmacyOrdersApi = {
     if (options?.limit) params.set("limit", String(options.limit));
 
     const query = params.toString();
-    const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders${query ? `?${query}` : ""}`,
-      {
-        method: "GET",
-        headers: await getPharmacyAuthHeaders(),
-      },
-    );
+    const response = await fetch(`${API_BASE_URL}/pharmacy/orders${query ? `?${query}` : ""}`, {
+      method: "GET",
+      headers: await getPharmacyAuthHeaders(),
+    });
 
     return readPharmacyResponse<{
       total: number;
@@ -280,25 +271,31 @@ export const pharmacyOrdersApi = {
   },
 
   async getOrderDetail(orderId: string) {
+    const response = await fetch(`${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}`, {
+      method: "GET",
+      headers: await getPharmacyAuthHeaders(),
+    });
+
+    return readPharmacyResponse<PharmacyOrderDetailResponse>(response);
+  },
+
+  async verifyPatientRefillRequest(orderId: string, note?: string) {
     const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}`,
+      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}/verify-patient-request`,
       {
-        method: "GET",
-        headers: await getPharmacyAuthHeaders(),
+        method: "PATCH",
+        headers: {
+          ...(await getPharmacyAuthHeaders()),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(note?.trim() ? { note: note.trim() } : {}),
       },
     );
 
-    return readPharmacyResponse<{
-      order: PharmacyOrderDetail;
-      allowedNextStatuses: PharmacyOrderStatus[];
-    }>(response);
+    return readPharmacyResponse<PharmacyOrderDetailResponse>(response);
   },
 
-  async updateOrderStatus(
-    orderId: string,
-    status: PharmacyOrderStatus,
-    reason?: string,
-  ) {
+  async updateOrderStatus(orderId: string, status: PharmacyOrderStatus, reason?: string) {
     const response = await fetch(
       `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}/status`,
       {

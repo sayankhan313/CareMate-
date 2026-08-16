@@ -3,13 +3,13 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -26,7 +26,6 @@ import {
   History,
   MapPin,
   PackageCheck,
-  PackageSearch,
   Phone,
   Pill,
   RefreshCw,
@@ -45,7 +44,6 @@ import {
   type PharmacyOrderStatus,
 } from "../../services/pharmacy/pharmacy-orders.api";
 import type { RootStackParamList } from "../../types/navigation";
-import PharmacyInventoryMatchModal from "./PharmacyInventoryMatchModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PharmacyOrderDetail">;
 type PharmacyMedicineItem = PharmacyOrderDetail["items"][number];
@@ -54,6 +52,7 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#747C91";
+const RIPPLE = "rgba(17, 25, 54, 0.08)";
 const BORDER = "#E1E6EF";
 
 const PHARMACY = "#15803D";
@@ -87,21 +86,6 @@ const primaryStatuses = new Set<PharmacyOrderStatus>([
   "COLLECTED",
   "OUT_FOR_DELIVERY",
   "DELIVERED",
-]);
-
-const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatus>([
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-]);
-
-const inventoryLockedStatuses = new Set<PharmacyOrderStatus>([
-  "READY",
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  "COLLECTED",
-  "REJECTED",
-  "CANCELLED",
 ]);
 
 const formatDateTime = (value: string | null | undefined) => {
@@ -198,12 +182,11 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isVerificationLoading, setIsVerificationLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [reasonModalVisible, setReasonModalVisible] = useState(false);
   const [selectedExceptionStatus, setSelectedExceptionStatus] = useState<PharmacyOrderStatus | null>(null);
   const [statusReason, setStatusReason] = useState("");
-  const [inventoryMatchItem, setInventoryMatchItem] = useState<PharmacyMedicineItem | null>(null);
 
   const loadOrder = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
@@ -270,16 +253,12 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
     Alert.alert("Update order status", getActionConfirmation(status), [
       { text: "Cancel", style: "cancel" },
-      {
-        text: getActionLabel(status),
-        onPress: () => void updateStatus(status),
-      },
+      { text: getActionLabel(status), onPress: () => void updateStatus(status) },
     ]);
   };
 
   const submitExceptionStatus = () => {
     const reason = statusReason.trim();
-
     if (!selectedExceptionStatus) return;
 
     if (reason.length < 5) {
@@ -288,6 +267,39 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     }
 
     void updateStatus(selectedExceptionStatus, reason);
+  };
+
+  const verifyPatientRefill = async () => {
+    try {
+      setIsVerificationLoading(true);
+
+      const result = await pharmacyOrdersApi.verifyPatientRefillRequest(route.params.orderId);
+      setOrder(result.order);
+      setAllowedNextStatuses(result.allowedNextStatuses || []);
+
+      Alert.alert(
+        "Request verified",
+        "This patient refill request is now authorised for pharmacy fulfilment. This verification does not mark it as a doctor-confirmed prescription.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to verify request",
+        error instanceof Error ? error.message : "The patient medicine request could not be verified.",
+      );
+    } finally {
+      setIsVerificationLoading(false);
+    }
+  };
+
+  const handleVerifyPatientRefill = () => {
+    Alert.alert(
+      "Verify patient medicine request",
+      "Confirm that pharmacy staff have reviewed this patient-requested medicine and allow the order to continue to fulfilment? This does not confirm a doctor prescription.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Verify request", onPress: () => void verifyPatientRefill() },
+      ],
+    );
   };
 
   const address = order
@@ -299,21 +311,21 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   const statusTone = order ? getStatusTone(order.status) : null;
   const primaryActions = allowedNextStatuses.filter(status => primaryStatuses.has(status));
   const exceptionActions = allowedNextStatuses.filter(status => exceptionStatuses.has(status));
-  const inventoryEditable = order ? !inventoryLockedStatuses.has(order.status) : false;
-  const allInventoryReady = order
-    ? order.items.length === 0 ||
-      order.items.every(item =>
-        Boolean(
-          item.inventoryItemId &&
-          item.inventoryReservedQuantity > 0 &&
-          item.inventoryReservedAt &&
-          !item.inventoryReleasedAt,
-        ),
-      )
-    : true;
-  const hasInventoryBlockedAction = primaryActions.some(status =>
-    inventoryReservationRequiredStatuses.has(status),
-  );
+
+  const canVerifyPatientRefill =
+    order?.orderSource === "REFILL_REQUEST" &&
+    order.patientSubmission?.requestType === "REFILL_REQUEST" &&
+    order.patientSubmission.status === "VERIFICATION_REQUIRED" &&
+    !order.prescriptionConfirmed &&
+    !order.fulfilmentAllowed &&
+    !["REJECTED", "CANCELLED", "DELIVERED", "COLLECTED"].includes(order.status);
+
+  const pharmacistVerifiedPatientRefill =
+    order?.orderSource === "REFILL_REQUEST" &&
+    order.patientSubmission?.requestType === "REFILL_REQUEST" &&
+    order.patientSubmission.status === "VERIFIED" &&
+    order.fulfilmentAllowed &&
+    !order.prescriptionConfirmed;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -322,10 +334,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       <View style={styles.screen}>
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: Math.max(insets.bottom + 36, 50) },
-          ]}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 36, 50) }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -338,12 +347,13 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
         >
           <View style={styles.header}>
             <View style={styles.appBar}>
-              <TouchableOpacity activeOpacity={0.72}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.backButton}
                 onPress={() => navigation.goBack()}
               >
                 <ArrowLeft size={23} color={TEXT} strokeWidth={2.5} />
-              </TouchableOpacity>
+              </Pressable>
 
               <View style={styles.appBarText}>
                 <Text style={styles.appBarTitle}>Prescription order</Text>
@@ -406,13 +416,14 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               <Text style={styles.errorTitle}>Order unavailable</Text>
               <Text style={styles.stateText}>{errorMessage}</Text>
 
-              <TouchableOpacity activeOpacity={0.72}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.retryButton}
                 onPress={() => void loadOrder("initial")}
               >
                 <RefreshCw size={16} color={SURFACE} strokeWidth={2.5} />
                 <Text style={styles.retryText}>Try again</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ) : null}
 
@@ -447,6 +458,52 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               />
 
               <View style={styles.actionsPanel}>
+                {canVerifyPatientRefill ? (
+                  <View style={styles.verificationRequestPanel}>
+                    <View style={styles.verificationRequestHeader}>
+                      <View style={styles.verificationRequestIcon}>
+                        <ShieldCheck size={21} color={WARNING_DARK} strokeWidth={2.6} />
+                      </View>
+
+                      <View style={styles.verificationRequestText}>
+                        <Text style={styles.verificationRequestTitle}>
+                          Pharmacist verification required
+                        </Text>
+                        <Text style={styles.verificationRequestDescription}>
+                          This refill was requested by the patient from their medicine list. Review the medicine
+                          details before allowing fulfilment.
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Pressable
+                      android_ripple={{ color: RIPPLE }}
+                      style={[styles.verifyRequestButton, isVerificationLoading && styles.disabledAction]}
+                      disabled={isVerificationLoading || isActionLoading}
+                      onPress={handleVerifyPatientRefill}
+                    >
+                      {isVerificationLoading ? (
+                        <ActivityIndicator color={SURFACE} />
+                      ) : (
+                        <>
+                          <ShieldCheck size={18} color={SURFACE} strokeWidth={2.6} />
+                          <Text style={styles.verifyRequestButtonText}>Verify patient request</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {pharmacistVerifiedPatientRefill ? (
+                  <View style={styles.verifiedRequestPanel}>
+                    <CheckCircle2 size={18} color={PHARMACY_DARK} strokeWidth={2.6} />
+                    <Text style={styles.verifiedRequestText}>
+                      Pharmacy verification completed. Fulfilment is allowed, while doctor prescription confirmation
+                      remains separate.
+                    </Text>
+                  </View>
+                ) : null}
+
                 {!order.fulfilmentAllowed && primaryActions.length > 0 ? (
                   <View style={styles.fulfilmentWarning}>
                     <AlertCircle size={18} color={WARNING_DARK} strokeWidth={2.5} />
@@ -456,44 +513,32 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                   </View>
                 ) : null}
 
-                {order.items.length > 0 && !allInventoryReady && hasInventoryBlockedAction ? (
-                  <View style={styles.inventoryActionWarning}>
-                    <PackageSearch size={18} color={WARNING_DARK} strokeWidth={2.5} />
-                    <Text style={styles.fulfilmentWarningText}>
-                      Match and reserve pharmacy stock for every medicine before preparation can continue.
-                    </Text>
-                  </View>
-                ) : null}
+                {primaryActions.map(status => (
+                  <Pressable
+                    android_ripple={{ color: RIPPLE }}
+                    key={status}
+                    style={[
+                      styles.primaryActionButton,
+                      (!order.fulfilmentAllowed || isActionLoading) && styles.disabledAction,
+                    ]}
+                    disabled={!order.fulfilmentAllowed || isActionLoading}
+                    onPress={() => handleAction(status)}
+                  >
+                    {status === "OUT_FOR_DELIVERY" ? (
+                      <Truck size={19} color={SURFACE} strokeWidth={2.6} />
+                    ) : (
+                      <CheckCircle2 size={19} color={SURFACE} strokeWidth={2.6} />
+                    )}
 
-                {primaryActions.map(status => {
-                  const inventoryBlocked =
-                    inventoryReservationRequiredStatuses.has(status) && !allInventoryReady;
-                  const actionDisabled =
-                    !order.fulfilmentAllowed || isActionLoading || inventoryBlocked;
-
-                  return (
-                    <TouchableOpacity
-                      activeOpacity={0.72}
-                      key={status}
-                      style={[styles.primaryActionButton, actionDisabled && styles.disabledAction]}
-                      disabled={actionDisabled}
-                      onPress={() => handleAction(status)}
-                    >
-                      {status === "OUT_FOR_DELIVERY" ? (
-                        <Truck size={19} color={SURFACE} strokeWidth={2.6} />
-                      ) : (
-                        <CheckCircle2 size={19} color={SURFACE} strokeWidth={2.6} />
-                      )}
-
-                      <Text style={styles.primaryActionText}>{getActionLabel(status)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                    <Text style={styles.primaryActionText}>{getActionLabel(status)}</Text>
+                  </Pressable>
+                ))}
 
                 {exceptionActions.length > 0 ? (
                   <View style={styles.exceptionActions}>
                     {exceptionActions.map(status => (
-                      <TouchableOpacity activeOpacity={0.72}
+                      <Pressable
+                        android_ripple={{ color: RIPPLE }}
                         key={status}
                         style={styles.exceptionButton}
                         disabled={isActionLoading}
@@ -501,7 +546,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       >
                         <XCircle size={16} color={DANGER_DARK} strokeWidth={2.5} />
                         <Text style={styles.exceptionButtonText}>{getActionLabel(status)}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ))}
                   </View>
                 ) : null}
@@ -509,6 +554,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 {allowedNextStatuses.length === 0 ? (
                   <View style={styles.terminalStatus}>
                     <CheckCircle2 size={20} color={PHARMACY} strokeWidth={2.6} />
+
                     <View style={styles.terminalText}>
                       <Text style={styles.terminalTitle}>No further pharmacy action</Text>
                       <Text style={styles.terminalSubtitle}>
@@ -570,6 +616,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
                     <View style={styles.prescriberText}>
                       <Text style={styles.prescriberName}>{order.doctor.fullName}</Text>
+
                       <Text style={styles.prescriberSpeciality}>
                         {order.doctor.doctorProfile?.specialization || "Doctor"}
                       </Text>
@@ -600,8 +647,6 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       item={item}
                       index={index}
                       last={index === order.items.length - 1}
-                      inventoryEditable={inventoryEditable}
-                      onManageStock={() => setInventoryMatchItem(item)}
                     />
                   ))
                 ) : (
@@ -624,13 +669,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       <NoteItem title="Doctor note" text={order.prescription.notes} />
                     ) : null}
 
-                    {order.requestNote ? (
-                      <NoteItem title="Request" text={order.requestNote} />
-                    ) : null}
+                    {order.requestNote ? <NoteItem title="Request" text={order.requestNote} /> : null}
 
-                    {order.statusReason ? (
-                      <NoteItem title="Status" text={order.statusReason} />
-                    ) : null}
+                    {order.statusReason ? <NoteItem title="Status" text={order.statusReason} /> : null}
                   </View>
                 </>
               ) : null}
@@ -661,6 +702,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       <Text style={styles.paymentAmountText}>
                         {formatMoney(order.payment.amountPence, order.payment.currency)}
                       </Text>
+
                       <Text style={styles.paymentStatus}>{formatStatus(order.payment.status)}</Text>
                     </View>
                   </View>
@@ -684,6 +726,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         <Text style={styles.exemptionType}>
                           {formatStatus(order.exemptionClaim.exemptionType)}
                         </Text>
+
                         <Text style={styles.exemptionMeta}>
                           {order.exemptionClaim.referenceNumber || "No reference"}
                         </Text>
@@ -725,6 +768,18 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         {"  •  "}
                         {order.patientSubmission.imageUrl ? "Image attached" : "No image"}
                       </Text>
+
+                      {order.patientSubmission.reviewedAt ? (
+                        <Text style={styles.submissionReviewMeta}>
+                          Reviewed {formatDateTime(order.patientSubmission.reviewedAt)}
+                        </Text>
+                      ) : null}
+
+                      {order.patientSubmission.reviewNote ? (
+                        <Text style={styles.submissionReviewNote}>
+                          {order.patientSubmission.reviewNote}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </>
@@ -767,19 +822,6 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
         </ScrollView>
       </View>
 
-      <PharmacyInventoryMatchModal
-        visible={Boolean(inventoryMatchItem)}
-        orderId={route.params.orderId}
-        item={inventoryMatchItem}
-        canEdit={inventoryEditable}
-        onClose={() => setInventoryMatchItem(null)}
-        onChanged={refreshAfterStatusChange}
-        onOpenInventory={() => {
-          setInventoryMatchItem(null);
-          navigation.navigate("PharmacyInventory");
-        }}
-      />
-
       <Modal
         visible={reasonModalVisible}
         transparent
@@ -793,17 +835,19 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.modalTitle}>
                   {selectedExceptionStatus ? getActionLabel(selectedExceptionStatus) : "Update order"}
                 </Text>
+
                 <Text style={styles.modalSubtitle}>
                   Add a clear reason so this decision is recorded in order history.
                 </Text>
               </View>
 
-              <TouchableOpacity activeOpacity={0.72}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.modalClose}
                 onPress={() => setReasonModalVisible(false)}
               >
                 <X size={20} color={TEXT} strokeWidth={2.5} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <TextInput
@@ -819,7 +863,8 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
             <Text style={styles.characterCount}>{statusReason.length}/500</Text>
 
-            <TouchableOpacity activeOpacity={0.72}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
               style={[styles.confirmExceptionButton, isActionLoading && styles.disabledAction]}
               disabled={isActionLoading}
               onPress={submitExceptionStatus}
@@ -831,7 +876,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                   {selectedExceptionStatus ? getActionLabel(selectedExceptionStatus) : "Confirm"}
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -863,7 +908,9 @@ const QuickInfo = ({
 }) => (
   <View style={[styles.quickInfo, { backgroundColor: background }]}>
     {icon}
-    <Text style={styles.quickInfoValue} numberOfLines={1}>{value}</Text>
+    <Text style={styles.quickInfoValue} numberOfLines={1}>
+      {value}
+    </Text>
     <Text style={styles.quickInfoLabel}>{label}</Text>
   </View>
 );
@@ -887,7 +934,9 @@ const SectionHeading = ({
 const ContactItem = ({ icon, text }: { icon: ReactNode; text: string }) => (
   <View style={styles.contactItem}>
     {icon}
-    <Text style={styles.contactText} numberOfLines={2}>{text}</Text>
+    <Text style={styles.contactText} numberOfLines={2}>
+      {text}
+    </Text>
   </View>
 );
 
@@ -895,42 +944,26 @@ const MedicineItem = ({
   item,
   index,
   last,
-  inventoryEditable,
-  onManageStock,
 }: {
   item: PharmacyMedicineItem;
   index: number;
   last: boolean;
-  inventoryEditable: boolean;
-  onManageStock: () => void;
 }) => {
-  const quantityMatch = item.quantity?.trim().match(/^(\d+)/);
-  const requiredNumeric = quantityMatch ? Number(quantityMatch[1]) : null;
+  const rawQuantity = item.quantity?.trim() || "";
+  const parsedRequired = rawQuantity ? Number.parseFloat(rawQuantity) : Number.NaN;
+  const required = Number.isFinite(parsedRequired) && parsedRequired > 0 ? parsedRequired : null;
   const dispensed = item.dispensedQuantity || 0;
-  const progress =
-    requiredNumeric && requiredNumeric > 0
-      ? Math.min(100, Math.max(0, (dispensed / requiredNumeric) * 100))
-      : 0;
+  const progress = required ? Math.min(100, Math.max(0, (dispensed / required) * 100)) : 0;
 
-  const quantityText = item.quantity
-    ? /^\d+$/.test(item.quantity.trim()) && item.quantityUnit
-      ? `${item.quantity.trim()} ${item.quantityUnit}`
-      : item.quantity
+  const unitAlreadyIncluded = item.quantityUnit
+    ? rawQuantity.toLowerCase().includes(item.quantityUnit.toLowerCase())
+    : true;
+
+  const quantityText = rawQuantity
+    ? `${rawQuantity}${item.quantityUnit && !unitAlreadyIncluded ? ` ${item.quantityUnit}` : ""}`
     : "Not specified";
 
   const dispensedText = `${dispensed}${item.quantityUnit ? ` ${item.quantityUnit}` : ""}`;
-  const reservationActive = Boolean(
-    item.inventoryItemId &&
-      item.inventoryReservedQuantity > 0 &&
-      item.inventoryReservedAt &&
-      !item.inventoryReleasedAt &&
-      !item.inventoryConsumedAt,
-  );
-  const stockConsumed = Boolean(item.inventoryConsumedAt);
-  const inventoryName = item.inventoryItem?.medicineName || "Matched inventory item";
-  const inventoryDetail = item.inventoryItem
-    ? [item.inventoryItem.strength, item.inventoryItem.form].filter(Boolean).join(" • ")
-    : "";
 
   return (
     <View style={[styles.medicineItem, last ? styles.medicineItemLast : undefined]}>
@@ -940,9 +973,14 @@ const MedicineItem = ({
         </View>
 
         <View style={styles.medicineMain}>
-          <Text style={styles.medicineName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.medicineName} numberOfLines={2}>
+            {item.name}
+          </Text>
+
           <Text style={styles.medicineSubline}>
-            {item.dose || "Dose not specified"}{"  •  "}{quantityText}
+            {item.dose || "Dose not specified"}
+            {"  •  "}
+            {quantityText}
           </Text>
         </View>
 
@@ -953,7 +991,9 @@ const MedicineItem = ({
 
       <View style={styles.medicineInstructionBox}>
         <Text style={styles.instructionLabel}>DIRECTIONS</Text>
-        <Text style={styles.instructionText}>{item.instructions || "No instructions provided"}</Text>
+        <Text style={styles.instructionText}>
+          {item.instructions || "No instructions provided"}
+        </Text>
       </View>
 
       <View style={styles.medicineStockRow}>
@@ -972,72 +1012,17 @@ const MedicineItem = ({
         </View>
       </View>
 
-      {requiredNumeric !== null && requiredNumeric > 0 ? (
+      {required !== null && required > 0 ? (
         <View style={styles.progressArea}>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
 
           <Text style={styles.progressText}>
-            {dispensed >= requiredNumeric
-              ? "Complete"
-              : `${Math.max(requiredNumeric - dispensed, 0)} remaining`}
+            {dispensed >= required ? "Complete" : `${Math.max(required - dispensed, 0)} remaining`}
           </Text>
         </View>
       ) : null}
-
-      {stockConsumed ? (
-        <View style={styles.inventoryMatchedCard}>
-          <View style={styles.inventoryStatusRow}>
-            <PackageCheck size={17} color={PHARMACY_DARK} strokeWidth={2.5} />
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryMatchedTitle}>Stock deducted</Text>
-              <Text style={styles.inventoryMatchedName}>{inventoryName}</Text>
-              {inventoryDetail ? <Text style={styles.inventoryMatchedMeta}>{inventoryDetail}</Text> : null}
-            </View>
-          </View>
-        </View>
-      ) : reservationActive ? (
-        <View style={styles.inventoryMatchedCard}>
-          <View style={styles.inventoryStatusRow}>
-            <PackageCheck size={17} color={PHARMACY_DARK} strokeWidth={2.5} />
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryMatchedTitle}>Stock reserved</Text>
-              <Text style={styles.inventoryMatchedName}>{inventoryName}</Text>
-              {inventoryDetail ? <Text style={styles.inventoryMatchedMeta}>{inventoryDetail}</Text> : null}
-              <Text style={styles.inventoryReservedText}>
-                {item.inventoryReservedQuantity} {item.inventoryItem?.stockUnit || "unit"}
-                {item.inventoryReservedQuantity === 1 ? "" : "s"} reserved
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.72} style={styles.manageStockButton} onPress={onManageStock}>
-            <Text style={styles.manageStockButtonText}>
-              {inventoryEditable ? "Review / change stock" : "Review stock"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.inventoryUnmatchedCard}>
-          <View style={styles.inventoryStatusRow}>
-            <PackageSearch size={17} color={WARNING_DARK} strokeWidth={2.5} />
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryUnmatchedTitle}>Stock not matched</Text>
-              <Text style={styles.inventoryUnmatchedText}>
-                A pharmacist must confirm a suitable inventory item before preparation.
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.72} style={styles.matchStockButton} onPress={onManageStock}>
-            <PackageSearch size={15} color={SURFACE} strokeWidth={2.5} />
-            <Text style={styles.matchStockButtonText}>
-              {inventoryEditable ? "Match stock" : "Review matching status"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 };
@@ -1137,7 +1122,13 @@ const styles = StyleSheet.create({
   },
 
   headerSourceText: { flex: 1, color: "#E9FFF0", fontSize: 10, fontWeight: "600" },
-  orderNumber: { color: SURFACE, fontSize: 20, fontWeight: "700", letterSpacing: -0.25, marginTop: 10 },
+  orderNumber: {
+    color: SURFACE,
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: -0.25,
+    marginTop: 10,
+  },
   receivedRow: { flexDirection: "row", alignItems: "center", marginTop: 5 },
   receivedText: { color: "#D9F5E2", fontSize: 9, fontWeight: "500", marginLeft: 6 },
   statusChip: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, marginLeft: 8 },
@@ -1161,11 +1152,29 @@ const styles = StyleSheet.create({
   },
 
   verificationText: { color: SURFACE, fontSize: 8, fontWeight: "600", marginLeft: 5 },
-  headerDivider: { width: StyleSheet.hairlineWidth, height: 20, backgroundColor: "rgba(255,255,255,0.3)" },
 
-  stateArea: { paddingVertical: 50, paddingHorizontal: 24, alignItems: "center" },
+  headerDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+
+  stateArea: {
+    paddingVertical: 50,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+
   stateTitle: { color: TEXT, fontSize: 15, fontWeight: "700", marginTop: 11 },
-  stateText: { color: MUTED, fontSize: 11, lineHeight: 17, textAlign: "center", fontWeight: "500", marginTop: 4 },
+
+  stateText: {
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 17,
+    textAlign: "center",
+    fontWeight: "500",
+    marginTop: 4,
+  },
 
   errorIcon: {
     width: 52,
@@ -1191,7 +1200,6 @@ const styles = StyleSheet.create({
 
   retryText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 6 },
   body: { paddingHorizontal: 16 },
-
   quickInfoRow: { flexDirection: "row", marginTop: 13, gap: 8 },
 
   quickInfo: {
@@ -1222,16 +1230,72 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
-  fulfilmentWarning: {
-    flexDirection: "row",
-    alignItems: "center",
+  verificationRequestPanel: {
     backgroundColor: WARNING_LIGHT,
-    borderRadius: 12,
-    padding: 11,
+    borderRadius: 13,
+    padding: 12,
     marginBottom: 10,
   },
 
-  inventoryActionWarning: {
+  verificationRequestHeader: { flexDirection: "row", alignItems: "flex-start" },
+
+  verificationRequestIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: "#FFE5BE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+  },
+
+  verificationRequestText: { flex: 1 },
+  verificationRequestTitle: { color: WARNING_DARK, fontSize: 12, fontWeight: "700" },
+
+  verificationRequestDescription: {
+    color: TEXT,
+    fontSize: 9,
+    fontWeight: "500",
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  verifyRequestButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: WARNING_DARK,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 11,
+  },
+
+  verifyRequestButtonText: {
+    color: SURFACE,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  verifiedRequestPanel: {
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+
+  verifiedRequestText: {
+    flex: 1,
+    color: PHARMACY_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    lineHeight: 14,
+    marginLeft: 8,
+  },
+
+  fulfilmentWarning: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: WARNING_LIGHT,
@@ -1277,7 +1341,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
 
-  exceptionButtonText: { color: DANGER_DARK, fontSize: 10, fontWeight: "700", marginLeft: 5 },
+  exceptionButtonText: {
+    color: DANGER_DARK,
+    fontSize: 10,
+    fontWeight: "700",
+    marginLeft: 5,
+  },
+
   disabledAction: { opacity: 0.45 },
 
   terminalStatus: {
@@ -1301,7 +1371,12 @@ const styles = StyleSheet.create({
 
   actionLoadingText: { color: MUTED, fontSize: 10, fontWeight: "600", marginLeft: 7 },
 
-  patientPanel: { backgroundColor: BLUE_LIGHT, borderRadius: 12, padding: 14 },
+  patientPanel: {
+    backgroundColor: BLUE_LIGHT,
+    borderRadius: 12,
+    padding: 14,
+  },
+
   profileRow: { flexDirection: "row", alignItems: "center" },
 
   patientAvatar: {
@@ -1328,7 +1403,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  contactText: { flex: 1, color: TEXT, fontSize: 10, fontWeight: "500", lineHeight: 15, marginLeft: 8 },
+  contactText: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "500",
+    lineHeight: 15,
+    marginLeft: 8,
+  },
 
   prescriberPanel: {
     backgroundColor: PHARMACY_LIGHT,
@@ -1353,7 +1435,11 @@ const styles = StyleSheet.create({
   prescriberSpeciality: { color: PHARMACY_DARK, fontSize: 10, fontWeight: "600", marginTop: 3 },
   prescribedDate: { color: MUTED, fontSize: 9, fontWeight: "500", marginTop: 5 },
 
-  medicineContainer: { backgroundColor: SURFACE, borderRadius: 12, overflow: "hidden" },
+  medicineContainer: {
+    backgroundColor: SURFACE,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
 
   medicineItem: {
     paddingHorizontal: 14,
@@ -1400,11 +1486,31 @@ const styles = StyleSheet.create({
     marginTop: 11,
   },
 
-  instructionLabel: { color: PHARMACY_DARK, fontSize: 7, fontWeight: "700", letterSpacing: 0.4 },
-  instructionText: { color: TEXT, fontSize: 10, lineHeight: 15, fontWeight: "500", marginTop: 4 },
+  instructionLabel: {
+    color: PHARMACY_DARK,
+    fontSize: 7,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+
+  instructionText: {
+    color: TEXT,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+
   medicineStockRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
   quantityBlock: { flex: 1 },
-  quantityDivider: { width: StyleSheet.hairlineWidth, height: 29, backgroundColor: BORDER, marginHorizontal: 14 },
+
+  quantityDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 29,
+    backgroundColor: BORDER,
+    marginHorizontal: 14,
+  },
+
   quantityLabel: { color: MUTED, fontSize: 8, fontWeight: "600" },
   quantityValue: { color: TEXT, fontSize: 12, fontWeight: "700", marginTop: 3 },
   dispensedValue: { color: PHARMACY_DARK },
@@ -1420,60 +1526,31 @@ const styles = StyleSheet.create({
 
   progressFill: { height: "100%", borderRadius: 3, backgroundColor: PHARMACY },
   progressText: { color: MUTED, fontSize: 8, fontWeight: "600", marginLeft: 9 },
-
-  inventoryMatchedCard: {
-    backgroundColor: PHARMACY_LIGHT,
-    borderRadius: 11,
-    padding: 10,
-    marginTop: 11,
-  },
-
-  inventoryUnmatchedCard: {
-    backgroundColor: WARNING_LIGHT,
-    borderRadius: 11,
-    padding: 10,
-    marginTop: 11,
-  },
-
-  inventoryStatusRow: { flexDirection: "row", alignItems: "flex-start" },
-  inventoryStatusText: { flex: 1, marginLeft: 8 },
-  inventoryMatchedTitle: { color: PHARMACY_DARK, fontSize: 9, fontWeight: "700" },
-  inventoryMatchedName: { color: TEXT, fontSize: 11, fontWeight: "700", marginTop: 3 },
-  inventoryMatchedMeta: { color: MUTED, fontSize: 8, fontWeight: "600", marginTop: 2 },
-  inventoryReservedText: { color: PHARMACY_DARK, fontSize: 8, fontWeight: "700", marginTop: 4 },
-  inventoryUnmatchedTitle: { color: WARNING_DARK, fontSize: 9, fontWeight: "700" },
-  inventoryUnmatchedText: { color: TEXT, fontSize: 8, lineHeight: 12, fontWeight: "500", marginTop: 3 },
-
-  manageStockButton: {
-    minHeight: 36,
-    backgroundColor: SURFACE,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 9,
-  },
-
-  manageStockButtonText: { color: PHARMACY_DARK, fontSize: 9, fontWeight: "700" },
-
-  matchStockButton: {
-    minHeight: 38,
-    backgroundColor: PHARMACY,
-    borderRadius: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 9,
-  },
-
-  matchStockButtonText: { color: SURFACE, fontSize: 9, fontWeight: "700", marginLeft: 6 },
   medicineEmpty: { alignItems: "center", paddingHorizontal: 16, paddingTop: 18 },
 
-  notesPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 12, paddingHorizontal: 13 },
+  notesPanel: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 12,
+    paddingHorizontal: 13,
+  },
+
   noteItem: { paddingVertical: 10 },
   noteTitle: { color: WARNING_DARK, fontSize: 9, fontWeight: "700" },
-  noteText: { color: TEXT, fontSize: 10, lineHeight: 16, fontWeight: "500", marginTop: 3 },
 
-  paymentPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 12, padding: 14 },
+  noteText: {
+    color: TEXT,
+    fontSize: 10,
+    lineHeight: 16,
+    fontWeight: "500",
+    marginTop: 3,
+  },
+
+  paymentPanel: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 12,
+    padding: 14,
+  },
+
   paymentTop: { flexDirection: "row", alignItems: "center" },
 
   paymentIcon: {
@@ -1493,13 +1570,25 @@ const styles = StyleSheet.create({
   paymentAmountText: { color: TEXT, fontSize: 15, fontWeight: "700" },
   paymentStatus: { color: WARNING_DARK, fontSize: 8, fontWeight: "700", marginTop: 3 },
 
-  exemptionPanel: { backgroundColor: BLUE_LIGHT, borderRadius: 12, padding: 14 },
+  exemptionPanel: {
+    backgroundColor: BLUE_LIGHT,
+    borderRadius: 12,
+    padding: 14,
+  },
+
   exemptionTop: { flexDirection: "row", alignItems: "center" },
   exemptionText: { flex: 1, marginLeft: 10 },
   exemptionType: { color: TEXT, fontSize: 13, fontWeight: "700" },
   exemptionMeta: { color: MUTED, fontSize: 9, fontWeight: "500", marginTop: 3 },
   exemptionStatus: { color: BLUE_DARK, fontSize: 9, fontWeight: "700" },
-  exemptionReason: { color: DANGER_DARK, fontSize: 10, lineHeight: 15, fontWeight: "500", marginTop: 10 },
+
+  exemptionReason: {
+    color: DANGER_DARK,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: "500",
+    marginTop: 10,
+  },
 
   submissionPanel: {
     backgroundColor: BLUE_LIGHT,
@@ -1522,6 +1611,15 @@ const styles = StyleSheet.create({
   submissionText: { flex: 1 },
   submissionTitle: { color: TEXT, fontSize: 13, fontWeight: "700" },
   submissionMeta: { color: BLUE_DARK, fontSize: 9, fontWeight: "600", marginTop: 4 },
+  submissionReviewMeta: { color: PHARMACY_DARK, fontSize: 8, fontWeight: "600", marginTop: 5 },
+
+  submissionReviewNote: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    lineHeight: 14,
+    marginTop: 4,
+  },
 
   historyPanel: {
     backgroundColor: PHARMACY_SOFT,
@@ -1572,7 +1670,14 @@ const styles = StyleSheet.create({
 
   currentChipText: { color: PHARMACY_DARK, fontSize: 7, fontWeight: "700" },
   historyDate: { color: MUTED, fontSize: 8, fontWeight: "500", marginTop: 3 },
-  historyNote: { color: MUTED, fontSize: 9, lineHeight: 14, fontWeight: "500", marginTop: 4 },
+
+  historyNote: {
+    color: MUTED,
+    fontSize: 9,
+    lineHeight: 14,
+    fontWeight: "500",
+    marginTop: 4,
+  },
 
   emptyText: {
     color: MUTED,
@@ -1612,7 +1717,14 @@ const styles = StyleSheet.create({
 
   modalHeaderText: { flex: 1, paddingRight: 10 },
   modalTitle: { color: TEXT, fontSize: 18, fontWeight: "700" },
-  modalSubtitle: { color: MUTED, fontSize: 11, fontWeight: "600", lineHeight: 16, marginTop: 4 },
+
+  modalSubtitle: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+    marginTop: 4,
+  },
 
   modalClose: {
     width: 38,
@@ -1651,5 +1763,9 @@ const styles = StyleSheet.create({
     marginTop: 11,
   },
 
-  confirmExceptionText: { color: SURFACE, fontSize: 13, fontWeight: "700" },
+  confirmExceptionText: {
+    color: SURFACE,
+    fontSize: 13,
+    fontWeight: "700",
+  },
 });
