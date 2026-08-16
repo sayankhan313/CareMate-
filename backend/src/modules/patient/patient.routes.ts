@@ -11,6 +11,7 @@ import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
 import { pharmacyLinkController } from "./pharmacy-link.controller.js";
+import { pharmacyRefillController } from "./pharmacy-refill.controller.js";
 import { profileController } from "./profile.controller.js";
 import { reportController } from "./report.controller.js";
 import { safetyController } from "./safety.controller.js";
@@ -22,321 +23,87 @@ const router = Router();
 router.use(authMiddleware);
 router.use(authorizeRoles("PATIENT"));
 
-router.get(
-  "/dashboard",
-  dashboardController.getDashboard
-);
+router.get("/dashboard", dashboardController.getDashboard);
 
-router.get(
-  "/profile",
-  profileController.getProfile
-);
+router.get("/profile", profileController.getProfile);
+router.patch("/profile", profileController.updateProfile);
 
-router.patch(
-  "/profile",
-  profileController.updateProfile
-);
+router.get("/settings/notifications", settingsController.getNotificationPreferences);
+router.patch("/settings/notifications", settingsController.updateNotificationPreferences);
+router.get("/settings/reminders", settingsController.getReminderSettings);
+router.patch("/settings/reminders", settingsController.updateReminderSettings);
+router.get("/settings/safety", settingsController.getSafetySettings);
+router.patch("/settings/safety", settingsController.updateSafetySettings);
+router.get("/settings/accessibility", settingsController.getAccessibilitySettings);
+router.patch("/settings/accessibility", settingsController.updateAccessibilitySettings);
+router.get("/settings/privacy", settingsController.getPrivacySettings);
+router.patch("/settings/privacy", settingsController.updatePrivacySettings);
 
-router.get(
-  "/settings/notifications",
-  settingsController.getNotificationPreferences
-);
+router.get("/doctors/specialties", doctorAssignmentController.listDoctorSpecialties);
+router.get("/doctors/:doctorId/availability/slots", consultationController.getDoctorAvailableSlots);
+router.get("/doctors/:doctorId/availability", consultationController.getDoctorMonthlyAvailability);
+router.get("/doctors", doctorAssignmentController.listApprovedDoctors);
 
-router.patch(
-  "/settings/notifications",
-  settingsController.updateNotificationPreferences
-);
+router.get("/doctor-assignments", doctorAssignmentController.listAssignedDoctors);
+router.post("/doctor-assignment", doctorAssignmentController.assignDoctor);
+router.post("/doctor-assignments", doctorAssignmentController.assignDoctor);
+router.patch("/doctor-assignments/:doctorId/primary", doctorAssignmentController.setPrimaryDoctor);
+router.delete("/doctor-assignments/:doctorId", doctorAssignmentController.removeDoctor);
 
-router.get(
-  "/settings/reminders",
-  settingsController.getReminderSettings
-);
-
-router.patch(
-  "/settings/reminders",
-  settingsController.updateReminderSettings
-);
-
-router.get(
-  "/settings/safety",
-  settingsController.getSafetySettings
-);
-
-router.patch(
-  "/settings/safety",
-  settingsController.updateSafetySettings
-);
-
-router.get(
-  "/settings/accessibility",
-  settingsController.getAccessibilitySettings
-);
-
-router.patch(
-  "/settings/accessibility",
-  settingsController.updateAccessibilitySettings
-);
-
-router.get(
-  "/settings/privacy",
-  settingsController.getPrivacySettings
-);
-
-router.patch(
-  "/settings/privacy",
-  settingsController.updatePrivacySettings
-);
-
-router.get(
-  "/doctors/specialties",
-  doctorAssignmentController.listDoctorSpecialties
-);
-
-router.get(
-  "/doctors/:doctorId/availability/slots",
-  consultationController.getDoctorAvailableSlots
-);
-
-router.get(
-  "/doctors/:doctorId/availability",
-  consultationController.getDoctorMonthlyAvailability
-);
-
-router.get(
-  "/doctors",
-  doctorAssignmentController.listApprovedDoctors
-);
-
-router.get(
-  "/doctor-assignments",
-  doctorAssignmentController.listAssignedDoctors
-);
-
-router.post(
-  "/doctor-assignment",
-  doctorAssignmentController.assignDoctor
-);
-
-router.post(
-  "/doctor-assignments",
-  doctorAssignmentController.assignDoctor
-);
-
-router.patch(
-  "/doctor-assignments/:doctorId/primary",
-  doctorAssignmentController.setPrimaryDoctor
-);
-
-router.delete(
-  "/doctor-assignments/:doctorId",
-  doctorAssignmentController.removeDoctor
-);
-
-router.get(
-  "/pharmacies/saved",
-  pharmacyLinkController.listSavedPharmacies
-);
-
-router.get(
-  "/pharmacies",
-  pharmacyLinkController.listApprovedPharmacies
-);
-
-router.post(
-  "/pharmacies/:pharmacyId/save",
-  pharmacyLinkController.savePharmacy
-);
-
-router.patch(
-  "/pharmacies/:pharmacyId/primary",
-  pharmacyLinkController.setPrimaryPharmacy
-);
-
-router.patch(
-  "/pharmacies/:pharmacyId/charge-preference",
-  pharmacyLinkController.updateChargePreference
-);
-
+router.get("/pharmacies/saved", pharmacyLinkController.listSavedPharmacies);
+router.get("/pharmacies", pharmacyLinkController.listApprovedPharmacies);
+router.post("/pharmacies/:pharmacyId/save", pharmacyLinkController.savePharmacy);
+router.patch("/pharmacies/:pharmacyId/primary", pharmacyLinkController.setPrimaryPharmacy);
+router.patch("/pharmacies/:pharmacyId/charge-preference", pharmacyLinkController.updateChargePreference);
 router.post(
   "/pharmacies/:pharmacyId/exemption-evidence",
   uploadPatientPharmacyExemptionEvidence,
-  pharmacyLinkController.submitExemptionEvidence
+  pharmacyLinkController.submitExemptionEvidence,
 );
+router.get("/pharmacies/:pharmacyId/exemption-evidence", pharmacyLinkController.listExemptionEvidence);
+router.delete("/pharmacies/:pharmacyId", pharmacyLinkController.removePharmacy);
 
-router.get(
-  "/pharmacies/:pharmacyId/exemption-evidence",
-  pharmacyLinkController.listExemptionEvidence
-);
+router.post("/pharmacy-refills", pharmacyRefillController.createRefillRequest);
 
-router.delete(
-  "/pharmacies/:pharmacyId",
-  pharmacyLinkController.removePharmacy
-);
+router.post("/reports", uploadSinglePatientReport, reportController.createReport);
+router.get("/reports", reportController.listReports);
+router.get("/reports/:reportId/file", reportController.getReportFile);
+router.post("/reports/:reportId/seen", reportController.markReportReviewsSeen);
+router.get("/reports/:reportId", reportController.getReportDetail);
 
-router.post(
-  "/reports",
-  uploadSinglePatientReport,
-  reportController.createReport
-);
+router.post("/vitals/readings", vitalsController.createReading);
+router.get("/vitals/latest", vitalsController.getLatestReading);
+router.get("/vitals/history", vitalsController.getReadingHistory);
 
-router.get(
-  "/reports",
-  reportController.listReports
-);
+router.post("/safety-alerts", safetyController.createSafetyAlert);
+router.get("/safety-alerts/active", safetyController.getActiveSafetyAlert);
+router.post("/safety-alerts/:alertId/cancel", safetyController.cancelSafetyAlert);
+router.post("/safety-alerts/:alertId/escalate", safetyController.escalateSafetyAlert);
 
-router.get(
-  "/reports/:reportId/file",
-  reportController.getReportFile
-);
+router.post("/consultations/manual", consultationController.createManualConsultation);
+router.get("/consultations", consultationController.listConsultations);
+router.post("/consultations/:consultationId/cancel", consultationController.cancelConsultation);
+router.patch("/consultations/:consultationId/reschedule", consultationController.rescheduleConsultation);
+router.get("/consultations/:consultationId/join", consultationController.getPatientJoinConfig);
+router.get("/consultations/:consultationId", consultationController.getConsultationById);
 
-router.post(
-  "/reports/:reportId/seen",
-  reportController.markReportReviewsSeen
-);
+router.post("/medicines", medicineController.createMedicine);
+router.get("/medicines", medicineController.listMedicines);
+router.get("/medicines/today", medicineController.getTodayMedicines);
+router.get("/medicines/:medicineId", medicineController.getMedicineById);
+router.patch("/medicines/:medicineId", medicineController.updateMedicine);
+router.post("/medicines/:medicineId/deletion-review", medicineController.requestMedicineDeletion);
 
-router.get(
-  "/reports/:reportId",
-  reportController.getReportDetail
-);
+router.get("/medicine-reviews", medicineController.listMedicineReviews);
+router.post("/medicine-reviews/:requestId/seen", medicineController.markMedicineReviewSeen);
+router.post("/medicine-reviews/:requestId/apply", medicineController.applyApprovedMedicineReview);
+router.post("/medicine-reviews/:requestId/resubmit", medicineController.resubmitMedicineReview);
 
-router.post(
-  "/vitals/readings",
-  vitalsController.createReading
-);
+router.post("/medicine-reminders/:reminderId/taken", medicineController.markReminderTaken);
+router.post("/medicine-reminders/:reminderId/snooze", medicineController.snoozeReminder);
 
-router.get(
-  "/vitals/latest",
-  vitalsController.getLatestReading
-);
-
-router.get(
-  "/vitals/history",
-  vitalsController.getReadingHistory
-);
-
-router.post(
-  "/safety-alerts",
-  safetyController.createSafetyAlert
-);
-
-router.get(
-  "/safety-alerts/active",
-  safetyController.getActiveSafetyAlert
-);
-
-router.post(
-  "/safety-alerts/:alertId/cancel",
-  safetyController.cancelSafetyAlert
-);
-
-router.post(
-  "/safety-alerts/:alertId/escalate",
-  safetyController.escalateSafetyAlert
-);
-
-router.post(
-  "/consultations/manual",
-  consultationController.createManualConsultation
-);
-
-router.get(
-  "/consultations",
-  consultationController.listConsultations
-);
-
-router.post(
-  "/consultations/:consultationId/cancel",
-  consultationController.cancelConsultation
-);
-
-router.patch(
-  "/consultations/:consultationId/reschedule",
-  consultationController.rescheduleConsultation
-);
-
-router.get(
-  "/consultations/:consultationId/join",
-  consultationController.getPatientJoinConfig
-);
-
-router.get(
-  "/consultations/:consultationId",
-  consultationController.getConsultationById
-);
-
-router.post(
-  "/medicines",
-  medicineController.createMedicine
-);
-
-router.get(
-  "/medicines",
-  medicineController.listMedicines
-);
-
-router.get(
-  "/medicines/today",
-  medicineController.getTodayMedicines
-);
-
-router.get(
-  "/medicines/:medicineId",
-  medicineController.getMedicineById
-);
-
-router.patch(
-  "/medicines/:medicineId",
-  medicineController.updateMedicine
-);
-
-router.post(
-  "/medicines/:medicineId/deletion-review",
-  medicineController.requestMedicineDeletion
-);
-
-router.get(
-  "/medicine-reviews",
-  medicineController.listMedicineReviews
-);
-
-router.post(
-  "/medicine-reviews/:requestId/seen",
-  medicineController.markMedicineReviewSeen
-);
-
-router.post(
-  "/medicine-reviews/:requestId/apply",
-  medicineController.applyApprovedMedicineReview
-);
-
-router.post(
-  "/medicine-reviews/:requestId/resubmit",
-  medicineController.resubmitMedicineReview
-);
-
-router.post(
-  "/medicine-reminders/:reminderId/taken",
-  medicineController.markReminderTaken
-);
-
-router.post(
-  "/medicine-reminders/:reminderId/snooze",
-  medicineController.snoozeReminder
-);
-
-router.get(
-  "/medicine-references/search",
-  medicineReferenceController.searchMedicineReferences
-);
-
-router.post(
-  "/medicine-scan/parse",
-  medicineReferenceController.parseMedicineScan
-);
-
-router.post(
-  "/medicine-scan/prescription/parse",
-  medicineReferenceController.parsePrescriptionScan
-);
+router.get("/medicine-references/search", medicineReferenceController.searchMedicineReferences);
+router.post("/medicine-scan/parse", medicineReferenceController.parseMedicineScan);
+router.post("/medicine-scan/prescription/parse", medicineReferenceController.parsePrescriptionScan);
 
 export default router;

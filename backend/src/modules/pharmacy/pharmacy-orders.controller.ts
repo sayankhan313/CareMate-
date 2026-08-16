@@ -6,6 +6,7 @@ import {
   pharmacyOrderParamsSchema,
   pharmacyOrdersQuerySchema,
   updatePharmacyOrderStatusSchema,
+  verifyPatientRefillSchema,
 } from "./pharmacy-orders.validation.js";
 
 const getPharmacyId = (req: Request) => {
@@ -43,6 +44,30 @@ export const pharmacyOrdersController = {
 
       const data = await pharmacyOrdersService.getOrderDetail(getPharmacyId(req), parsed.data.orderId);
       return res.status(200).json({ success: true, message: "Pharmacy order fetched successfully", data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async verifyPatientRefill(req: Request, res: Response, next: NextFunction) {
+    try {
+      const params = pharmacyOrderParamsSchema.safeParse(req.params);
+      if (!params.success) throw new AppError(getValidationMessage(params.error), 400);
+
+      const body = verifyPatientRefillSchema.safeParse(req.body);
+      if (!body.success) throw new AppError(getValidationMessage(body.error), 400);
+
+      const data = await pharmacyOrdersService.verifyPatientRefillRequest(
+        getPharmacyId(req),
+        params.data.orderId,
+        body.data.note,
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Patient medicine request verified for pharmacy fulfilment",
+        data,
+      });
     } catch (error) {
       next(error);
     }
