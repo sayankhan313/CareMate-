@@ -9,6 +9,11 @@ import type {
   PharmacyOrderStatusUpdateInput,
   PharmacyOrderStatusUpdateTarget,
 } from "./pharmacy-orders.types.js";
+import {
+  consumeOrderInventoryReservations,
+  ensureOrderInventoryReadyForFulfilment,
+  releaseOrderInventoryReservations,
+} from "./pharmacy-inventory-match.service.js";
 
 export const pharmacyOrderListInclude = {
   patient: { select: { id: true, fullName: true } },
@@ -68,6 +73,23 @@ const exceptionStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
   "DELAYED",
   "OUT_OF_STOCK",
   "CANCELLED",
+]);
+
+const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
+  "PREPARING",
+  "READY",
+  "OUT_FOR_DELIVERY",
+]);
+
+const inventoryReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
+  "REJECTED",
+  "OUT_OF_STOCK",
+  "CANCELLED",
+]);
+
+const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
+  "DELIVERED",
+  "COLLECTED",
 ]);
 
 export const getAllowedPharmacyOrderStatuses = (status: PharmacyOrderStatus) => {
@@ -223,6 +245,24 @@ export const pharmacyOrdersService = {
             instructions: true,
             dispensedQuantity: true,
             quantityUnit: true,
+            inventoryItemId: true,
+            inventoryReservedQuantity: true,
+            inventoryReservedAt: true,
+            inventoryConsumedAt: true,
+            inventoryReleasedAt: true,
+            inventoryItem: {
+              select: {
+                id: true,
+                medicineName: true,
+                strength: true,
+                form: true,
+                stockUnit: true,
+                quantityInStock: true,
+                reservedQuantity: true,
+                lowStockThreshold: true,
+                isActive: true,
+              },
+            },
           },
           orderBy: { createdAt: "asc" },
         },
@@ -322,6 +362,10 @@ export const pharmacyOrdersService = {
     const timestampUpdate = getTimestampUpdate(input.status, now, order);
 
     const updatedOrder = await prisma.$transaction(async tx => {
+      if (inventoryReservationRequiredStatuses.has(input.status)) {
+        await ensureOrderInventoryReadyForFulfilment(tx, pharmacyId, orderId);
+      }
+
       const changed = await tx.medicineOrder.updateMany({
         where: { id: orderId, pharmacyId, status: order.status },
         data: {
@@ -333,6 +377,14 @@ export const pharmacyOrdersService = {
 
       if (changed.count === 0) {
         throw new AppError("Order status changed elsewhere. Please refresh and try again.", 409);
+      }
+
+      if (inventoryReleaseStatuses.has(input.status)) {
+        await releaseOrderInventoryReservations(tx, pharmacyId, orderId, now);
+      }
+
+      if (inventoryConsumeStatuses.has(input.status)) {
+        await consumeOrderInventoryReservations(tx, pharmacyId, orderId, now);
       }
 
       await tx.medicineOrderStatusHistory.create({

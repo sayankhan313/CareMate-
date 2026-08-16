@@ -685,7 +685,8 @@ model PharmacyInventoryItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  pharmacy User @relation("PharmacyInventoryItems", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacy   User                @relation("PharmacyInventoryItems", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  orderItems MedicineOrderItem[] @relation("MedicineOrderItemInventory")
 
   @@index([pharmacyId, isActive])
   @@index([pharmacyId, medicineName])
@@ -1120,29 +1121,38 @@ model MedicineOrder {
 }
 
 model MedicineOrderItem {
-  id                 String   @id @default(uuid())
+  id                 String  @id @default(uuid())
   orderId            String
   medicineId         String?
   prescriptionItemId String?
   submissionItemId   String?
+  inventoryItemId    String?
   name               String
   dose               String?
   quantity           String?
   instructions       String?
   dispensedQuantity  Int?
   quantityUnit       String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+
+  inventoryReservedQuantity Int       @default(0)
+  inventoryReservedAt       DateTime?
+  inventoryConsumedAt       DateTime?
+  inventoryReleasedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   order            MedicineOrder                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   medicine         Medicine?                          @relation(fields: [medicineId], references: [id], onDelete: SetNull)
   prescriptionItem PrescriptionItem?                  @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
   submissionItem   PatientPrescriptionSubmissionItem? @relation(fields: [submissionItemId], references: [id], onDelete: SetNull)
+  inventoryItem    PharmacyInventoryItem?             @relation("MedicineOrderItemInventory", fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([medicineId])
   @@index([prescriptionItemId])
   @@index([submissionItemId])
+  @@index([inventoryItemId])
 }
 
 model PrescriptionPayment {
