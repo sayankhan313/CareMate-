@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
+import { notificationService } from "../notification/notification.service.js";
 import { ensureApprovedPharmacy } from "./pharmacy-access.service.js";
 import type {
   PharmacyExemptionReviewDetail,
@@ -28,13 +29,7 @@ const exemptionSelect = {
       id: true,
       fullName: true,
       email: true,
-      patientProfile: {
-        select: {
-          phoneNumber: true,
-          addressLine: true,
-          postcode: true,
-        },
-      },
+      patientProfile: { select: { phoneNumber: true, addressLine: true, postcode: true } },
     },
   },
 } as const;
@@ -51,11 +46,7 @@ const formatListItem = (evidence: any): PharmacyExemptionReviewListItem => ({
   documentCount: evidence.evidenceDocumentUrls.length,
   createdAt: evidence.createdAt,
   updatedAt: evidence.updatedAt,
-  patient: {
-    id: evidence.patient.id,
-    fullName: evidence.patient.fullName,
-    email: evidence.patient.email,
-  },
+  patient: { id: evidence.patient.id, fullName: evidence.patient.fullName, email: evidence.patient.email },
 });
 
 const formatDetail = (evidence: any): PharmacyExemptionReviewDetail => ({
@@ -63,10 +54,7 @@ const formatDetail = (evidence: any): PharmacyExemptionReviewDetail => ({
   verifiedAt: evidence.verifiedAt,
   rejectedAt: evidence.rejectedAt,
   rejectionReason: evidence.rejectionReason,
-  documents: evidence.evidenceDocumentUrls.map((storedPath: string, index: number) => ({
-    index,
-    fileName: getFileName(storedPath),
-  })),
+  documents: evidence.evidenceDocumentUrls.map((storedPath: string, index: number) => ({ index, fileName: getFileName(storedPath) })),
   patient: {
     id: evidence.patient.id,
     fullName: evidence.patient.fullName,
@@ -84,8 +72,41 @@ const getEvidenceOrThrow = async (pharmacyId: string, evidenceId: string) => {
   });
 
   if (!evidence) throw new AppError("Exemption evidence was not found for this pharmacy", 404);
-
   return evidence;
+};
+
+const sendExemptionNotification = async (patientId: string, evidenceId: string, status: "VERIFIED" | "REJECTED") => {
+  try {
+    if (status === "VERIFIED") {
+      await notificationService.createAndSend({
+        userId: patientId,
+        type: "PHARMACY_EXEMPTION_VERIFIED",
+        title: "Exemption evidence verified",
+        body: "Your pharmacy has verified your prescription exemption evidence.",
+        priority: "NORMAL",
+        entityType: "PHARMACY_EXEMPTION_EVIDENCE",
+        entityId: evidenceId,
+        targetScreen: "Notifications",
+        data: { source: "PHARMACY_EXEMPTION_REVIEW", evidenceId, status },
+      });
+
+      return;
+    }
+
+    await notificationService.createAndSend({
+      userId: patientId,
+      type: "PHARMACY_EXEMPTION_REJECTED",
+      title: "Exemption evidence needs attention",
+      body: "Your pharmacy could not verify your exemption evidence. Open CareMate+ to review the decision.",
+      priority: "HIGH",
+      entityType: "PHARMACY_EXEMPTION_EVIDENCE",
+      entityId: evidenceId,
+      targetScreen: "Notifications",
+      data: { source: "PHARMACY_EXEMPTION_REVIEW", evidenceId, status },
+    });
+  } catch (error) {
+    console.error("Pharmacy exemption notification failed:", error);
+  }
 };
 
 export const pharmacyExemptionService = {
@@ -112,9 +133,7 @@ export const pharmacyExemptionService = {
 
   async getReview(pharmacyId: string, evidenceId: string) {
     await ensureApprovedPharmacy(pharmacyId);
-
     const evidence = await getEvidenceOrThrow(pharmacyId, evidenceId);
-
     return { review: formatDetail(evidence) };
   },
 
@@ -126,10 +145,7 @@ export const pharmacyExemptionService = {
 
     if (!storedPath) throw new AppError("Evidence document was not found", 404);
 
-    return {
-      storedPath,
-      fileName: getFileName(storedPath),
-    };
+    return { storedPath, fileName: getFileName(storedPath) };
   },
 
   async verify(pharmacyId: string, evidenceId: string) {
@@ -169,6 +185,8 @@ export const pharmacyExemptionService = {
       });
     });
 
+    await sendExemptionNotification(updated.patient.id, evidenceId, "VERIFIED");
+
     return { review: formatDetail(updated) };
   },
 
@@ -204,6 +222,8 @@ export const pharmacyExemptionService = {
         select: exemptionSelect,
       });
     });
+
+    await sendExemptionNotification(updated.patient.id, evidenceId, "REJECTED");
 
     return { review: formatDetail(updated) };
   },

@@ -1,6 +1,13 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
+import { notificationService } from "../notification/notification.service.js";
+import type { SendNotificationInput } from "../notification/notification.types.js";
 import { ensureApprovedPharmacy } from "./pharmacy-access.service.js";
+import {
+  consumeOrderInventoryReservations,
+  ensureOrderInventoryReadyForFulfilment,
+  releaseOrderInventoryReservations,
+} from "./pharmacy-inventory-match.service.js";
 import type {
   PharmacyOrderListItem,
   PharmacyOrdersResponse,
@@ -9,11 +16,6 @@ import type {
   PharmacyOrderStatusUpdateInput,
   PharmacyOrderStatusUpdateTarget,
 } from "./pharmacy-orders.types.js";
-import {
-  consumeOrderInventoryReservations,
-  ensureOrderInventoryReadyForFulfilment,
-  releaseOrderInventoryReservations,
-} from "./pharmacy-inventory-match.service.js";
 
 export const pharmacyOrderListInclude = {
   patient: { select: { id: true, fullName: true } },
@@ -59,42 +61,13 @@ const allowedStatusTransitions: Record<PharmacyOrderStatus, PharmacyOrderStatusU
   CANCELLED: [],
 };
 
-const fulfilmentStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "ACCEPTED",
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  "COLLECTED",
-]);
+const fulfilmentStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["ACCEPTED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "COLLECTED"]);
+const exceptionStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["REJECTED", "DELAYED", "OUT_OF_STOCK", "CANCELLED"]);
+const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["PREPARING", "READY", "OUT_FOR_DELIVERY"]);
+const inventoryReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["REJECTED", "OUT_OF_STOCK", "CANCELLED"]);
+const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["DELIVERED", "COLLECTED"]);
 
-const exceptionStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "REJECTED",
-  "DELAYED",
-  "OUT_OF_STOCK",
-  "CANCELLED",
-]);
-
-const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-]);
-
-const inventoryReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "REJECTED",
-  "OUT_OF_STOCK",
-  "CANCELLED",
-]);
-
-const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "DELIVERED",
-  "COLLECTED",
-]);
-
-export const getAllowedPharmacyOrderStatuses = (status: PharmacyOrderStatus) => {
-  return allowedStatusTransitions[status] || [];
-};
+export const getAllowedPharmacyOrderStatuses = (status: PharmacyOrderStatus) => allowedStatusTransitions[status] || [];
 
 const getTimestampUpdate = (
   status: PharmacyOrderStatusUpdateTarget,
@@ -136,6 +109,59 @@ const getTimestampUpdate = (
   }
 };
 
+const getOrderNotificationContent = (
+  status: PharmacyOrderStatusUpdateTarget,
+): Pick<SendNotificationInput, "type" | "title" | "body" | "priority"> => {
+  switch (status) {
+    case "ACCEPTED":
+      return { type: "ORDER_ACCEPTED", title: "Prescription order accepted", body: "Your pharmacy has accepted your prescription order.", priority: "NORMAL" };
+
+    case "REJECTED":
+      return { type: "ORDER_REJECTED", title: "Prescription order not accepted", body: "Your pharmacy could not accept your prescription order. Open CareMate+ for details.", priority: "HIGH" };
+
+    case "PREPARING":
+      return { type: "ORDER_PREPARING", title: "Prescription being prepared", body: "Your pharmacy has started preparing your prescription order.", priority: "NORMAL" };
+
+    case "READY":
+      return { type: "ORDER_READY", title: "Prescription ready", body: "Your prescription order is ready for collection or the next fulfilment step.", priority: "HIGH" };
+
+    case "OUT_FOR_DELIVERY":
+      return { type: "ORDER_OUT_FOR_DELIVERY", title: "Prescription out for delivery", body: "Your prescription order has left the pharmacy for delivery.", priority: "NORMAL" };
+
+    case "DELIVERED":
+      return { type: "ORDER_DELIVERED", title: "Prescription delivered", body: "Your pharmacy has marked your prescription order as delivered.", priority: "NORMAL" };
+
+    case "COLLECTED":
+      return { type: "ORDER_COLLECTED", title: "Prescription collected", body: "Your pharmacy has marked your prescription order as collected.", priority: "NORMAL" };
+
+    case "DELAYED":
+      return { type: "ORDER_DELAYED", title: "Prescription delayed", body: "Your pharmacy has reported a delay with your prescription order. Open CareMate+ for details.", priority: "HIGH" };
+
+    case "OUT_OF_STOCK":
+      return { type: "ORDER_OUT_OF_STOCK", title: "Medicine currently unavailable", body: "Your pharmacy has reported that stock required for your order is currently unavailable.", priority: "HIGH" };
+
+    case "CANCELLED":
+      return { type: "ORDER_CANCELLED", title: "Prescription order cancelled", body: "Your pharmacy order has been cancelled. Open CareMate+ for details.", priority: "HIGH" };
+  }
+};
+
+const sendOrderStatusNotification = async (patientId: string, orderId: string, orderNumber: string | null, status: PharmacyOrderStatusUpdateTarget) => {
+  try {
+    const content = getOrderNotificationContent(status);
+
+    await notificationService.createAndSend({
+      userId: patientId,
+      ...content,
+      entityType: "MEDICINE_ORDER",
+      entityId: orderId,
+      targetScreen: "Notifications",
+      data: { source: "PHARMACY_ORDER_STATUS", orderId, orderNumber, status },
+    });
+  } catch (error) {
+    console.error("Pharmacy order notification failed:", error);
+  }
+};
+
 export const pharmacyOrdersService = {
   async listOrders(
     pharmacyId: string,
@@ -151,12 +177,7 @@ export const pharmacyOrdersService = {
 
     const [total, orders] = await Promise.all([
       prisma.medicineOrder.count({ where }),
-      prisma.medicineOrder.findMany({
-        where,
-        include: pharmacyOrderListInclude,
-        orderBy: { createdAt: "desc" },
-        take: options.limit,
-      }),
+      prisma.medicineOrder.findMany({ where, include: pharmacyOrderListInclude, orderBy: { createdAt: "desc" }, take: options.limit }),
     ]);
 
     return { total, orders: orders.map(formatPharmacyOrderListItem) };
@@ -213,24 +234,10 @@ export const pharmacyOrdersService = {
           },
         },
 
-        prescription: {
-          select: {
-            id: true,
-            source: true,
-            prescribedAt: true,
-            notes: true,
-          },
-        },
+        prescription: { select: { id: true, source: true, prescribedAt: true, notes: true } },
 
         patientSubmission: {
-          select: {
-            id: true,
-            requestType: true,
-            status: true,
-            imageUrl: true,
-            notes: true,
-            createdAt: true,
-          },
+          select: { id: true, requestType: true, status: true, imageUrl: true, notes: true, createdAt: true },
         },
 
         items: {
@@ -299,13 +306,7 @@ export const pharmacyOrdersService = {
         },
 
         statusHistory: {
-          select: {
-            id: true,
-            fromStatus: true,
-            toStatus: true,
-            note: true,
-            createdAt: true,
-          },
+          select: { id: true, fromStatus: true, toStatus: true, note: true, createdAt: true },
           orderBy: { createdAt: "asc" },
         },
       },
@@ -313,10 +314,7 @@ export const pharmacyOrdersService = {
 
     if (!order) throw new AppError("Order not found for this pharmacy", 404);
 
-    return {
-      order,
-      allowedNextStatuses: getAllowedPharmacyOrderStatuses(order.status),
-    };
+    return { order, allowedNextStatuses: getAllowedPharmacyOrderStatuses(order.status) };
   },
 
   async updateOrderStatus(pharmacyId: string, orderId: string, input: PharmacyOrderStatusUpdateInput) {
@@ -326,6 +324,8 @@ export const pharmacyOrdersService = {
       where: { id: orderId, pharmacyId },
       select: {
         id: true,
+        patientId: true,
+        orderNumber: true,
         status: true,
         fulfilmentAllowed: true,
         acceptedAt: true,
@@ -388,13 +388,7 @@ export const pharmacyOrdersService = {
       }
 
       await tx.medicineOrderStatusHistory.create({
-        data: {
-          orderId,
-          changedById: pharmacyId,
-          fromStatus: order.status,
-          toStatus: input.status,
-          note: reason,
-        },
+        data: { orderId, changedById: pharmacyId, fromStatus: order.status, toStatus: input.status, note: reason },
       });
 
       return tx.medicineOrder.findFirstOrThrow({
@@ -417,22 +411,15 @@ export const pharmacyOrdersService = {
           outOfStockAt: true,
           updatedAt: true,
           statusHistory: {
-            select: {
-              id: true,
-              fromStatus: true,
-              toStatus: true,
-              note: true,
-              createdAt: true,
-            },
+            select: { id: true, fromStatus: true, toStatus: true, note: true, createdAt: true },
             orderBy: { createdAt: "asc" },
           },
         },
       });
     });
 
-    return {
-      order: updatedOrder,
-      allowedNextStatuses: getAllowedPharmacyOrderStatuses(updatedOrder.status),
-    };
+    await sendOrderStatusNotification(order.patientId, orderId, order.orderNumber, input.status);
+
+    return { order: updatedOrder, allowedNextStatuses: getAllowedPharmacyOrderStatuses(updatedOrder.status) };
   },
 };
