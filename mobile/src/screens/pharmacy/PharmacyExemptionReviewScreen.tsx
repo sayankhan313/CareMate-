@@ -33,10 +33,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  pharmacyApi,
+  pharmacyExemptionApi,
   type PharmacyExemptionReviewDetail,
   type PharmacyExemptionType,
-} from "../../services/pharmacy/pharmacyApi";
+} from "../../services/pharmacy/pharmacy-exemption.api";
 import type { RootStackParamList } from "../../types/navigation";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PharmacyExemptionReview">;
@@ -123,7 +123,7 @@ export const PharmacyExemptionReviewScreen = ({ navigation, route }: Props) => {
       setIsLoading(true);
       setErrorMessage("");
 
-      const result = await pharmacyApi.getExemptionReview(evidenceId);
+      const result = await pharmacyExemptionApi.getExemptionReview(evidenceId);
       setReview(result.review);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to load exemption evidence.");
@@ -140,7 +140,7 @@ export const PharmacyExemptionReviewScreen = ({ navigation, route }: Props) => {
 
   const openDocument = async (index: number, fileName: string) => {
     try {
-      const source = await pharmacyApi.getExemptionDocumentSource(evidenceId, index);
+      const source = await pharmacyExemptionApi.getExemptionDocumentSource(evidenceId, index);
       setDocumentSource(source);
       setDocumentTitle(fileName);
       setDocumentVisible(true);
@@ -160,7 +160,7 @@ export const PharmacyExemptionReviewScreen = ({ navigation, route }: Props) => {
           onPress: async () => {
             try {
               setIsActionLoading(true);
-              const result = await pharmacyApi.verifyExemptionEvidence(evidenceId);
+              const result = await pharmacyExemptionApi.verifyExemptionEvidence(evidenceId);
               setReview(result.review);
               Alert.alert("Verified", "The exemption evidence has been marked as verified.");
             } catch (error) {
@@ -184,7 +184,7 @@ export const PharmacyExemptionReviewScreen = ({ navigation, route }: Props) => {
 
     try {
       setIsActionLoading(true);
-      const result = await pharmacyApi.rejectExemptionEvidence(evidenceId, reason);
+      const result = await pharmacyExemptionApi.rejectExemptionEvidence(evidenceId, reason);
       setReview(result.review);
       setRejectVisible(false);
       setRejectReason("");

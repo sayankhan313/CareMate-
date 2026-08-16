@@ -117,6 +117,7 @@ export type RootStackParamList = {
     | undefined;
 
   PharmacyDashboard: { user?: any } | undefined;
+  PharmacyInventory: undefined;
 
   PharmacyOrders:
     | {

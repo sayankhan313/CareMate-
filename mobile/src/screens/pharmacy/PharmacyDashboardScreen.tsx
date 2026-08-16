@@ -1,7 +1,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -9,7 +8,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
@@ -34,10 +33,12 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  pharmacyApi,
+  pharmacyDashboardApi,
   type PharmacyDashboardData,
-  type PharmacyOrderListItem,
-} from "../../services/pharmacy/pharmacyApi";
+} from "../../services/pharmacy/pharmacy-dashboard.api";
+import type {
+  PharmacyOrderListItem,
+} from "../../services/pharmacy/pharmacy-orders.api";
 import { tokenStorage } from "../../services/tokenStorage";
 import type { RootStackParamList } from "../../types/navigation";
 
@@ -55,6 +56,7 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
+const RIPPLE = "rgba(17, 25, 54, 0.08)";
 
 const PHARMACY_PRIMARY = "#15803D";
 const PHARMACY_SECONDARY = "#22C55E";
@@ -154,7 +156,7 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
 
       setErrorMessage("");
 
-      const result = await pharmacyApi.getDashboard();
+      const result = await pharmacyDashboardApi.getDashboard();
       setDashboard(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load pharmacy dashboard.";
@@ -209,10 +211,7 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
   };
 
   const openInventory = () => {
-    Alert.alert(
-      "Inventory",
-      "Pharmacy inventory management will be connected in the next workflow step.",
-    );
+    navigation.navigate("PharmacyInventory");
   };
 
   const openOrderDetail = (order: PharmacyOrderListItem) => {
@@ -295,13 +294,12 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
             <Text style={styles.headerSubtitle}>{pharmacyLocation}</Text>
           </View>
 
-          <TouchableOpacity
+          <Pressable android_ripple={{ color: RIPPLE }}
             style={styles.logoutCircle}
-            activeOpacity={0.86}
             onPress={logout}
           >
             <LogOut size={20} color={PHARMACY_PRIMARY} strokeWidth={2.6} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -336,14 +334,13 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
               <Text style={styles.errorTitle}>Unable to load dashboard</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
-              <TouchableOpacity
+              <Pressable android_ripple={{ color: RIPPLE }}
                 style={styles.retryButton}
-                activeOpacity={0.86}
                 onPress={() => void loadDashboard("initial")}
               >
                 <RefreshCw size={17} color={SURFACE} strokeWidth={2.5} />
                 <Text style={styles.retryText}>Retry</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ) : null}
 
@@ -415,27 +412,27 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
+                <Pressable android_ripple={{ color: RIPPLE }}
                   onPress={openAllOrders}
                 >
                   <Text style={styles.sectionLink}>View all</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
-              <View style={styles.orderStack}>
-                {dashboard.recentOrders.length > 0 ? (
-                  dashboard.recentOrders.map(order => (
+              {dashboard.recentOrders.length > 0 ? (
+                <View style={styles.orderStack}>
+                  {dashboard.recentOrders.map((order, index) => (
                     <OrderCard
                       key={order.id}
                       order={order}
+                      isLast={index === dashboard.recentOrders.length - 1}
                       onPress={() => openOrderDetail(order)}
                     />
-                  ))
-                ) : (
-                  <EmptyOrders onPress={openAllOrders} />
-                )}
-              </View>
+                  ))}
+                </View>
+              ) : (
+                <EmptyOrders onPress={openAllOrders} />
+              )}
 
               <View style={styles.sectionHeader}>
                 <View>
@@ -531,9 +528,8 @@ const QuickAction = ({
   onPress: () => void;
 }) => {
   return (
-    <TouchableOpacity
+    <Pressable android_ripple={{ color: RIPPLE }}
       style={styles.quickAction}
-      activeOpacity={0.86}
       onPress={onPress}
     >
       <View style={styles.quickActionIcon}>
@@ -551,24 +547,25 @@ const QuickAction = ({
       <Text style={styles.quickActionText} numberOfLines={1}>
         {title}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
 const OrderCard = ({
   order,
+  isLast,
   onPress,
 }: {
   order: PharmacyOrderListItem;
+  isLast: boolean;
   onPress: () => void;
 }) => {
   const statusTone = getStatusTone(order.status);
   const isDoctorPrescription = order.source === "DOCTOR_PRESCRIPTION";
 
   return (
-    <TouchableOpacity
-      style={styles.orderCard}
-      activeOpacity={0.86}
+    <Pressable android_ripple={{ color: RIPPLE }}
+      style={[styles.orderCard, isLast ? styles.orderCardLast : undefined]}
       onPress={onPress}
     >
       <View
@@ -631,7 +628,7 @@ const OrderCard = ({
           strokeWidth={2.5}
         />
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -651,9 +648,8 @@ const FulfilmentRow = ({
   onPress: () => void;
 }) => {
   return (
-    <TouchableOpacity
+    <Pressable android_ripple={{ color: RIPPLE }}
       style={styles.fulfilmentRow}
-      activeOpacity={0.86}
       onPress={onPress}
     >
       <View
@@ -679,7 +675,7 @@ const FulfilmentRow = ({
         color={MUTED}
         strokeWidth={2.5}
       />
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -689,9 +685,8 @@ const EmptyOrders = ({
   onPress: () => void;
 }) => {
   return (
-    <TouchableOpacity
+    <Pressable android_ripple={{ color: RIPPLE }}
       style={styles.emptyCard}
-      activeOpacity={0.86}
       onPress={onPress}
     >
       <View style={styles.emptyIcon}>
@@ -708,7 +703,7 @@ const EmptyOrders = ({
         Doctor prescriptions and patient submissions routed to this pharmacy
         will appear here.
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -762,11 +757,10 @@ const styles = StyleSheet.create({
   logoutCircle: {
     width: 46,
     height: 46,
-    borderRadius: 15,
-    backgroundColor: SURFACE,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
-    ...elevate(1),
+    overflow: "hidden",
   },
 
   scrollView: {
@@ -780,7 +774,7 @@ const styles = StyleSheet.create({
 
   stateCard: {
     backgroundColor: SURFACE,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 22,
     alignItems: "center",
     marginTop: 12,
@@ -796,7 +790,7 @@ const styles = StyleSheet.create({
 
   errorCard: {
     backgroundColor: SURFACE,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 22,
     alignItems: "center",
     marginTop: 12,
@@ -806,7 +800,7 @@ const styles = StyleSheet.create({
   errorIcon: {
     width: 58,
     height: 58,
-    borderRadius: 16,
+    borderRadius: 12,
     backgroundColor: DANGER_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -847,7 +841,7 @@ const styles = StyleSheet.create({
   },
 
   heroCard: {
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 18,
     overflow: "hidden",
     ...elevate(2),
@@ -862,7 +856,7 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 52,
     height: 52,
-    borderRadius: 15,
+    borderRadius: 12,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
@@ -958,7 +952,7 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: 12,
     backgroundColor: PHARMACY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -1024,16 +1018,23 @@ const styles = StyleSheet.create({
   },
 
   orderStack: {
-    gap: 10,
+    backgroundColor: SURFACE,
+    borderRadius: 12,
+    overflow: "hidden",
+    ...elevate(1),
   },
 
   orderCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",
-    ...elevate(1),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E4E8F2",
+  },
+
+  orderCardLast: {
+    borderBottomWidth: 0,
   },
 
   orderIcon: {
@@ -1097,7 +1098,7 @@ const styles = StyleSheet.create({
 
   fulfilmentPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingHorizontal: 14,
     ...elevate(1),
   },
@@ -1158,7 +1159,7 @@ const styles = StyleSheet.create({
 
   emptyCard: {
     backgroundColor: SURFACE,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 24,
     alignItems: "center",
@@ -1168,7 +1169,7 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 54,
     height: 54,
-    borderRadius: 16,
+    borderRadius: 12,
     backgroundColor: PHARMACY_LIGHT,
     alignItems: "center",
     justifyContent: "center",

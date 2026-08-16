@@ -77,6 +77,7 @@ import PharmacyOrdersScreen from "../screens/pharmacy/PharmacyOrdersScreen";
 import PharmacyOrderDetailScreen from "../screens/pharmacy/PharmacyOrderDetailScreen";
 import PharmacyExemptionReviewsScreen from "../screens/pharmacy/PharmacyExemptionReviewsScreen";
 import PharmacyExemptionReviewScreen from "../screens/pharmacy/PharmacyExemptionReviewScreen";
+import PharmacyInventoryScreen from "../screens/pharmacy/PharmacyInventoryScreen";
 
 import { NotificationsScreen } from "../screens/common/NotificationsScreen";
 import { FCMInitializer } from "../components/common/FCMInitializer";
@@ -127,6 +128,7 @@ const PharmacyOrdersStackScreen = PharmacyOrdersScreen as ComponentType<any>;
 const PharmacyOrderDetailStackScreen = PharmacyOrderDetailScreen as ComponentType<any>;
 const PharmacyExemptionReviewsStackScreen = PharmacyExemptionReviewsScreen as ComponentType<any>;
 const PharmacyExemptionReviewStackScreen = PharmacyExemptionReviewScreen as ComponentType<any>;
+const PharmacyInventoryStackScreen = PharmacyInventoryScreen as ComponentType<any>;
 
 const AdminProfileStackScreen = AdminProfileScreen as ComponentType<any>;
 const ReminderSettingsStackScreen = ReminderSettingsScreen as ComponentType<any>;
@@ -192,6 +194,7 @@ const NON_PATIENT_SESSION_ROUTES = new Set([
   "AdminAuditLogDetail",
   "AdminRegisterWebView",
   "PharmacyDashboard",
+  "PharmacyInventory",
   "PharmacyOrders",
   "PharmacyOrderDetail",
   "PharmacyExemptionReviews",
@@ -460,6 +463,7 @@ export const AppNavigator = () => {
                 <Stack.Screen name="AdminProfile" component={AdminProfileStackScreen} />
 
                 <Stack.Screen name="PharmacyDashboard" component={PharmacyDashboardScreen} />
+                <Stack.Screen name="PharmacyInventory" component={PharmacyInventoryStackScreen} />
                 <Stack.Screen name="PharmacyOrders" component={PharmacyOrdersStackScreen} />
                 <Stack.Screen name="PharmacyOrderDetail" component={PharmacyOrderDetailStackScreen} />
                 <Stack.Screen name="PharmacyExemptionReviews" component={PharmacyExemptionReviewsStackScreen} />
