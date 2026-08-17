@@ -1,4 +1,7 @@
-export type MedicineSource = "MANUAL" | "SCANNER" | "DOCTOR_PRESCRIBED";
+export type MedicineSource =
+  | "MANUAL"
+  | "SCANNER"
+  | "DOCTOR_PRESCRIBED";
 
 export type MedicineFrequency =
   | "ONCE_DAILY"
@@ -11,11 +14,13 @@ export type MedicineFrequency =
 export type CreateMedicineInput = {
   name: string;
   dose: string;
+  doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   source?: MedicineSource;
   frequency: MedicineFrequency;
   customFrequency?: string;
-  timeOfDay?: string;
+  timeOfDay: string;
   selectedTimes?: string[];
   startDate: string;
   endDate?: string;
@@ -29,6 +34,8 @@ export type CreateMedicineInput = {
 export type UpdateMedicineInput = {
   name?: string;
   dose?: string;
+  doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   isActive?: boolean;
   frequency?: MedicineFrequency;
@@ -39,8 +46,8 @@ export type UpdateMedicineInput = {
   sendToDoctorForReview?: boolean;
   hasMedicineOnHand?: boolean;
   currentStock?: number;
-  stockUnit?: string | null;
-  lowStockThreshold?: number | null;
+  stockUnit?: string;
+  lowStockThreshold?: number;
 };
 
 export type RequestMedicineDeletionInput = {
@@ -50,6 +57,8 @@ export type RequestMedicineDeletionInput = {
 export type ResubmitMedicineReviewInput = {
   name: string;
   dose: string;
+  doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   frequency: MedicineFrequency;
   customFrequency?: string;

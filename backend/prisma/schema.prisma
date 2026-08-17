@@ -706,18 +706,23 @@ model PatientPharmacyExemptionEvidence {
 }
 
 model PharmacyInventoryItem {
-  id                String   @id @default(uuid())
-  pharmacyId        String
-  medicineName      String
-  strength          String?
-  form              String?
-  stockUnit         String   @default("pack")
-  quantityInStock   Int      @default(0)
-  reservedQuantity  Int      @default(0)
-  lowStockThreshold Int      @default(5)
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id           String  @id @default(uuid())
+  pharmacyId   String
+  medicineName String
+  strength     String?
+  form         String?
+
+  stockUnit         String @default("pack")
+  quantityInStock   Int    @default(0)
+  reservedQuantity  Int    @default(0)
+  lowStockThreshold Int    @default(5)
+
+  packSize Int?
+  packUnit String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   pharmacy   User                @relation("PharmacyInventoryItems", fields: [pharmacyId], references: [id], onDelete: Cascade)
   orderItems MedicineOrderItem[] @relation("MedicineOrderItemInventory")
@@ -939,14 +944,17 @@ model PatientReportReview {
 }
 
 model Medicine {
-  id                   String         @id @default(uuid())
+  id                   String  @id @default(uuid())
   patientId            String
   prescribedByDoctorId String?
   name                 String
   dose                 String
-  instructions         String?
-  source               MedicineSource @default(MANUAL)
-  isActive             Boolean        @default(true)
+  doseQuantity         Int     @default(1)
+  doseUnit             String?
+
+  instructions String?
+  source       MedicineSource @default(MANUAL)
+  isActive     Boolean        @default(true)
 
   hasMedicineOnHand Boolean?
   currentStock      Int?
@@ -1185,12 +1193,20 @@ model MedicineOrderItem {
   prescriptionItemId String?
   submissionItemId   String?
   inventoryItemId    String?
-  name               String
-  dose               String?
-  quantity           String?
-  instructions       String?
-  dispensedQuantity  Int?
-  quantityUnit       String?
+
+  name         String
+  dose         String?
+  quantity     String?
+  instructions String?
+
+  // Patient-facing requested quantity.
+  // Example: 1 pack.
+  quantityUnit String?
+
+  // Actual quantity supplied by pharmacy.
+  // Example: 28 tablets.
+  dispensedQuantity Int?
+  dispensedUnit     String?
 
   inventoryReservedQuantity Int       @default(0)
   inventoryReservedAt       DateTime?
@@ -1211,6 +1227,30 @@ model MedicineOrderItem {
   @@index([prescriptionItemId])
   @@index([submissionItemId])
   @@index([inventoryItemId])
+}
+
+model MedicinePackReference {
+  id String @id @default(uuid())
+
+  medicineSlug String
+  medicineName String
+  strength     String
+  form         String
+
+  packageUnit String
+  packSize    Int
+  contentUnit String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([medicineSlug, strength])
+  @@index([medicineSlug])
+  @@index([medicineName])
+  @@index([strength])
+  @@index([isActive])
 }
 
 model PrescriptionPayment {
