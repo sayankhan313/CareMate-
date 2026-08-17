@@ -1,8 +1,4 @@
-import {
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +23,7 @@ import {
   Clock3,
   FileImage,
   FilePenLine,
+  Package,
   Pill,
   Plus,
   Save,
@@ -34,10 +31,7 @@ import {
   Stethoscope,
   Trash2,
 } from "lucide-react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { medicineOcrService } from "../../services/medicineOcrService";
 import {
@@ -48,24 +42,14 @@ import {
 } from "../../services/doctor/doctorPrescriptionsApi";
 import type { RootStackParamList } from "../../types/navigation";
 
-type Props =
-  NativeStackScreenProps<
-    RootStackParamList,
-    "DoctorPrescription"
-  >;
+type Props = NativeStackScreenProps<RootStackParamList, "DoctorPrescription">;
 
-type ScreenMode =
-  | "SELECT"
-  | "EDITOR";
+type ScreenMode = "SELECT" | "EDITOR";
+type ScanInputSource = "CAMERA" | "GALLERY";
 
-type ScanInputSource =
-  | "CAMERA"
-  | "GALLERY";
-
-type PrescriptionItemDraft =
-  DoctorPrescriptionItemInput & {
-    localId: string;
-  };
+type PrescriptionItemDraft = DoctorPrescriptionItemInput & {
+  localId: string;
+};
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
@@ -75,7 +59,6 @@ const SOFT_PANEL = "#F7F9FF";
 const BORDER = "#E4E8F2";
 
 const DOCTOR_PRIMARY = "#0F766E";
-const DOCTOR_SECONDARY = "#14B8A6";
 const DOCTOR_DARK = "#134E4A";
 const DOCTOR_LIGHT = "#E6FFFA";
 
@@ -83,27 +66,16 @@ const SUCCESS = "#42B883";
 const SUCCESS_DARK = "#167A58";
 const SUCCESS_LIGHT = "#EAF8F2";
 
-const WARNING = "#F6A545";
 const WARNING_DARK = "#A85A13";
 const WARNING_LIGHT = "#FFF3E2";
 
 const DANGER = "#EF4D56";
-const DANGER_DARK = "#B42318";
 const DANGER_LIGHT = "#FFEDEE";
 
 const TIME_OPTIONS = [
-  {
-    label: "Morning",
-    time: "08:00",
-  },
-  {
-    label: "Afternoon",
-    time: "13:00",
-  },
-  {
-    label: "Night",
-    time: "20:00",
-  },
+  { label: "Morning", time: "08:00" },
+  { label: "Afternoon", time: "13:00" },
+  { label: "Night", time: "20:00" },
 ];
 
 const FREQUENCY_OPTIONS: {
@@ -119,20 +91,12 @@ const FREQUENCY_OPTIONS: {
   {
     label: "Twice daily",
     value: "TWICE_DAILY",
-    times: [
-      "08:00",
-      "20:00",
-    ],
+    times: ["08:00", "20:00"],
   },
   {
     label: "Three times",
-    value:
-      "THREE_TIMES_DAILY",
-    times: [
-      "08:00",
-      "13:00",
-      "20:00",
-    ],
+    value: "THREE_TIMES_DAILY",
+    times: ["08:00", "13:00", "20:00"],
   },
   {
     label: "As needed",
@@ -141,11 +105,8 @@ const FREQUENCY_OPTIONS: {
   },
 ];
 
-const elevate = (
-  level: 1 | 2 = 1
-) => ({
-  elevation:
-    level === 1 ? 2 : 4,
+const elevate = (level: 1 | 2 = 1) => ({
+  elevation: level === 1 ? 2 : 4,
   shadowColor: "#172033",
   shadowOffset: {
     width: 0,
@@ -157,155 +118,78 @@ const elevate = (
       : level === 1
         ? 0.06
         : 0.1,
-  shadowRadius:
-    level === 1 ? 4 : 8,
+  shadowRadius: level === 1 ? 4 : 8,
 });
 
 const getTodayDate = () => {
   const date = new Date();
-
-  const year =
-    date.getFullYear();
-
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 };
 
 const createLocalId = () => {
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
-const createEmptyItem =
-  (): PrescriptionItemDraft => ({
-    localId: createLocalId(),
-    name: "",
-    dose: "",
-    instructions: "",
-    frequency: "ONCE_DAILY",
-    customFrequency: "",
-    selectedTimes: ["08:00"],
-    startDate: getTodayDate(),
-    endDate: "",
-    prescriptionPattern: "",
-  });
+const createEmptyItem = (): PrescriptionItemDraft => ({
+  localId: createLocalId(),
+  name: "",
+  dose: "",
+  quantity: "",
+  instructions: "",
+  frequency: "ONCE_DAILY",
+  customFrequency: "",
+  selectedTimes: ["08:00"],
+  startDate: getTodayDate(),
+  endDate: "",
+  prescriptionPattern: "",
+});
 
 const getFrequencyFromTimes = (
-  times: string[]
+  times: string[],
 ): DoctorPrescriptionFrequency => {
-  if (times.length >= 3) {
-    return "THREE_TIMES_DAILY";
-  }
-
-  if (times.length === 2) {
-    return "TWICE_DAILY";
-  }
+  if (times.length >= 3) return "THREE_TIMES_DAILY";
+  if (times.length === 2) return "TWICE_DAILY";
 
   return "ONCE_DAILY";
 };
 
-const formatFrequency = (
-  frequency: string
-) => {
+const formatFrequency = (frequency: string) => {
   return frequency
     .toLowerCase()
     .split("_")
-    .map(
-      (part) =>
-        part.charAt(0).toUpperCase() +
-        part.slice(1)
-    )
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 };
 
-const DoctorPrescriptionScreen = ({
-  navigation,
-  route,
-}: Props) => {
-  const insets =
-    useSafeAreaInsets();
+const DoctorPrescriptionScreen = ({ navigation, route }: Props) => {
+  const insets = useSafeAreaInsets();
+  const { patientId, patientName } = route.params;
 
-  const {
-    patientId,
-    patientName,
-  } = route.params;
-
-  const [
-    screenMode,
-    setScreenMode,
-  ] =
-    useState<ScreenMode>("SELECT");
-
-  const [
-    prescriptionSource,
-    setPrescriptionSource,
-  ] =
-    useState<DoctorPrescriptionSource>(
-      "MANUAL"
-    );
-
-  const [items, setItems] =
-    useState<
-      PrescriptionItemDraft[]
-    >([]);
-
-  const [notes, setNotes] =
-    useState("");
-
-  const [
-    rawDetectedText,
-    setRawDetectedText,
-  ] = useState("");
-
-  const [
-    ocrConfidence,
-    setOcrConfidence,
-  ] =
-    useState<number | undefined>(
-      undefined
-    );
-
-  const [
-    prescriptionImageUri,
-    setPrescriptionImageUri,
-  ] = useState<
+  const [screenMode, setScreenMode] = useState<ScreenMode>("SELECT");
+  const [prescriptionSource, setPrescriptionSource] =
+    useState<DoctorPrescriptionSource>("MANUAL");
+  const [items, setItems] = useState<PrescriptionItemDraft[]>([]);
+  const [notes, setNotes] = useState("");
+  const [rawDetectedText, setRawDetectedText] = useState("");
+  const [ocrConfidence, setOcrConfidence] = useState<number | undefined>(
+    undefined,
+  );
+  const [prescriptionImageUri, setPrescriptionImageUri] = useState<
     string | undefined
   >(undefined);
+  const [isScanning, setIsScanning] = useState(false);
+  const [activeScanSource, setActiveScanSource] =
+    useState<ScanInputSource | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [
-    isScanning,
-    setIsScanning,
-  ] = useState(false);
-
-  const [
-    activeScanSource,
-    setActiveScanSource,
-  ] =
-    useState<ScanInputSource | null>(
-      null
-    );
-
-  const [
-    isSaving,
-    setIsSaving,
-  ] = useState(false);
-
-  const medicineCount =
-    items.length;
+  const medicineCount = items.length;
 
   const handleBack = () => {
-    if (
-      screenMode === "EDITOR" &&
-      !isSaving
-    ) {
+    if (screenMode === "EDITOR" && !isSaving) {
       setScreenMode("SELECT");
       return;
     }
@@ -313,293 +197,202 @@ const DoctorPrescriptionScreen = ({
     navigation.goBack();
   };
 
-  const startManualPrescription =
-    () => {
-      setPrescriptionSource(
-        "MANUAL"
-      );
-
-      setItems([
-        createEmptyItem(),
-      ]);
-
-      setNotes("");
-      setRawDetectedText("");
-      setOcrConfidence(undefined);
-      setPrescriptionImageUri(
-        undefined
-      );
-
-      setScreenMode("EDITOR");
-    };
-
-  const buildScannedItems = (
-    medicines: any[]
-  ): PrescriptionItemDraft[] => {
-    return medicines.map(
-      (medicine) => {
-        const draft =
-          medicine.medicineDraft;
-
-        const selectedTimes =
-          Array.isArray(
-            draft?.selectedTimes
-          ) &&
-          draft.selectedTimes.length >
-            0
-            ? draft.selectedTimes
-            : [
-                draft?.timeOfDay ||
-                  "08:00",
-              ];
-
-        return {
-          localId: createLocalId(),
-          name:
-            draft?.name ||
-            medicine.brandName ||
-            medicine.detectedName ||
-            "",
-          dose:
-            draft?.dose ||
-            medicine.dose ||
-            "",
-          instructions:
-            draft?.instructions ||
-            medicine.instructions ||
-            "",
-          frequency:
-            draft?.frequency ||
-            getFrequencyFromTimes(
-              selectedTimes
-            ),
-          customFrequency: "",
-          selectedTimes,
-          startDate:
-            draft?.startDate ||
-            getTodayDate(),
-          endDate:
-            draft?.endDate || "",
-          prescriptionPattern:
-            draft?.prescriptionPattern ||
-            medicine
-              .prescriptionSchedule
-              ?.pattern ||
-            "",
-        };
-      }
-    );
+  const startManualPrescription = () => {
+    setPrescriptionSource("MANUAL");
+    setItems([createEmptyItem()]);
+    setNotes("");
+    setRawDetectedText("");
+    setOcrConfidence(undefined);
+    setPrescriptionImageUri(undefined);
+    setScreenMode("EDITOR");
   };
 
-  const scanPrescription =
-    async (
-      source: ScanInputSource
-    ) => {
-      if (isScanning) {
+  const buildScannedItems = (medicines: any[]): PrescriptionItemDraft[] => {
+    return medicines.map(medicine => {
+      const draft = medicine.medicineDraft;
+
+      const selectedTimes =
+        Array.isArray(draft?.selectedTimes) &&
+        draft.selectedTimes.length > 0
+          ? draft.selectedTimes
+          : [draft?.timeOfDay || "08:00"];
+
+      return {
+        localId: createLocalId(),
+        name:
+          draft?.name ||
+          medicine.brandName ||
+          medicine.detectedName ||
+          "",
+        dose: draft?.dose || medicine.dose || "",
+        quantity: "",
+        instructions:
+          draft?.instructions ||
+          medicine.instructions ||
+          "",
+        frequency:
+          draft?.frequency ||
+          getFrequencyFromTimes(selectedTimes),
+        customFrequency: "",
+        selectedTimes,
+        startDate:
+          draft?.startDate ||
+          getTodayDate(),
+        endDate:
+          draft?.endDate || "",
+        prescriptionPattern:
+          draft?.prescriptionPattern ||
+          medicine.prescriptionSchedule?.pattern ||
+          "",
+      };
+    });
+  };
+
+  const scanPrescription = async (source: ScanInputSource) => {
+    if (isScanning) return;
+
+    try {
+      setIsScanning(true);
+      setActiveScanSource(source);
+
+      const ocrResult =
+        source === "CAMERA"
+          ? await medicineOcrService.scanFromCamera()
+          : await medicineOcrService.scanFromGallery();
+
+      if (!ocrResult) return;
+
+      const parsed =
+        await doctorPrescriptionsApi.parsePrescriptionScan({
+          detectedText: ocrResult.detectedText,
+          ocrConfidence: ocrResult.ocrConfidence,
+        });
+
+      if (!parsed.medicines || parsed.medicines.length === 0) {
+        Alert.alert(
+          "No medicines detected",
+          "The prescription text was read, but no medicine could be matched. Try a clearer image or use manual entry.",
+        );
         return;
       }
 
-      try {
-        setIsScanning(true);
-        setActiveScanSource(
-          source
-        );
+      setPrescriptionSource("SCANNED");
+      setItems(buildScannedItems(parsed.medicines));
+      setRawDetectedText(ocrResult.detectedText);
+      setOcrConfidence(ocrResult.ocrConfidence);
+      setPrescriptionImageUri(ocrResult.imageUri);
+      setNotes("");
+      setScreenMode("EDITOR");
+    } catch (error) {
+      Alert.alert(
+        "Unable to scan",
+        error instanceof Error
+          ? error.message
+          : "The prescription could not be scanned.",
+      );
+    } finally {
+      setIsScanning(false);
+      setActiveScanSource(null);
+    }
+  };
 
-        const ocrResult =
-          source === "CAMERA"
-            ? await medicineOcrService.scanFromCamera()
-            : await medicineOcrService.scanFromGallery();
-
-        if (!ocrResult) {
-          return;
-        }
-
-        const parsed =
-          await doctorPrescriptionsApi.parsePrescriptionScan(
-            {
-              detectedText:
-                ocrResult.detectedText,
-              ocrConfidence:
-                ocrResult.ocrConfidence,
-            }
-          );
-
-        if (
-          !parsed.medicines ||
-          parsed.medicines.length ===
-            0
-        ) {
-          Alert.alert(
-            "No medicines detected",
-            "The prescription text was read, but no medicine could be matched. Try a clearer image or use manual entry."
-          );
-
-          return;
-        }
-
-        setPrescriptionSource(
-          "SCANNED"
-        );
-
-        setItems(
-          buildScannedItems(
-            parsed.medicines
-          )
-        );
-
-        setRawDetectedText(
-          ocrResult.detectedText
-        );
-
-        setOcrConfidence(
-          ocrResult.ocrConfidence
-        );
-
-        setPrescriptionImageUri(
-          ocrResult.imageUri
-        );
-
-        setNotes("");
-        setScreenMode("EDITOR");
-      } catch (error) {
-        Alert.alert(
-          "Unable to scan",
-          error instanceof Error
-            ? error.message
-            : "The prescription could not be scanned."
-        );
-      } finally {
-        setIsScanning(false);
-        setActiveScanSource(null);
-      }
-    };
-
-  const updateItem = <
-    K extends keyof PrescriptionItemDraft,
-  >(
+  const updateItem = <K extends keyof PrescriptionItemDraft>(
     localId: string,
     field: K,
-    value:
-      PrescriptionItemDraft[K]
+    value: PrescriptionItemDraft[K],
   ) => {
-    setItems((current) =>
-      current.map((item) =>
+    setItems(current =>
+      current.map(item =>
         item.localId === localId
           ? {
               ...item,
               [field]: value,
             }
-          : item
-      )
+          : item,
+      ),
     );
   };
 
   const updateFrequency = (
     localId: string,
-    frequency: DoctorPrescriptionFrequency
+    frequency: DoctorPrescriptionFrequency,
   ) => {
-    const option =
-      FREQUENCY_OPTIONS.find(
-        (item) =>
-          item.value === frequency
-      );
+    const option = FREQUENCY_OPTIONS.find(
+      item => item.value === frequency,
+    );
 
-    setItems((current) =>
-      current.map((item) =>
+    setItems(current =>
+      current.map(item =>
         item.localId === localId
           ? {
               ...item,
               frequency,
               selectedTimes:
-                option?.times || [
-                  "08:00",
-                ],
+                option?.times || ["08:00"],
             }
-          : item
-      )
+          : item,
+      ),
     );
   };
 
-  const toggleTime = (
-    localId: string,
-    time: string
-  ) => {
-    setItems((current) =>
-      current.map((item) => {
-        if (
-          item.localId !==
-          localId
-        ) {
+  const toggleTime = (localId: string, time: string) => {
+    setItems(current =>
+      current.map(item => {
+        if (item.localId !== localId) {
           return item;
         }
 
-        const alreadySelected =
-          item.selectedTimes.includes(
-            time
-          );
+        const alreadySelected = item.selectedTimes.includes(time);
 
         if (
           alreadySelected &&
-          item.selectedTimes.length ===
-            1
+          item.selectedTimes.length === 1
         ) {
           return item;
         }
 
-        const nextTimes =
-          alreadySelected
-            ? item.selectedTimes.filter(
-                (selectedTime) =>
-                  selectedTime !== time
-              )
-            : [
-                ...item.selectedTimes,
-                time,
-              ];
+        const nextTimes = alreadySelected
+          ? item.selectedTimes.filter(
+              selectedTime => selectedTime !== time,
+            )
+          : [...item.selectedTimes, time];
 
-        const sortedTimes =
-          [...nextTimes].sort();
+        const sortedTimes = [...nextTimes].sort();
 
         return {
           ...item,
-          selectedTimes:
-            sortedTimes,
+          selectedTimes: sortedTimes,
           frequency:
-            item.frequency ===
-            "AS_NEEDED"
+            item.frequency === "AS_NEEDED"
               ? "AS_NEEDED"
-              : getFrequencyFromTimes(
-                  sortedTimes
-                ),
+              : getFrequencyFromTimes(sortedTimes),
         };
-      })
+      }),
     );
   };
 
   const addMedicineItem = () => {
-    setItems((current) => [
+    setItems(current => [
       ...current,
       createEmptyItem(),
     ]);
   };
 
   const removeMedicineItem = (
-    localId: string
+    localId: string,
   ) => {
     if (items.length === 1) {
       Alert.alert(
         "Medicine required",
-        "A prescription must contain at least one medicine."
+        "A prescription must contain at least one medicine.",
       );
-
       return;
     }
 
-    setItems((current) =>
+    setItems(current =>
       current.filter(
-        (item) =>
-          item.localId !== localId
-      )
+        item => item.localId !== localId,
+      ),
     );
   };
 
@@ -612,9 +405,7 @@ const DoctorPrescriptionScreen = ({
       const item = items[index];
 
       if (!item.name.trim()) {
-        return `Enter the medicine name for item ${
-          index + 1
-        }.`;
+        return `Enter the medicine name for item ${index + 1}.`;
       }
 
       if (!item.dose.trim()) {
@@ -624,16 +415,34 @@ const DoctorPrescriptionScreen = ({
         }.`;
       }
 
+      if (!item.quantity.trim()) {
+        return `Enter the number of packs to dispense for ${item.name}.`;
+      }
+
+      if (!/^\d+$/.test(item.quantity.trim())) {
+        return `Packs to dispense for ${item.name} must be a whole number.`;
+      }
+
+      const packQuantity = Number(
+        item.quantity.trim(),
+      );
+
       if (
-        item.selectedTimes.length ===
-        0
+        packQuantity < 1 ||
+        packQuantity > 100
+      ) {
+        return `Packs to dispense for ${item.name} must be between 1 and 100.`;
+      }
+
+      if (
+        item.selectedTimes.length === 0
       ) {
         return `Select at least one reminder time for ${item.name}.`;
       }
 
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(
-          item.startDate.trim()
+          item.startDate.trim(),
         )
       ) {
         return `Enter the start date for ${item.name} in YYYY-MM-DD format.`;
@@ -642,7 +451,7 @@ const DoctorPrescriptionScreen = ({
       if (
         item.endDate?.trim() &&
         !/^\d{4}-\d{2}-\d{2}$/.test(
-          item.endDate.trim()
+          item.endDate.trim(),
         )
       ) {
         return `Enter the end date for ${item.name} in YYYY-MM-DD format.`;
@@ -652,97 +461,92 @@ const DoctorPrescriptionScreen = ({
     return null;
   };
 
-  const savePrescription =
-    async () => {
-      if (isSaving) {
-        return;
-      }
+  const savePrescription = async () => {
+    if (isSaving) return;
 
-      const validationError =
-        validateItems();
+    const validationError =
+      validateItems();
 
-      if (validationError) {
-        Alert.alert(
-          "Check prescription",
-          validationError
-        );
+    if (validationError) {
+      Alert.alert(
+        "Check prescription",
+        validationError,
+      );
+      return;
+    }
 
-        return;
-      }
+    try {
+      setIsSaving(true);
 
-      try {
-        setIsSaving(true);
+      const cleanItems =
+        items.map(item => ({
+          name: item.name.trim(),
+          dose: item.dose.trim(),
+          quantity:
+            item.quantity.trim(),
+          instructions:
+            item.instructions?.trim() ||
+            undefined,
+          frequency:
+            item.frequency,
+          customFrequency:
+            item.customFrequency?.trim() ||
+            undefined,
+          selectedTimes:
+            item.selectedTimes,
+          startDate:
+            item.startDate.trim(),
+          endDate:
+            item.endDate?.trim() ||
+            undefined,
+          prescriptionPattern:
+            item.prescriptionPattern?.trim() ||
+            undefined,
+        }));
 
-        const cleanItems =
-          items.map((item) => ({
-            name: item.name.trim(),
-            dose: item.dose.trim(),
-            instructions:
-              item.instructions?.trim() ||
-              undefined,
-            frequency:
-              item.frequency,
-            customFrequency:
-              item.customFrequency?.trim() ||
-              undefined,
-            selectedTimes:
-              item.selectedTimes,
-            startDate:
-              item.startDate.trim(),
-            endDate:
-              item.endDate?.trim() ||
-              undefined,
-            prescriptionPattern:
-              item.prescriptionPattern?.trim() ||
-              undefined,
-          }));
+      const result =
+        await doctorPrescriptionsApi.createPrescription({
+          patientId,
+          source:
+            prescriptionSource,
+          notes:
+            notes.trim() ||
+            undefined,
+          rawDetectedText:
+            rawDetectedText ||
+            undefined,
+          ocrConfidence,
+          items: cleanItems,
+          imageUri:
+            prescriptionImageUri,
+        });
 
-        const result =
-          await doctorPrescriptionsApi.createPrescription(
-            {
-              patientId,
-              source:
-                prescriptionSource,
-              notes:
-                notes.trim() ||
-                undefined,
-              rawDetectedText:
-                rawDetectedText ||
-                undefined,
-              ocrConfidence,
-              items: cleanItems,
-              imageUri:
-                prescriptionImageUri,
-            }
-          );
-
-        Alert.alert(
-          "Prescription added",
-          `${result.prescription.items.length} medicine${
-            result.prescription
-              .items.length === 1
-              ? ""
-              : "s"
-          } added to ${patientName}'s medicine plan.`,
-          [
-            {
-              text: "Done",
-              onPress: () =>
-                navigation.goBack(),
-            },
-          ]
-        );
-      } catch (error) {
-        Alert.alert(
-          "Unable to save",
-          error instanceof Error
-            ? error.message
-            : "The prescription could not be saved."
-        );
-      } finally {
-        setIsSaving(false);
-      }
-    };
+      Alert.alert(
+        "Prescription added",
+        `${result.prescription.items.length} medicine${
+          result.prescription.items.length === 1
+            ? ""
+            : "s"
+        } added to ${patientName}'s medicine plan and routed to their primary pharmacy when available.`,
+        [
+          {
+            text: "Done",
+            onPress: () =>
+              navigation.goBack(),
+          },
+        ],
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to save",
+        error instanceof Error
+          ? error.message
+          : "The prescription could not be saved.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const screenTitle =
     screenMode === "SELECT"
@@ -758,39 +562,26 @@ const DoctorPrescriptionScreen = ({
       edges={["top", "bottom"]}
     >
       <StatusBar
-        backgroundColor={
-          BACKGROUND
-        }
+        backgroundColor={BACKGROUND}
         barStyle="dark-content"
       />
 
       <View style={styles.screen}>
         <View style={styles.header}>
           <TouchableOpacity
-            style={
-              styles.backButton
-            }
+            style={styles.backButton}
             activeOpacity={0.85}
             onPress={handleBack}
-            disabled={
-              isSaving ||
-              isScanning
-            }
+            disabled={isSaving || isScanning}
           >
             <ArrowLeft
               size={22}
-              color={
-                DOCTOR_PRIMARY
-              }
+              color={DOCTOR_PRIMARY}
               strokeWidth={2.7}
             />
           </TouchableOpacity>
 
-          <View
-            style={
-              styles.headerTextBlock
-            }
-          >
+          <View style={styles.headerTextBlock}>
             <Text
               style={styles.headerTitle}
               numberOfLines={1}
@@ -799,9 +590,7 @@ const DoctorPrescriptionScreen = ({
             </Text>
 
             <Text
-              style={
-                styles.headerSubtitle
-              }
+              style={styles.headerSubtitle}
               numberOfLines={1}
             >
               Patient: {patientName}
@@ -809,8 +598,7 @@ const DoctorPrescriptionScreen = ({
           </View>
         </View>
 
-        {screenMode ===
-        "SELECT" ? (
+        {screenMode === "SELECT" ? (
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[
@@ -819,100 +607,71 @@ const DoctorPrescriptionScreen = ({
                 paddingBottom:
                   Math.max(
                     insets.bottom + 30,
-                    50
+                    50,
                   ),
               },
             ]}
-            showsVerticalScrollIndicator={
-              false
-            }
+            showsVerticalScrollIndicator={false}
           >
-            <View
-              style={styles.heroCard}
-            >
-              <View
-                style={styles.heroIcon}
-              >
+            <View style={styles.heroCard}>
+              <View style={styles.heroIcon}>
                 <Stethoscope
                   size={28}
-                  color={
-                    DOCTOR_PRIMARY
-                  }
+                  color={DOCTOR_PRIMARY}
                   strokeWidth={2.7}
                 />
               </View>
 
-              <Text
-                style={styles.heroTitle}
-              >
+              <Text style={styles.heroTitle}>
                 Create a patient prescription
               </Text>
 
-              <Text
-                style={styles.heroText}
-              >
-                Add medicines manually or scan an existing prescription. You can review and edit every item before saving.
+              <Text style={styles.heroText}>
+                Add medicines manually or scan an existing prescription. Review the medicine, dose, pack quantity and schedule before saving.
               </Text>
             </View>
 
-            <Text
-              style={
-                styles.sectionTitle
-              }
-            >
+            <Text style={styles.sectionTitle}>
               Choose entry method
             </Text>
 
             <ActionCard
               title="Manual Entry"
-              description="Enter medicines, doses, timings and instructions manually."
+              description="Enter medicines, doses, pack quantities, timings and instructions manually."
               icon={
                 <FilePenLine
                   size={25}
-                  color={
-                    DOCTOR_PRIMARY
-                  }
+                  color={DOCTOR_PRIMARY}
                   strokeWidth={2.7}
                 />
               }
-              onPress={
-                startManualPrescription
-              }
-              disabled={
-                isScanning
-              }
+              onPress={startManualPrescription}
+              disabled={isScanning}
             />
 
             <ActionCard
               title="Scan with Camera"
-              description="Take a clear photo and extract medicines using OCR."
+              description="Take a clear photo and extract medicine details using OCR."
               icon={
                 isScanning &&
-                activeScanSource ===
-                  "CAMERA" ? (
+                activeScanSource === "CAMERA" ? (
                   <ActivityIndicator
-                    color={
-                      DOCTOR_PRIMARY
-                    }
+                    color={DOCTOR_PRIMARY}
                   />
                 ) : (
                   <Camera
                     size={25}
-                    color={
-                      DOCTOR_PRIMARY
-                    }
+                    color={DOCTOR_PRIMARY}
                     strokeWidth={2.7}
                   />
                 )
               }
               onPress={() =>
                 void scanPrescription(
-                  "CAMERA"
+                  "CAMERA",
                 )
               }
-              disabled={
-                isScanning
-              }
+              disabled={isScanning}
             />
 
             <ActionCard
@@ -920,121 +679,79 @@ const DoctorPrescriptionScreen = ({
               description="Select a prescription image from the phone gallery."
               icon={
                 isScanning &&
-                activeScanSource ===
-                  "GALLERY" ? (
+                activeScanSource === "GALLERY" ? (
                   <ActivityIndicator
-                    color={
-                      DOCTOR_PRIMARY
-                    }
+                    color={DOCTOR_PRIMARY}
                   />
                 ) : (
                   <FileImage
                     size={25}
-                    color={
-                      DOCTOR_PRIMARY
-                    }
+                    color={DOCTOR_PRIMARY}
                     strokeWidth={2.7}
                   />
                 )
               }
               onPress={() =>
                 void scanPrescription(
-                  "GALLERY"
+                  "GALLERY",
                 )
               }
-              disabled={
-                isScanning
-              }
+              disabled={isScanning}
             />
 
-            <View
-              style={styles.infoPanel}
-            >
+            <View style={styles.infoPanel}>
               <AlertCircle
                 size={20}
                 color={WARNING_DARK}
                 strokeWidth={2.6}
               />
 
-              <Text
-                style={styles.infoText}
-              >
-                OCR results are drafts only. Check the medicine name, dose and schedule before saving.
+              <Text style={styles.infoText}>
+                OCR results are drafts only. Check the medicine name, dose, number of packs and schedule before saving.
               </Text>
             </View>
           </ScrollView>
         ) : (
           <>
             <ScrollView
-              style={
-                styles.scrollView
-              }
+              style={styles.scrollView}
               contentContainerStyle={[
                 styles.editorContent,
                 {
                   paddingBottom:
                     Math.max(
-                      insets.bottom +
-                        126,
-                      150
+                      insets.bottom + 126,
+                      150,
                     ),
                 },
               ]}
-              showsVerticalScrollIndicator={
-                false
-              }
+              showsVerticalScrollIndicator={false}
             >
               {prescriptionSource ===
               "SCANNED" ? (
-                <View
-                  style={
-                    styles.scanSummary
-                  }
-                >
-                  <View
-                    style={
-                      styles.scanSummaryIcon
-                    }
-                  >
+                <View style={styles.scanSummary}>
+                  <View style={styles.scanSummaryIcon}>
                     <ScanLine
                       size={22}
-                      color={
-                        SUCCESS_DARK
-                      }
-                      strokeWidth={
-                        2.7
-                      }
+                      color={SUCCESS_DARK}
+                      strokeWidth={2.7}
                     />
                   </View>
 
-                  <View
-                    style={
-                      styles.scanSummaryTextBlock
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.scanSummaryTitle
-                      }
-                    >
+                  <View style={styles.scanSummaryTextBlock}>
+                    <Text style={styles.scanSummaryTitle}>
                       Prescription scanned
                     </Text>
 
-                    <Text
-                      style={
-                        styles.scanSummaryText
-                      }
-                    >
+                    <Text style={styles.scanSummaryText}>
                       {medicineCount} medicine
-                      {medicineCount ===
-                      1
+                      {medicineCount === 1
                         ? ""
                         : "s"}{" "}
                       detected
-                      {ocrConfidence !==
-                      undefined
+                      {ocrConfidence !== undefined
                         ? ` · ${Math.round(
-                            ocrConfidence
+                            ocrConfidence,
                           )}% OCR`
                         : ""}
                     </Text>
@@ -1048,62 +765,33 @@ const DoctorPrescriptionScreen = ({
                 </View>
               ) : null}
 
-              <View
-                style={
-                  styles.notesPanel
-                }
-              >
-                <Text
-                  style={
-                    styles.inputLabel
-                  }
-                >
+              <View style={styles.notesPanel}>
+                <Text style={styles.inputLabel}>
                   Prescription note
                 </Text>
 
                 <TextInput
-                  style={
-                    styles.notesInput
-                  }
+                  style={styles.notesInput}
                   value={notes}
-                  onChangeText={
-                    setNotes
-                  }
+                  onChangeText={setNotes}
                   placeholder="Optional clinical note..."
-                  placeholderTextColor={
-                    MUTED
-                  }
+                  placeholderTextColor={MUTED}
                   multiline
                   maxLength={2000}
                   textAlignVertical="top"
-                  editable={
-                    !isSaving
-                  }
+                  editable={!isSaving}
                 />
               </View>
 
-              <View
-                style={
-                  styles.itemsHeader
-                }
-              >
+              <View style={styles.itemsHeader}>
                 <View>
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
+                  <Text style={styles.sectionTitle}>
                     Medicines
                   </Text>
 
-                  <Text
-                    style={
-                      styles.sectionSubtitle
-                    }
-                  >
+                  <Text style={styles.sectionSubtitle}>
                     {medicineCount} item
-                    {medicineCount ===
-                    1
+                    {medicineCount === 1
                       ? ""
                       : "s"}{" "}
                     in this prescription
@@ -1111,16 +799,10 @@ const DoctorPrescriptionScreen = ({
                 </View>
 
                 <TouchableOpacity
-                  style={
-                    styles.addItemButton
-                  }
+                  style={styles.addItemButton}
                   activeOpacity={0.85}
-                  onPress={
-                    addMedicineItem
-                  }
-                  disabled={
-                    isSaving
-                  }
+                  onPress={addMedicineItem}
+                  disabled={isSaving}
                 >
                   <Plus
                     size={17}
@@ -1128,62 +810,45 @@ const DoctorPrescriptionScreen = ({
                     strokeWidth={2.8}
                   />
 
-                  <Text
-                    style={
-                      styles.addItemText
-                    }
-                  >
+                  <Text style={styles.addItemText}>
                     Add
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {items.map(
-                (item, index) => (
-                  <MedicineEditorCard
-                    key={item.localId}
-                    item={item}
-                    index={index}
-                    canRemove={
-                      items.length > 1
-                    }
-                    disabled={
-                      isSaving
-                    }
-                    onUpdate={(
+              {items.map((item, index) => (
+                <MedicineEditorCard
+                  key={item.localId}
+                  item={item}
+                  index={index}
+                  canRemove={items.length > 1}
+                  disabled={isSaving}
+                  onUpdate={(field, value) =>
+                    updateItem(
+                      item.localId,
                       field,
-                      value
-                    ) =>
-                      updateItem(
-                        item.localId,
-                        field,
-                        value as never
-                      )
-                    }
-                    onFrequencyChange={(
-                      frequency
-                    ) =>
-                      updateFrequency(
-                        item.localId,
-                        frequency
-                      )
-                    }
-                    onToggleTime={(
-                      time
-                    ) =>
-                      toggleTime(
-                        item.localId,
-                        time
-                      )
-                    }
-                    onRemove={() =>
-                      removeMedicineItem(
-                        item.localId
-                      )
-                    }
-                  />
-                )
-              )}
+                      value as never,
+                    )
+                  }
+                  onFrequencyChange={frequency =>
+                    updateFrequency(
+                      item.localId,
+                      frequency,
+                    )
+                  }
+                  onToggleTime={time =>
+                    toggleTime(
+                      item.localId,
+                      time,
+                    )
+                  }
+                  onRemove={() =>
+                    removeMedicineItem(
+                      item.localId,
+                    )
+                  }
+                />
+              ))}
             </ScrollView>
 
             <View
@@ -1192,9 +857,8 @@ const DoctorPrescriptionScreen = ({
                 {
                   paddingBottom:
                     Math.max(
-                      insets.bottom +
-                        6,
-                      14
+                      insets.bottom + 6,
+                      14,
                     ),
                 },
               ]}
@@ -1210,9 +874,7 @@ const DoctorPrescriptionScreen = ({
                 onPress={() =>
                   void savePrescription()
                 }
-                disabled={
-                  isSaving
-                }
+                disabled={isSaving}
               >
                 {isSaving ? (
                   <ActivityIndicator
@@ -1226,11 +888,7 @@ const DoctorPrescriptionScreen = ({
                       strokeWidth={2.7}
                     />
 
-                    <Text
-                      style={
-                        styles.saveButtonText
-                      }
-                    >
+                    <Text style={styles.saveButtonText}>
                       Save Prescription
                     </Text>
                   </>
@@ -1256,57 +914,39 @@ const ActionCard = ({
   icon: ReactNode;
   disabled: boolean;
   onPress: () => void;
-}) => {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.actionCard,
-        disabled
-          ? styles.disabledButton
-          : undefined,
-      ]}
-      activeOpacity={0.86}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View
-        style={
-          styles.actionCardIcon
-        }
-      >
-        {icon}
-      </View>
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.actionCard,
+      disabled
+        ? styles.disabledButton
+        : undefined,
+    ]}
+    activeOpacity={0.86}
+    onPress={onPress}
+    disabled={disabled}
+  >
+    <View style={styles.actionCardIcon}>
+      {icon}
+    </View>
 
-      <View
-        style={
-          styles.actionCardTextBlock
-        }
-      >
-        <Text
-          style={
-            styles.actionCardTitle
-          }
-        >
-          {title}
-        </Text>
+    <View style={styles.actionCardTextBlock}>
+      <Text style={styles.actionCardTitle}>
+        {title}
+      </Text>
 
-        <Text
-          style={
-            styles.actionCardText
-          }
-        >
-          {description}
-        </Text>
-      </View>
+      <Text style={styles.actionCardText}>
+        {description}
+      </Text>
+    </View>
 
-      <ChevronRight
-        size={20}
-        color={DOCTOR_PRIMARY}
-        strokeWidth={2.7}
-      />
-    </TouchableOpacity>
-  );
-};
+    <ChevronRight
+      size={20}
+      color={DOCTOR_PRIMARY}
+      strokeWidth={2.7}
+    />
+  </TouchableOpacity>
+);
 
 const MedicineEditorCard = ({
   item,
@@ -1323,364 +963,313 @@ const MedicineEditorCard = ({
   canRemove: boolean;
   disabled: boolean;
   onUpdate: (
-    field:
-      keyof PrescriptionItemDraft,
-    value: string
+    field: keyof PrescriptionItemDraft,
+    value: string,
   ) => void;
   onFrequencyChange: (
-    frequency: DoctorPrescriptionFrequency
+    frequency: DoctorPrescriptionFrequency,
   ) => void;
-  onToggleTime: (
-    time: string
-  ) => void;
+  onToggleTime: (time: string) => void;
   onRemove: () => void;
-}) => {
-  return (
-    <View
-      style={styles.medicineCard}
-    >
-      <View
-        style={
-          styles.medicineCardHeader
-        }
-      >
-        <View
-          style={
-            styles.medicineNumber
-          }
-        >
-          <Text
-            style={
-              styles.medicineNumberText
-            }
-          >
-            {index + 1}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.medicineHeaderText
-          }
-        >
-          <Text
-            style={
-              styles.medicineCardTitle
-            }
-          >
-            Medicine item
-          </Text>
-
-          <Text
-            style={
-              styles.medicineCardSubtitle
-            }
-          >
-            Review all details
-          </Text>
-        </View>
-
-        {canRemove ? (
-          <TouchableOpacity
-            style={
-              styles.removeButton
-            }
-            activeOpacity={0.85}
-            onPress={onRemove}
-            disabled={disabled}
-          >
-            <Trash2
-              size={18}
-              color={DANGER}
-              strokeWidth={2.6}
-            />
-          </TouchableOpacity>
-        ) : null}
+}) => (
+  <View style={styles.medicineCard}>
+    <View style={styles.medicineCardHeader}>
+      <View style={styles.medicineNumber}>
+        <Text style={styles.medicineNumberText}>
+          {index + 1}
+        </Text>
       </View>
 
-      <InputField
-        label="Medicine name"
-        value={item.name}
-        placeholder="e.g. Metformin"
-        icon={
-          <Pill
-            size={17}
-            color={DOCTOR_PRIMARY}
-            strokeWidth={2.5}
-          />
-        }
-        editable={!disabled}
-        onChangeText={(value) =>
-          onUpdate("name", value)
-        }
-      />
+      <View style={styles.medicineHeaderText}>
+        <Text style={styles.medicineCardTitle}>
+          Medicine item
+        </Text>
 
-      <InputField
-        label="Dose"
-        value={item.dose}
-        placeholder="e.g. 500mg"
-        icon={
-          <ClipboardList
-            size={17}
-            color={DOCTOR_PRIMARY}
-            strokeWidth={2.5}
-          />
-        }
-        editable={!disabled}
-        onChangeText={(value) =>
-          onUpdate("dose", value)
-        }
-      />
-
-      <Text
-        style={styles.inputLabel}
-      >
-        Frequency
-      </Text>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.frequencyRow
-        }
-      >
-        {FREQUENCY_OPTIONS.map(
-          (option) => {
-            const selected =
-              item.frequency ===
-              option.value;
-
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.frequencyChip,
-                  selected
-                    ? styles.frequencyChipSelected
-                    : undefined,
-                ]}
-                activeOpacity={0.84}
-                onPress={() =>
-                  onFrequencyChange(
-                    option.value
-                  )
-                }
-                disabled={disabled}
-              >
-                <Text
-                  style={[
-                    styles.frequencyChipText,
-                    selected
-                      ? styles.frequencyChipTextSelected
-                      : undefined,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-        )}
-      </ScrollView>
-
-      <Text
-        style={styles.inputLabel}
-      >
-        Reminder times
-      </Text>
-
-      <View
-        style={styles.timeRow}
-      >
-        {TIME_OPTIONS.map(
-          (option) => {
-            const selected =
-              item.selectedTimes.includes(
-                option.time
-              );
-
-            return (
-              <TouchableOpacity
-                key={option.time}
-                style={[
-                  styles.timeChip,
-                  selected
-                    ? styles.timeChipSelected
-                    : undefined,
-                ]}
-                activeOpacity={0.84}
-                onPress={() =>
-                  onToggleTime(
-                    option.time
-                  )
-                }
-                disabled={disabled}
-              >
-                <Clock3
-                  size={15}
-                  color={
-                    selected
-                      ? SURFACE
-                      : DOCTOR_PRIMARY
-                  }
-                  strokeWidth={2.5}
-                />
-
-                <Text
-                  style={[
-                    styles.timeChipLabel,
-                    selected
-                      ? styles.timeChipLabelSelected
-                      : undefined,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.timeChipValue,
-                    selected
-                      ? styles.timeChipLabelSelected
-                      : undefined,
-                  ]}
-                >
-                  {option.time}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-        )}
+        <Text style={styles.medicineCardSubtitle}>
+          Review all prescribing details
+        </Text>
       </View>
 
-      <View
-        style={styles.dateRow}
-      >
-        <View
-          style={
-            styles.dateField
-          }
+      {canRemove ? (
+        <TouchableOpacity
+          style={styles.removeButton}
+          activeOpacity={0.85}
+          onPress={onRemove}
+          disabled={disabled}
         >
-          <InputField
-            label="Start date"
-            value={item.startDate}
-            placeholder="YYYY-MM-DD"
-            icon={
-              <CalendarDays
-                size={17}
-                color={
-                  DOCTOR_PRIMARY
-                }
-                strokeWidth={2.5}
-              />
-            }
-            editable={!disabled}
-            onChangeText={(value) =>
-              onUpdate(
-                "startDate",
-                value
-              )
-            }
+          <Trash2
+            size={18}
+            color={DANGER}
+            strokeWidth={2.6}
           />
-        </View>
-
-        <View
-          style={
-            styles.dateField
-          }
-        >
-          <InputField
-            label="End date"
-            value={
-              item.endDate || ""
-            }
-            placeholder="Optional"
-            icon={
-              <CalendarDays
-                size={17}
-                color={
-                  DOCTOR_PRIMARY
-                }
-                strokeWidth={2.5}
-              />
-            }
-            editable={!disabled}
-            onChangeText={(value) =>
-              onUpdate(
-                "endDate",
-                value
-              )
-            }
-          />
-        </View>
-      </View>
-
-      <Text
-        style={styles.inputLabel}
-      >
-        Instructions
-      </Text>
-
-      <TextInput
-        style={
-          styles.instructionsInput
-        }
-        value={
-          item.instructions || ""
-        }
-        onChangeText={(value) =>
-          onUpdate(
-            "instructions",
-            value
-          )
-        }
-        placeholder="e.g. Take after food"
-        placeholderTextColor={MUTED}
-        multiline
-        maxLength={1000}
-        textAlignVertical="top"
-        editable={!disabled}
-      />
-
-      {item.prescriptionPattern ? (
-        <View
-          style={styles.patternPanel}
-        >
-          <Text
-            style={
-              styles.patternLabel
-            }
-          >
-            Prescription pattern
-          </Text>
-
-          <Text
-            style={
-              styles.patternValue
-            }
-          >
-            {
-              item.prescriptionPattern
-            }
-          </Text>
-
-          <Text
-            style={
-              styles.patternFrequency
-            }
-          >
-            {formatFrequency(
-              item.frequency
-            )}
-          </Text>
-        </View>
+        </TouchableOpacity>
       ) : null}
     </View>
-  );
-};
+
+    <InputField
+      label="Medicine name"
+      value={item.name}
+      placeholder="e.g. Metformin"
+      icon={
+        <Pill
+          size={17}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.5}
+        />
+      }
+      editable={!disabled}
+      onChangeText={value =>
+        onUpdate("name", value)
+      }
+    />
+
+    <InputField
+      label="Dose"
+      value={item.dose}
+      placeholder="e.g. 500mg"
+      icon={
+        <ClipboardList
+          size={17}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.5}
+        />
+      }
+      editable={!disabled}
+      onChangeText={value =>
+        onUpdate("dose", value)
+      }
+    />
+
+    <InputField
+      label="Packs to dispense"
+      value={item.quantity}
+      placeholder="e.g. 2"
+      keyboardType="number-pad"
+      icon={
+        <Package
+          size={17}
+          color={DOCTOR_PRIMARY}
+          strokeWidth={2.5}
+        />
+      }
+      editable={!disabled}
+      onChangeText={value =>
+        onUpdate(
+          "quantity",
+          value.replace(
+            /[^0-9]/g,
+            "",
+          ),
+        )
+      }
+    />
+
+    <View style={styles.packInfo}>
+      <Package
+        size={16}
+        color={DOCTOR_DARK}
+        strokeWidth={2.4}
+      />
+      <Text style={styles.packInfoText}>
+        Enter the number of pharmacy packs to supply. The pharmacist will match the prescribed medicine to the appropriate inventory pack.
+      </Text>
+    </View>
+
+    <Text style={styles.inputLabel}>
+      Frequency
+    </Text>
+
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.frequencyRow}
+    >
+      {FREQUENCY_OPTIONS.map(option => {
+        const selected =
+          item.frequency === option.value;
+
+        return (
+          <TouchableOpacity
+            key={option.value}
+            style={[
+              styles.frequencyChip,
+              selected
+                ? styles.frequencyChipSelected
+                : undefined,
+            ]}
+            activeOpacity={0.84}
+            onPress={() =>
+              onFrequencyChange(
+                option.value,
+              )
+            }
+            disabled={disabled}
+          >
+            <Text
+              style={[
+                styles.frequencyChipText,
+                selected
+                  ? styles.frequencyChipTextSelected
+                  : undefined,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+
+    <Text style={styles.inputLabel}>
+      Reminder times
+    </Text>
+
+    <View style={styles.timeRow}>
+      {TIME_OPTIONS.map(option => {
+        const selected =
+          item.selectedTimes.includes(
+            option.time,
+          );
+
+        return (
+          <TouchableOpacity
+            key={option.time}
+            style={[
+              styles.timeChip,
+              selected
+                ? styles.timeChipSelected
+                : undefined,
+            ]}
+            activeOpacity={0.84}
+            onPress={() =>
+              onToggleTime(
+                option.time,
+              )
+            }
+            disabled={disabled}
+          >
+            <Clock3
+              size={15}
+              color={
+                selected
+                  ? SURFACE
+                  : DOCTOR_PRIMARY
+              }
+              strokeWidth={2.5}
+            />
+
+            <Text
+              style={[
+                styles.timeChipLabel,
+                selected
+                  ? styles.timeChipLabelSelected
+                  : undefined,
+              ]}
+            >
+              {option.label}
+            </Text>
+
+            <Text
+              style={[
+                styles.timeChipValue,
+                selected
+                  ? styles.timeChipLabelSelected
+                  : undefined,
+              ]}
+            >
+              {option.time}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+
+    <View style={styles.dateRow}>
+      <View style={styles.dateField}>
+        <InputField
+          label="Start date"
+          value={item.startDate}
+          placeholder="YYYY-MM-DD"
+          icon={
+            <CalendarDays
+              size={17}
+              color={DOCTOR_PRIMARY}
+              strokeWidth={2.5}
+            />
+          }
+          editable={!disabled}
+          onChangeText={value =>
+            onUpdate(
+              "startDate",
+              value,
+            )
+          }
+        />
+      </View>
+
+      <View style={styles.dateField}>
+        <InputField
+          label="End date"
+          value={item.endDate || ""}
+          placeholder="Optional"
+          icon={
+            <CalendarDays
+              size={17}
+              color={DOCTOR_PRIMARY}
+              strokeWidth={2.5}
+            />
+          }
+          editable={!disabled}
+          onChangeText={value =>
+            onUpdate(
+              "endDate",
+              value,
+            )
+          }
+        />
+      </View>
+    </View>
+
+    <Text style={styles.inputLabel}>
+      Instructions
+    </Text>
+
+    <TextInput
+      style={styles.instructionsInput}
+      value={item.instructions || ""}
+      onChangeText={value =>
+        onUpdate(
+          "instructions",
+          value,
+        )
+      }
+      placeholder="e.g. Take after food"
+      placeholderTextColor={MUTED}
+      multiline
+      maxLength={1000}
+      textAlignVertical="top"
+      editable={!disabled}
+    />
+
+    {item.prescriptionPattern ? (
+      <View style={styles.patternPanel}>
+        <Text style={styles.patternLabel}>
+          Prescription pattern
+        </Text>
+
+        <Text style={styles.patternValue}>
+          {item.prescriptionPattern}
+        </Text>
+
+        <Text style={styles.patternFrequency}>
+          {formatFrequency(
+            item.frequency,
+          )}
+        </Text>
+      </View>
+    ) : null}
+  </View>
+);
 
 const InputField = ({
   label,
@@ -1688,6 +1277,7 @@ const InputField = ({
   placeholder,
   icon,
   editable,
+  keyboardType = "default",
   onChangeText,
 }: {
   label: string;
@@ -1695,55 +1285,37 @@ const InputField = ({
   placeholder: string;
   icon: ReactNode;
   editable: boolean;
-  onChangeText: (
-    value: string
-  ) => void;
-}) => {
-  return (
-    <View
-      style={styles.inputBlock}
-    >
-      <Text
-        style={styles.inputLabel}
-      >
-        {label}
-      </Text>
+  keyboardType?: "default" | "number-pad";
+  onChangeText: (value: string) => void;
+}) => (
+  <View style={styles.inputBlock}>
+    <Text style={styles.inputLabel}>
+      {label}
+    </Text>
 
-      <View
-        style={styles.inputShell}
-      >
-        <View
-          style={styles.inputIcon}
-        >
-          {icon}
-        </View>
-
-        <TextInput
-          style={styles.textInput}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={
-            MUTED
-          }
-          editable={editable}
-        />
+    <View style={styles.inputShell}>
+      <View style={styles.inputIcon}>
+        {icon}
       </View>
+
+      <TextInput
+        style={styles.textInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={MUTED}
+        editable={editable}
+        keyboardType={keyboardType}
+      />
     </View>
-  );
-};
+  </View>
+);
 
 export default DoctorPrescriptionScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-  screen: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
+  safeArea: { flex: 1, backgroundColor: BACKGROUND },
+  screen: { flex: 1, backgroundColor: BACKGROUND },
   header: {
     paddingHorizontal: 18,
     paddingTop: 10,
@@ -1761,9 +1333,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     ...elevate(1),
   },
-  headerTextBlock: {
-    flex: 1,
-  },
+  headerTextBlock: { flex: 1 },
   headerTitle: {
     color: TEXT,
     fontSize: 24,
@@ -1775,9 +1345,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 3,
   },
-  scrollView: {
-    flex: 1,
-  },
+  scrollView: { flex: 1 },
   selectContent: {
     paddingHorizontal: 16,
     paddingTop: 4,
@@ -1892,9 +1460,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
-  scanSummaryTextBlock: {
-    flex: 1,
-  },
+  scanSummaryTextBlock: { flex: 1 },
   scanSummaryTitle: {
     color: SUCCESS_DARK,
     fontSize: 14,
@@ -1970,9 +1536,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  medicineHeaderText: {
-    flex: 1,
-  },
+  medicineHeaderText: { flex: 1 },
   medicineCardTitle: {
     color: TEXT,
     fontSize: 15,
@@ -1992,9 +1556,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  inputBlock: {
-    marginBottom: 12,
-  },
+  inputBlock: { marginBottom: 12 },
   inputLabel: {
     color: TEXT,
     fontSize: 12,
@@ -2025,9 +1587,24 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     paddingVertical: 10,
   },
-  frequencyRow: {
-    paddingBottom: 12,
+  packInfo: {
+    backgroundColor: DOCTOR_LIGHT,
+    borderRadius: 11,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: -2,
+    marginBottom: 14,
   },
+  packInfoText: {
+    flex: 1,
+    color: DOCTOR_DARK,
+    fontSize: 10,
+    fontWeight: "600",
+    lineHeight: 15,
+    marginLeft: 8,
+  },
+  frequencyRow: { paddingBottom: 12 },
   frequencyChip: {
     borderRadius: 10,
     backgroundColor: SOFT_PANEL,
@@ -2076,16 +1653,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
-  timeChipLabelSelected: {
-    color: SURFACE,
-  },
+  timeChipLabelSelected: { color: SURFACE },
   dateRow: {
     flexDirection: "row",
     gap: 8,
   },
-  dateField: {
-    flex: 1,
-  },
+  dateField: { flex: 1 },
   instructionsInput: {
     minHeight: 92,
     borderRadius: 12,
@@ -2143,7 +1716,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginLeft: 8,
   },
-  disabledButton: {
-    opacity: 0.58,
-  },
+  disabledButton: { opacity: 0.58 },
 });
