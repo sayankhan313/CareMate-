@@ -4,13 +4,13 @@ import {
   Alert,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
-  Pressable,
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -55,10 +55,8 @@ const RIPPLE = "rgba(17, 25, 54, 0.08)";
 const BORDER = "#E1E6EF";
 
 const PRIMARY = "#15803D";
-const PRIMARY_DARK = "#14532D";
 const PRIMARY_LIGHT = "#E9F8EF";
 
-const BLUE = "#5B86E5";
 const BLUE_DARK = "#315FBA";
 const BLUE_LIGHT = "#EEF4FF";
 
@@ -84,19 +82,12 @@ const elevate = (level: 1 | 2 = 1) => ({
   shadowColor: "#172033",
   shadowOpacity: Platform.OS === "android" ? 0 : 0.07,
   shadowRadius: level === 1 ? 4 : 8,
-  shadowOffset: {
-    width: 0,
-    height: level === 1 ? 2 : 4,
-  },
+  shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
 });
 
 const parseStockNumber = (value: string) => {
   const number = Number(value.trim());
-
-  if (!Number.isInteger(number) || number < 0) {
-    return null;
-  }
-
+  if (!Number.isInteger(number) || number < 0) return null;
   return number;
 };
 
@@ -119,21 +110,14 @@ export const PharmacyInventoryScreen = () => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const [formVisible, setFormVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<PharmacyInventoryItem | null>(
-    null,
-  );
+  const [editingItem, setEditingItem] = useState<PharmacyInventoryItem | null>(null);
   const [form, setForm] = useState<InventoryForm>(EMPTY_FORM);
 
   const loadInventory = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
       try {
-        if (mode === "initial") {
-          setIsLoading(true);
-        }
-
-        if (mode === "refresh") {
-          setIsRefreshing(true);
-        }
+        if (mode === "initial") setIsLoading(true);
+        if (mode === "refresh") setIsRefreshing(true);
 
         setErrorMessage("");
 
@@ -167,9 +151,7 @@ export const PharmacyInventoryScreen = () => {
     }, [loadInventory]),
   );
 
-  const applySearch = () => {
-    setAppliedSearch(searchText.trim());
-  };
+  const applySearch = () => setAppliedSearch(searchText.trim());
 
   const clearSearch = () => {
     setSearchText("");
@@ -184,7 +166,6 @@ export const PharmacyInventoryScreen = () => {
 
   const openEdit = (item: PharmacyInventoryItem) => {
     setEditingItem(item);
-
     setForm({
       medicineName: item.medicineName,
       strength: item.strength || "",
@@ -193,14 +174,11 @@ export const PharmacyInventoryScreen = () => {
       quantityInStock: String(item.quantityInStock),
       lowStockThreshold: String(item.lowStockThreshold),
     });
-
     setFormVisible(true);
   };
 
   const closeForm = () => {
-    if (isSaving) {
-      return;
-    }
+    if (isSaving) return;
 
     setFormVisible(false);
     setEditingItem(null);
@@ -212,10 +190,7 @@ export const PharmacyInventoryScreen = () => {
     const stockUnit = form.stockUnit.trim();
 
     if (medicineName.length < 2) {
-      Alert.alert(
-        "Medicine name required",
-        "Please enter a valid medicine name.",
-      );
+      Alert.alert("Medicine name required", "Please enter a valid medicine name.");
       return;
     }
 
@@ -287,10 +262,7 @@ export const PharmacyInventoryScreen = () => {
       "Archive inventory item?",
       `${item.medicineName} will be removed from the active inventory list. Existing history will be preserved.`,
       [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Archive",
           style: "destructive",
@@ -337,7 +309,8 @@ export const PharmacyInventoryScreen = () => {
 
       <View style={styles.screen}>
         <View style={styles.appBar}>
-          <Pressable android_ripple={{ color: RIPPLE }}
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
@@ -346,12 +319,11 @@ export const PharmacyInventoryScreen = () => {
 
           <View style={styles.appBarText}>
             <Text style={styles.title}>Pharmacy inventory</Text>
-            <Text style={styles.subtitle}>
-              Manage available medicine stock
-            </Text>
+            <Text style={styles.subtitle}>Manage available medicine stock</Text>
           </View>
 
-          <Pressable android_ripple={{ color: RIPPLE }}
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
             style={styles.addButton}
             onPress={openCreate}
           >
@@ -363,9 +335,7 @@ export const PharmacyInventoryScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.content,
-            {
-              paddingBottom: Math.max(insets.bottom + 34, 48),
-            },
+            { paddingBottom: Math.max(insets.bottom + 34, 48) },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -420,7 +390,8 @@ export const PharmacyInventoryScreen = () => {
               />
 
               {searchText.length > 0 ? (
-                <Pressable android_ripple={{ color: RIPPLE }}
+                <Pressable
+                  android_ripple={{ color: RIPPLE }}
                   style={styles.clearSearch}
                   onPress={clearSearch}
                 >
@@ -429,7 +400,8 @@ export const PharmacyInventoryScreen = () => {
               ) : null}
             </View>
 
-            <Pressable android_ripple={{ color: RIPPLE }}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
               style={styles.searchButton}
               onPress={applySearch}
             >
@@ -438,11 +410,9 @@ export const PharmacyInventoryScreen = () => {
           </View>
 
           <View style={styles.tabs}>
-            <Pressable android_ripple={{ color: RIPPLE }}
-              style={[
-                styles.tab,
-                tab === "ACTIVE" ? styles.tabSelected : undefined,
-              ]}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={[styles.tab, tab === "ACTIVE" ? styles.tabSelected : undefined]}
               onPress={() => setTab("ACTIVE")}
             >
               <Text
@@ -455,11 +425,9 @@ export const PharmacyInventoryScreen = () => {
               </Text>
             </Pressable>
 
-            <Pressable android_ripple={{ color: RIPPLE }}
-              style={[
-                styles.tab,
-                tab === "ARCHIVED" ? styles.tabSelected : undefined,
-              ]}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={[styles.tab, tab === "ARCHIVED" ? styles.tabSelected : undefined]}
               onPress={() => setTab("ARCHIVED")}
             >
               <Text
@@ -474,12 +442,11 @@ export const PharmacyInventoryScreen = () => {
           </View>
 
           {tab === "ACTIVE" ? (
-            <Pressable android_ripple={{ color: RIPPLE }}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
               style={[
                 styles.lowStockFilter,
-                lowStockOnly
-                  ? styles.lowStockFilterSelected
-                  : undefined,
+                lowStockOnly ? styles.lowStockFilterSelected : undefined,
               ]}
               onPress={() => setLowStockOnly(value => !value)}
             >
@@ -492,9 +459,7 @@ export const PharmacyInventoryScreen = () => {
               <Text
                 style={[
                   styles.lowStockFilterText,
-                  lowStockOnly
-                    ? styles.lowStockFilterTextSelected
-                    : undefined,
+                  lowStockOnly ? styles.lowStockFilterTextSelected : undefined,
                 ]}
               >
                 Low stock only
@@ -505,9 +470,7 @@ export const PharmacyInventoryScreen = () => {
           {isLoading ? (
             <View style={styles.stateCard}>
               <ActivityIndicator color={PRIMARY} />
-
               <Text style={styles.stateTitle}>Loading inventory</Text>
-
               <Text style={styles.stateText}>
                 Checking medicine stock for this pharmacy.
               </Text>
@@ -517,17 +480,15 @@ export const PharmacyInventoryScreen = () => {
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
               <RefreshCw size={26} color={DANGER} strokeWidth={2.6} />
-
               <Text style={styles.errorTitle}>Inventory unavailable</Text>
-
               <Text style={styles.errorText}>{errorMessage}</Text>
 
-              <Pressable android_ripple={{ color: RIPPLE }}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.retryButton}
                 onPress={() => void loadInventory("initial")}
               >
                 <RefreshCw size={16} color={SURFACE} strokeWidth={2.5} />
-
                 <Text style={styles.retryText}>Try again</Text>
               </Pressable>
             </View>
@@ -540,9 +501,7 @@ export const PharmacyInventoryScreen = () => {
               </View>
 
               <Text style={styles.emptyTitle}>
-                {tab === "ACTIVE"
-                  ? "No inventory items"
-                  : "No archived items"}
+                {tab === "ACTIVE" ? "No inventory items" : "No archived items"}
               </Text>
 
               <Text style={styles.emptyText}>
@@ -552,16 +511,12 @@ export const PharmacyInventoryScreen = () => {
               </Text>
 
               {tab === "ACTIVE" ? (
-                <Pressable android_ripple={{ color: RIPPLE }}
+                <Pressable
+                  android_ripple={{ color: RIPPLE }}
                   style={styles.emptyAddButton}
                   onPress={openCreate}
                 >
-                  <PackagePlus
-                    size={17}
-                    color={SURFACE}
-                    strokeWidth={2.5}
-                  />
-
+                  <PackagePlus size={17} color={SURFACE} strokeWidth={2.5} />
                   <Text style={styles.emptyAddText}>Add medicine</Text>
                 </Pressable>
               ) : null}
@@ -603,7 +558,8 @@ export const PharmacyInventoryScreen = () => {
                 </Text>
               </View>
 
-              <Pressable android_ripple={{ color: RIPPLE }}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.closeButton}
                 disabled={isSaving}
                 onPress={closeForm}
@@ -622,10 +578,7 @@ export const PharmacyInventoryScreen = () => {
                 value={form.medicineName}
                 placeholder="e.g. Amoxicillin"
                 onChangeText={medicineName =>
-                  setForm(current => ({
-                    ...current,
-                    medicineName,
-                  }))
+                  setForm(current => ({ ...current, medicineName }))
                 }
               />
 
@@ -636,10 +589,7 @@ export const PharmacyInventoryScreen = () => {
                     value={form.strength}
                     placeholder="e.g. 500 mg"
                     onChangeText={strength =>
-                      setForm(current => ({
-                        ...current,
-                        strength,
-                      }))
+                      setForm(current => ({ ...current, strength }))
                     }
                   />
                 </View>
@@ -652,10 +602,7 @@ export const PharmacyInventoryScreen = () => {
                     value={form.form}
                     placeholder="e.g. Tablet"
                     onChangeText={medicineForm =>
-                      setForm(current => ({
-                        ...current,
-                        form: medicineForm,
-                      }))
+                      setForm(current => ({ ...current, form: medicineForm }))
                     }
                   />
                 </View>
@@ -666,10 +613,7 @@ export const PharmacyInventoryScreen = () => {
                 value={form.stockUnit}
                 placeholder="e.g. pack"
                 onChangeText={stockUnit =>
-                  setForm(current => ({
-                    ...current,
-                    stockUnit,
-                  }))
+                  setForm(current => ({ ...current, stockUnit }))
                 }
               />
 
@@ -681,10 +625,7 @@ export const PharmacyInventoryScreen = () => {
                     placeholder="0"
                     keyboardType="number-pad"
                     onChangeText={quantityInStock =>
-                      setForm(current => ({
-                        ...current,
-                        quantityInStock,
-                      }))
+                      setForm(current => ({ ...current, quantityInStock }))
                     }
                   />
                 </View>
@@ -698,37 +639,16 @@ export const PharmacyInventoryScreen = () => {
                     placeholder="5"
                     keyboardType="number-pad"
                     onChangeText={lowStockThreshold =>
-                      setForm(current => ({
-                        ...current,
-                        lowStockThreshold,
-                      }))
+                      setForm(current => ({ ...current, lowStockThreshold }))
                     }
                   />
                 </View>
               </View>
-
-              {editingItem && editingItem.reservedQuantity > 0 ? (
-                <View style={styles.reservedNotice}>
-                  <TriangleAlert
-                    size={18}
-                    color={WARNING_DARK}
-                    strokeWidth={2.5}
-                  />
-
-                  <Text style={styles.reservedNoticeText}>
-                    {editingItem.reservedQuantity} {editingItem.stockUnit}
-                    {editingItem.reservedQuantity === 1 ? "" : "s"} currently
-                    reserved. Stock cannot be reduced below this amount.
-                  </Text>
-                </View>
-              ) : null}
             </ScrollView>
 
-            <Pressable android_ripple={{ color: RIPPLE }}
-              style={[
-                styles.saveButton,
-                isSaving ? styles.disabledButton : undefined,
-              ]}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={[styles.saveButton, isSaving ? styles.disabledButton : undefined]}
               disabled={isSaving}
               onPress={() => void saveItem()}
             >
@@ -736,12 +656,7 @@ export const PharmacyInventoryScreen = () => {
                 <ActivityIndicator color={SURFACE} />
               ) : (
                 <>
-                  <PackagePlus
-                    size={19}
-                    color={SURFACE}
-                    strokeWidth={2.6}
-                  />
-
+                  <PackagePlus size={19} color={SURFACE} strokeWidth={2.6} />
                   <Text style={styles.saveButtonText}>
                     {editingItem ? "Save changes" : "Add medicine"}
                   </Text>
@@ -770,10 +685,7 @@ const InventoryCard = ({
     item.quantityInStock > 0
       ? Math.min(
           100,
-          Math.max(
-            0,
-            (item.availableQuantity / item.quantityInStock) * 100,
-          ),
+          Math.max(0, (item.availableQuantity / item.quantityInStock) * 100),
         )
       : 0;
 
@@ -783,17 +695,11 @@ const InventoryCard = ({
         <View
           style={[
             styles.medicineIcon,
-            item.isLowStock
-              ? styles.medicineIconWarning
-              : undefined,
+            item.isLowStock ? styles.medicineIconWarning : undefined,
           ]}
         >
           {item.isLowStock ? (
-            <TriangleAlert
-              size={21}
-              color={WARNING_DARK}
-              strokeWidth={2.5}
-            />
+            <TriangleAlert size={21} color={WARNING_DARK} strokeWidth={2.5} />
           ) : (
             <Pill size={21} color={PRIMARY} strokeWidth={2.5} />
           )}
@@ -823,36 +729,34 @@ const InventoryCard = ({
         ) : null}
       </View>
 
-      <View style={styles.stockGrid}>
-        <StockValue
-          label="In stock"
-          value={item.quantityInStock}
-          unit={item.stockUnit}
-        />
+      <View style={styles.availableStockCard}>
+        <View>
+          <Text
+            style={[
+              styles.availableStockNumber,
+              item.isLowStock ? styles.stockNumberWarning : undefined,
+            ]}
+          >
+            {item.availableQuantity}
+          </Text>
+          <Text style={styles.availableStockUnit}>
+            {item.stockUnit}
+            {item.availableQuantity === 1 ? "" : "s"}
+          </Text>
+        </View>
 
-        <View style={styles.stockDivider} />
-
-        <StockValue
-          label="Reserved"
-          value={item.reservedQuantity}
-          unit={item.stockUnit}
-        />
-
-        <View style={styles.stockDivider} />
-
-        <StockValue
-          label="Available"
-          value={item.availableQuantity}
-          unit={item.stockUnit}
-          warning={item.isLowStock}
-        />
+        <View style={styles.availableStockText}>
+          <Text style={styles.availableStockTitle}>Available stock</Text>
+          <Text style={styles.availableStockSubtitle}>
+            Available for new pharmacy orders
+          </Text>
+        </View>
       </View>
 
       {item.isActive ? (
         <>
           <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Available stock</Text>
-
+            <Text style={styles.progressLabel}>Stock level</Text>
             <Text style={styles.thresholdText}>
               Low at ≤ {item.lowStockThreshold}
             </Text>
@@ -862,12 +766,8 @@ const InventoryCard = ({
             <View
               style={[
                 styles.progressFill,
-                item.isLowStock
-                  ? styles.progressFillWarning
-                  : undefined,
-                {
-                  width: `${availablePercentage}%`,
-                },
+                item.isLowStock ? styles.progressFillWarning : undefined,
+                { width: `${availablePercentage}%` },
               ]}
             />
           </View>
@@ -877,7 +777,8 @@ const InventoryCard = ({
       <View style={styles.cardActions}>
         {item.isActive ? (
           <>
-            <Pressable android_ripple={{ color: RIPPLE }}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
               style={styles.editButton}
               onPress={onEdit}
             >
@@ -885,20 +786,18 @@ const InventoryCard = ({
               <Text style={styles.editButtonText}>Edit</Text>
             </Pressable>
 
-            <Pressable android_ripple={{ color: RIPPLE }}
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
               style={styles.archiveButton}
               onPress={onArchive}
             >
-              <Archive
-                size={16}
-                color={DANGER_DARK}
-                strokeWidth={2.5}
-              />
+              <Archive size={16} color={DANGER_DARK} strokeWidth={2.5} />
               <Text style={styles.archiveButtonText}>Archive</Text>
             </Pressable>
           </>
         ) : (
-          <Pressable android_ripple={{ color: RIPPLE }}
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
             style={styles.restoreButton}
             onPress={onRestore}
           >
@@ -910,35 +809,6 @@ const InventoryCard = ({
     </View>
   );
 };
-
-const StockValue = ({
-  label,
-  value,
-  unit,
-  warning = false,
-}: {
-  label: string;
-  value: number;
-  unit: string;
-  warning?: boolean;
-}) => (
-  <View style={styles.stockValue}>
-    <Text
-      style={[
-        styles.stockNumber,
-        warning ? styles.stockNumberWarning : undefined,
-      ]}
-    >
-      {value}
-    </Text>
-
-    <Text style={styles.stockUnit} numberOfLines={1}>
-      {unit}
-    </Text>
-
-    <Text style={styles.stockLabel}>{label}</Text>
-  </View>
-);
 
 const FormField = ({
   label,
@@ -970,15 +840,8 @@ const FormField = ({
 export default PharmacyInventoryScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-
-  screen: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
+  safeArea: { flex: 1, backgroundColor: BACKGROUND },
+  screen: { flex: 1, backgroundColor: BACKGROUND },
 
   appBar: {
     flexDirection: "row",
@@ -987,7 +850,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 13,
   },
-
   backButton: {
     width: 42,
     height: 42,
@@ -997,24 +859,9 @@ const styles = StyleSheet.create({
     marginRight: 4,
     overflow: "hidden",
   },
-
-  appBarText: {
-    flex: 1,
-  },
-
-  title: {
-    color: TEXT,
-    fontSize: 22,
-    fontWeight: "700",
-  },
-
-  subtitle: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
+  appBarText: { flex: 1 },
+  title: { color: TEXT, fontSize: 22, fontWeight: "700" },
+  subtitle: { color: MUTED, fontSize: 11, fontWeight: "600", marginTop: 3 },
   addButton: {
     width: 44,
     height: 44,
@@ -1025,13 +872,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 
-  scrollView: {
-    flex: 1,
-  },
-
-  content: {
-    paddingHorizontal: 16,
-  },
+  scrollView: { flex: 1 },
+  content: { paddingHorizontal: 16 },
 
   summaryCard: {
     backgroundColor: SURFACE,
@@ -1041,7 +883,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...elevate(1),
   },
-
   summaryIcon: {
     width: 48,
     height: 48,
@@ -1051,28 +892,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 13,
   },
-
-  summaryItem: {
-    flex: 1,
-  },
-
-  summaryValue: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: "700",
-  },
-
-  warningValue: {
-    color: WARNING_DARK,
-  },
-
-  summaryLabel: {
-    color: MUTED,
-    fontSize: 9,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-
+  summaryItem: { flex: 1 },
+  summaryValue: { color: TEXT, fontSize: 20, fontWeight: "700" },
+  warningValue: { color: WARNING_DARK },
+  summaryLabel: { color: MUTED, fontSize: 9, fontWeight: "600", marginTop: 2 },
   summaryDivider: {
     width: StyleSheet.hairlineWidth,
     height: 38,
@@ -1080,11 +903,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
 
-  searchRow: {
-    flexDirection: "row",
-    marginTop: 12,
-  },
-
+  searchRow: { flexDirection: "row", marginTop: 12 },
   searchInputContainer: {
     flex: 1,
     minHeight: 46,
@@ -1096,21 +915,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   searchInput: {
     flex: 1,
     color: TEXT,
     fontSize: 12,
     paddingHorizontal: 9,
   },
-
   clearSearch: {
     width: 30,
     height: 30,
     alignItems: "center",
     justifyContent: "center",
   },
-
   searchButton: {
     width: 46,
     height: 46,
@@ -1128,7 +944,6 @@ const styles = StyleSheet.create({
     padding: 4,
     marginTop: 12,
   },
-
   tab: {
     flex: 1,
     minHeight: 38,
@@ -1136,20 +951,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  tabSelected: {
-    backgroundColor: PRIMARY,
-  },
-
-  tabText: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  tabTextSelected: {
-    color: SURFACE,
-  },
+  tabSelected: { backgroundColor: PRIMARY },
+  tabText: { color: MUTED, fontSize: 11, fontWeight: "700" },
+  tabTextSelected: { color: SURFACE },
 
   lowStockFilter: {
     alignSelf: "flex-start",
@@ -1163,22 +967,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   lowStockFilterSelected: {
     backgroundColor: WARNING_LIGHT,
     borderColor: WARNING,
   },
-
   lowStockFilterText: {
     color: MUTED,
     fontSize: 10,
     fontWeight: "700",
     marginLeft: 6,
   },
-
-  lowStockFilterTextSelected: {
-    color: WARNING_DARK,
-  },
+  lowStockFilterTextSelected: { color: WARNING_DARK },
 
   stateCard: {
     backgroundColor: SURFACE,
@@ -1188,14 +987,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     ...elevate(1),
   },
-
-  stateTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-    marginTop: 10,
-  },
-
+  stateTitle: { color: TEXT, fontSize: 15, fontWeight: "700", marginTop: 10 },
   stateText: {
     color: MUTED,
     fontSize: 11,
@@ -1213,14 +1005,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     ...elevate(1),
   },
-
-  errorTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 10,
-  },
-
+  errorTitle: { color: TEXT, fontSize: 16, fontWeight: "700", marginTop: 10 },
   errorText: {
     color: MUTED,
     fontSize: 11,
@@ -1229,7 +1014,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 5,
   },
-
   retryButton: {
     backgroundColor: PRIMARY,
     borderRadius: 11,
@@ -1239,13 +1023,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 13,
   },
-
-  retryText: {
-    color: SURFACE,
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 6,
-  },
+  retryText: { color: SURFACE, fontSize: 11, fontWeight: "700", marginLeft: 6 },
 
   emptyCard: {
     backgroundColor: SURFACE,
@@ -1255,7 +1033,6 @@ const styles = StyleSheet.create({
     marginTop: 14,
     ...elevate(1),
   },
-
   emptyIcon: {
     width: 54,
     height: 54,
@@ -1265,13 +1042,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 10,
   },
-
-  emptyTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
+  emptyTitle: { color: TEXT, fontSize: 15, fontWeight: "700" },
   emptyText: {
     color: MUTED,
     fontSize: 11,
@@ -1280,7 +1051,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 5,
   },
-
   emptyAddButton: {
     minHeight: 42,
     backgroundColor: PRIMARY,
@@ -1291,7 +1061,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 13,
   },
-
   emptyAddText: {
     color: SURFACE,
     fontSize: 11,
@@ -1306,12 +1075,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     ...elevate(1),
   },
-
-  inventoryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
+  inventoryHeader: { flexDirection: "row", alignItems: "center" },
   medicineIcon: {
     width: 44,
     height: 44,
@@ -1321,28 +1085,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
-
-  medicineIconWarning: {
-    backgroundColor: WARNING_LIGHT,
-  },
-
-  inventoryTitleBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  medicineName: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  medicineMeta: {
-    color: MUTED,
-    fontSize: 9,
-    fontWeight: "600",
-    marginTop: 3,
-  },
+  medicineIconWarning: { backgroundColor: WARNING_LIGHT },
+  inventoryTitleBlock: { flex: 1, minWidth: 0 },
+  medicineName: { color: TEXT, fontSize: 14, fontWeight: "700" },
+  medicineMeta: { color: MUTED, fontSize: 9, fontWeight: "600", marginTop: 3 },
 
   lowStockBadge: {
     backgroundColor: WARNING_LIGHT,
@@ -1351,12 +1097,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginLeft: 8,
   },
-
-  lowStockBadgeText: {
-    color: WARNING_DARK,
-    fontSize: 7,
-    fontWeight: "700",
-  },
+  lowStockBadgeText: { color: WARNING_DARK, fontSize: 7, fontWeight: "700" },
 
   archivedBadge: {
     backgroundColor: BLUE_LIGHT,
@@ -1365,55 +1106,47 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginLeft: 8,
   },
+  archivedBadgeText: { color: BLUE_DARK, fontSize: 7, fontWeight: "700" },
 
-  archivedBadgeText: {
-    color: BLUE_DARK,
-    fontSize: 7,
-    fontWeight: "700",
-  },
-
-  stockGrid: {
-    flexDirection: "row",
-    alignItems: "center",
+  availableStockCard: {
+    minHeight: 74,
     backgroundColor: BACKGROUND,
     borderRadius: 13,
-    paddingVertical: 11,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     marginTop: 12,
-  },
-
-  stockValue: {
-    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
   },
-
-  stockNumber: {
+  availableStockNumber: {
     color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 23,
+    fontWeight: "800",
   },
-
-  stockNumberWarning: {
-    color: WARNING_DARK,
-  },
-
-  stockUnit: {
+  stockNumberWarning: { color: WARNING_DARK },
+  availableStockUnit: {
     color: MUTED,
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "600",
     marginTop: 1,
   },
-
-  stockLabel: {
+  availableStockText: {
+    flex: 1,
+    marginLeft: 16,
+    paddingLeft: 16,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: BORDER,
+  },
+  availableStockTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  availableStockSubtitle: {
     color: MUTED,
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "600",
     marginTop: 3,
-  },
-
-  stockDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 34,
-    backgroundColor: BORDER,
   },
 
   progressHeader: {
@@ -1421,19 +1154,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 12,
   },
-
-  progressLabel: {
-    color: MUTED,
-    fontSize: 8,
-    fontWeight: "700",
-  },
-
-  thresholdText: {
-    color: MUTED,
-    fontSize: 8,
-    fontWeight: "600",
-  },
-
+  progressLabel: { color: MUTED, fontSize: 8, fontWeight: "700" },
+  thresholdText: { color: MUTED, fontSize: 8, fontWeight: "600" },
   progressTrack: {
     height: 6,
     borderRadius: 4,
@@ -1441,22 +1163,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginTop: 6,
   },
-
   progressFill: {
     height: "100%",
     borderRadius: 4,
     backgroundColor: PRIMARY,
   },
+  progressFillWarning: { backgroundColor: WARNING },
 
-  progressFillWarning: {
-    backgroundColor: WARNING,
-  },
-
-  cardActions: {
-    flexDirection: "row",
-    marginTop: 13,
-  },
-
+  cardActions: { flexDirection: "row", marginTop: 13 },
   editButton: {
     flex: 1,
     minHeight: 40,
@@ -1467,14 +1181,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 7,
   },
-
   editButtonText: {
     color: PRIMARY,
     fontSize: 10,
     fontWeight: "700",
     marginLeft: 5,
   },
-
   archiveButton: {
     flex: 1,
     minHeight: 40,
@@ -1485,14 +1197,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 7,
   },
-
   archiveButtonText: {
     color: DANGER_DARK,
     fontSize: 10,
     fontWeight: "700",
     marginLeft: 5,
   },
-
   restoreButton: {
     flex: 1,
     minHeight: 42,
@@ -1502,7 +1212,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   restoreButtonText: {
     color: PRIMARY,
     fontSize: 10,
@@ -1516,30 +1225,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
   },
-
   formModal: {
     maxHeight: "88%",
     backgroundColor: SURFACE,
     borderRadius: 18,
     padding: 18,
   },
-
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-
-  modalHeaderText: {
-    flex: 1,
-    paddingRight: 10,
-  },
-
-  modalTitle: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
+  modalHeader: { flexDirection: "row", alignItems: "flex-start" },
+  modalHeaderText: { flex: 1, paddingRight: 10 },
+  modalTitle: { color: TEXT, fontSize: 18, fontWeight: "700" },
   modalSubtitle: {
     color: MUTED,
     fontSize: 10,
@@ -1547,7 +1241,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 3,
   },
-
   closeButton: {
     width: 38,
     height: 38,
@@ -1556,22 +1249,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  formScroll: { marginTop: 13 },
 
-  formScroll: {
-    marginTop: 13,
-  },
-
-  field: {
-    marginBottom: 12,
-  },
-
+  field: { marginBottom: 12 },
   fieldLabel: {
     color: TEXT,
     fontSize: 10,
     fontWeight: "700",
     marginBottom: 6,
   },
-
   fieldInput: {
     minHeight: 46,
     backgroundColor: BACKGROUND,
@@ -1582,36 +1268,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-
-  formRow: {
-    flexDirection: "row",
-  },
-
-  formHalf: {
-    flex: 1,
-  },
-
-  formGap: {
-    width: 10,
-  },
-
-  reservedNotice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: WARNING_LIGHT,
-    borderRadius: 12,
-    padding: 11,
-    marginBottom: 12,
-  },
-
-  reservedNoticeText: {
-    flex: 1,
-    color: WARNING_DARK,
-    fontSize: 10,
-    fontWeight: "600",
-    lineHeight: 15,
-    marginLeft: 7,
-  },
+  formRow: { flexDirection: "row" },
+  formHalf: { flex: 1 },
+  formGap: { width: 10 },
 
   saveButton: {
     minHeight: 48,
@@ -1622,15 +1281,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 5,
   },
-
   saveButtonText: {
     color: SURFACE,
     fontSize: 12,
     fontWeight: "700",
     marginLeft: 7,
   },
-
-  disabledButton: {
-    opacity: 0.5,
-  },
+  disabledButton: { opacity: 0.5 },
 });

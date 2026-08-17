@@ -21,11 +21,14 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  Eye,
   FileCheck2,
   FileText,
   History,
+  LockKeyhole,
   MapPin,
   PackageCheck,
+  PackageSearch,
   Phone,
   Pill,
   RefreshCw,
@@ -37,6 +40,7 @@ import {
   XCircle,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 
 import {
   pharmacyOrdersApi,
@@ -44,6 +48,7 @@ import {
   type PharmacyOrderStatus,
 } from "../../services/pharmacy/pharmacy-orders.api";
 import type { RootStackParamList } from "../../types/navigation";
+import PharmacyInventoryMatchModal from "./PharmacyInventoryMatchModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PharmacyOrderDetail">;
 type PharmacyMedicineItem = PharmacyOrderDetail["items"][number];
@@ -52,7 +57,7 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#747C91";
-const RIPPLE = "rgba(17, 25, 54, 0.08)";
+const RIPPLE = "rgba(17,25,54,0.08)";
 const BORDER = "#E1E6EF";
 
 const PHARMACY = "#15803D";
@@ -64,7 +69,6 @@ const BLUE = "#5B86E5";
 const BLUE_DARK = "#315FBA";
 const BLUE_LIGHT = "#EEF4FF";
 
-const WARNING = "#F6A545";
 const WARNING_DARK = "#9A570D";
 const WARNING_LIGHT = "#FFF3E2";
 
@@ -88,9 +92,30 @@ const primaryStatuses = new Set<PharmacyOrderStatus>([
   "DELIVERED",
 ]);
 
+const verificationBlockedStatuses = new Set<PharmacyOrderStatus>([
+  "REJECTED",
+  "CANCELLED",
+  "DELIVERED",
+  "COLLECTED",
+]);
+
+const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatus>([
+  "PREPARING",
+  "READY",
+  "OUT_FOR_DELIVERY",
+]);
+
+const inventoryLockedStatuses = new Set<PharmacyOrderStatus>([
+  "READY",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "COLLECTED",
+  "REJECTED",
+  "CANCELLED",
+]);
+
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "Not available";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not available";
 
@@ -109,6 +134,39 @@ const formatStatus = (value: string) =>
     .split("_")
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const normalizeUnit = (value?: string | null) => {
+  if (!value) return "";
+  const normalized = value.trim().toLowerCase();
+
+  const aliases: Record<string, string> = {
+    packs: "pack",
+    pack: "pack",
+    tablets: "tablet",
+    tablet: "tablet",
+    tabs: "tablet",
+    tab: "tablet",
+    capsules: "capsule",
+    capsule: "capsule",
+    caps: "capsule",
+    cap: "capsule",
+    bottles: "bottle",
+    bottle: "bottle",
+    boxes: "box",
+    box: "box",
+    inhalers: "inhaler",
+    inhaler: "inhaler",
+    units: "unit",
+    unit: "unit",
+  };
+
+  return aliases[normalized] || normalized.replace(/s$/, "");
+};
+
+const pluralize = (value: string, quantity: number) => {
+  if (quantity === 1 || value === "ml" || value === "g") return value;
+  return `${value}s`;
+};
 
 const getSourceLabel = (source: PharmacyOrderDetail["orderSource"]) => {
   if (source === "DOCTOR_PRESCRIPTION") return "Doctor prescription";
@@ -163,7 +221,7 @@ const getActionLabel = (status: PharmacyOrderStatus) => {
 
 const getActionConfirmation = (status: PharmacyOrderStatus) => {
   const messages: Partial<Record<PharmacyOrderStatus, string>> = {
-    ACCEPTED: "Accept this prescription order for pharmacy fulfilment?",
+    ACCEPTED: "Accept this medicine order for pharmacy fulfilment?",
     PREPARING: "Confirm that preparation of this order has started?",
     READY: "Confirm that this order is ready for collection or delivery?",
     COLLECTED: "Confirm that the patient has collected this order?",
@@ -183,10 +241,20 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isVerificationLoading, setIsVerificationLoading] = useState(false);
+  const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
+  const [evidenceVisible, setEvidenceVisible] = useState(false);
+  const [evidenceSource, setEvidenceSource] = useState<{
+    uri: string;
+    headers: Record<string, string>;
+  } | null>(null);
+
   const [errorMessage, setErrorMessage] = useState("");
   const [reasonModalVisible, setReasonModalVisible] = useState(false);
-  const [selectedExceptionStatus, setSelectedExceptionStatus] = useState<PharmacyOrderStatus | null>(null);
+  const [selectedExceptionStatus, setSelectedExceptionStatus] =
+    useState<PharmacyOrderStatus | null>(null);
   const [statusReason, setStatusReason] = useState("");
+  const [inventoryMatchItem, setInventoryMatchItem] =
+    useState<PharmacyMedicineItem | null>(null);
 
   const loadOrder = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
@@ -200,7 +268,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
         setOrder(result.order);
         setAllowedNextStatuses(result.allowedNextStatuses || []);
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Unable to load pharmacy order.");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to load pharmacy order.",
+        );
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -215,7 +285,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     }, [loadOrder]),
   );
 
-  const refreshAfterStatusChange = async () => {
+  const refreshOrder = async () => {
     const result = await pharmacyOrdersApi.getOrderDetail(route.params.orderId);
     setOrder(result.order);
     setAllowedNextStatuses(result.allowedNextStatuses || []);
@@ -225,14 +295,22 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     try {
       setIsActionLoading(true);
 
-      await pharmacyOrdersApi.updateOrderStatus(route.params.orderId, status, reason);
-      await refreshAfterStatusChange();
+      await pharmacyOrdersApi.updateOrderStatus(
+        route.params.orderId,
+        status,
+        reason,
+      );
+
+      await refreshOrder();
 
       setReasonModalVisible(false);
       setSelectedExceptionStatus(null);
       setStatusReason("");
 
-      Alert.alert("Order updated", `Order status changed to ${formatStatus(status)}.`);
+      Alert.alert(
+        "Order updated",
+        `Order status changed to ${formatStatus(status)}.`,
+      );
     } catch (error) {
       Alert.alert(
         "Unable to update order",
@@ -253,7 +331,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
     Alert.alert("Update order status", getActionConfirmation(status), [
       { text: "Cancel", style: "cancel" },
-      { text: getActionLabel(status), onPress: () => void updateStatus(status) },
+      {
+        text: getActionLabel(status),
+        onPress: () => void updateStatus(status),
+      },
     ]);
   };
 
@@ -262,70 +343,194 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     if (!selectedExceptionStatus) return;
 
     if (reason.length < 5) {
-      Alert.alert("Reason required", "Please provide a clear reason of at least 5 characters.");
+      Alert.alert(
+        "Reason required",
+        "Please provide a clear reason of at least 5 characters.",
+      );
       return;
     }
 
     void updateStatus(selectedExceptionStatus, reason);
   };
 
-  const verifyPatientRefill = async () => {
+  const verifyExternalEvidence = async () => {
     try {
       setIsVerificationLoading(true);
 
-      const result = await pharmacyOrdersApi.verifyPatientRefillRequest(route.params.orderId);
+      const result = await pharmacyOrdersApi.verifyPatientRefillRequest(
+        route.params.orderId,
+      );
+
       setOrder(result.order);
       setAllowedNextStatuses(result.allowedNextStatuses || []);
 
       Alert.alert(
-        "Request verified",
-        "This patient refill request is now authorised for pharmacy fulfilment. This verification does not mark it as a doctor-confirmed prescription.",
+        "Evidence verified",
+        "The supporting evidence has been reviewed. Pharmacy fulfilment is now allowed for this request.",
       );
     } catch (error) {
       Alert.alert(
-        "Unable to verify request",
-        error instanceof Error ? error.message : "The patient medicine request could not be verified.",
+        "Unable to verify evidence",
+        error instanceof Error
+          ? error.message
+          : "The supporting evidence could not be verified.",
       );
     } finally {
       setIsVerificationLoading(false);
     }
   };
 
-  const handleVerifyPatientRefill = () => {
+  const handleVerifyExternalEvidence = () => {
     Alert.alert(
-      "Verify patient medicine request",
-      "Confirm that pharmacy staff have reviewed this patient-requested medicine and allow the order to continue to fulfilment? This does not confirm a doctor prescription.",
+      "Verify supporting evidence",
+      "Confirm that pharmacy staff have reviewed the patient's supporting evidence and allow this medicine request to continue? This does not represent doctor prescribing.",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Verify request", onPress: () => void verifyPatientRefill() },
+        {
+          text: "Verify evidence",
+          onPress: () => void verifyExternalEvidence(),
+        },
       ],
     );
   };
 
+  const openPatientRefillEvidence = async () => {
+    if (!order?.patientSubmission?.imageUrl || isEvidenceLoading) return;
+
+    try {
+      setIsEvidenceLoading(true);
+
+      const source =
+        await pharmacyOrdersApi.getPatientRefillEvidenceSource(
+          route.params.orderId,
+        );
+
+      setEvidenceSource(source);
+      setEvidenceVisible(true);
+    } catch (error) {
+      Alert.alert(
+        "Unable to open evidence",
+        error instanceof Error
+          ? error.message
+          : "The supporting evidence could not be opened.",
+      );
+    } finally {
+      setIsEvidenceLoading(false);
+    }
+  };
+
   const address = order
-    ? [order.patient.patientProfile?.addressLine, order.patient.patientProfile?.postcode]
+    ? [
+        order.patient.patientProfile?.addressLine,
+        order.patient.patientProfile?.postcode,
+      ]
         .filter(Boolean)
         .join(", ")
     : "";
 
   const statusTone = order ? getStatusTone(order.status) : null;
-  const primaryActions = allowedNextStatuses.filter(status => primaryStatuses.has(status));
-  const exceptionActions = allowedNextStatuses.filter(status => exceptionStatuses.has(status));
 
-  const canVerifyPatientRefill =
-    order?.orderSource === "REFILL_REQUEST" &&
-    order.patientSubmission?.requestType === "REFILL_REQUEST" &&
-    order.patientSubmission.status === "VERIFICATION_REQUIRED" &&
-    !order.prescriptionConfirmed &&
-    !order.fulfilmentAllowed &&
-    !["REJECTED", "CANCELLED", "DELIVERED", "COLLECTED"].includes(order.status);
+  const primaryActions = allowedNextStatuses.filter(status =>
+    primaryStatuses.has(status),
+  );
 
-  const pharmacistVerifiedPatientRefill =
-    order?.orderSource === "REFILL_REQUEST" &&
-    order.patientSubmission?.requestType === "REFILL_REQUEST" &&
-    order.patientSubmission.status === "VERIFIED" &&
-    order.fulfilmentAllowed &&
-    !order.prescriptionConfirmed;
+  const exceptionActions = allowedNextStatuses.filter(status =>
+    exceptionStatuses.has(status),
+  );
+
+  const refillSubmission =
+    order?.orderSource === "REFILL_REQUEST" ? order.patientSubmission : null;
+
+  const isAssignedDoctorRefill =
+    refillSubmission?.verificationPath === "ASSIGNED_DOCTOR";
+
+  const isExternalEvidenceRefill =
+    refillSubmission?.verificationPath === "EXTERNAL_EVIDENCE";
+
+  const isCareMatePrescriptionRefill =
+    refillSubmission?.verificationPath === "CAREMATE_PRESCRIPTION";
+
+  const awaitingDoctorConfirmation = Boolean(
+    order &&
+      isAssignedDoctorRefill &&
+      refillSubmission?.doctorVerificationStatus === "PENDING" &&
+      !order.fulfilmentAllowed,
+  );
+
+  const doctorConfirmedRefill = Boolean(
+    order &&
+      isAssignedDoctorRefill &&
+      refillSubmission?.doctorVerificationStatus === "CONFIRMED" &&
+      order.fulfilmentAllowed,
+  );
+
+  const doctorRejectedRefill = Boolean(
+    isAssignedDoctorRefill &&
+      refillSubmission?.doctorVerificationStatus === "REJECTED",
+  );
+
+  const canVerifyExternalEvidence = Boolean(
+    order &&
+      isExternalEvidenceRefill &&
+      refillSubmission?.status === "VERIFICATION_REQUIRED" &&
+      refillSubmission.imageUrl &&
+      !order.prescriptionConfirmed &&
+      !order.fulfilmentAllowed &&
+      !verificationBlockedStatuses.has(order.status),
+  );
+
+  const pharmacistVerifiedExternalEvidence = Boolean(
+    order &&
+      isExternalEvidenceRefill &&
+      refillSubmission?.status === "VERIFIED" &&
+      order.fulfilmentAllowed,
+  );
+
+  const inventoryEditable = Boolean(
+    order &&
+      order.fulfilmentAllowed &&
+      order.status !== "RECEIVED" &&
+      !inventoryLockedStatuses.has(order.status),
+  );
+
+  const allInventoryReady = order
+    ? order.items.length === 0 ||
+      order.items.every(item =>
+        Boolean(
+          item.inventoryItemId &&
+            item.inventoryItem &&
+            item.inventoryItem.isActive &&
+            item.inventoryReservedQuantity > 0 &&
+            item.inventoryReservedAt &&
+            !item.inventoryConsumedAt &&
+            !item.inventoryReleasedAt &&
+            item.dispensedQuantity &&
+            item.dispensedQuantity > 0 &&
+            item.dispensedUnit,
+        ),
+      )
+    : true;
+
+  const inventoryReadyCount = order
+    ? order.items.filter(item =>
+        Boolean(
+          item.inventoryItemId &&
+            item.inventoryItem &&
+            item.inventoryItem.isActive &&
+            item.inventoryReservedQuantity > 0 &&
+            item.inventoryReservedAt &&
+            !item.inventoryConsumedAt &&
+            !item.inventoryReleasedAt &&
+            item.dispensedQuantity &&
+            item.dispensedQuantity > 0 &&
+            item.dispensedUnit,
+        ),
+      ).length
+    : 0;
+
+  const hasInventoryBlockedAction = primaryActions.some(status =>
+    inventoryReservationRequiredStatuses.has(status),
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -334,7 +539,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       <View style={styles.screen}>
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 36, 50) }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: Math.max(insets.bottom + 36, 50) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -356,7 +564,7 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               </Pressable>
 
               <View style={styles.appBarText}>
-                <Text style={styles.appBarTitle}>Prescription order</Text>
+                <Text style={styles.appBarTitle}>Medicine order</Text>
                 <Text style={styles.appBarSubtitle}>Pharmacy fulfilment</Text>
               </View>
             </View>
@@ -366,16 +574,36 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 <View style={styles.orderSourceRow}>
                   <View style={styles.headerSourceIcon}>
                     {order.orderSource === "DOCTOR_PRESCRIPTION" ? (
-                      <BadgeCheck size={19} color={PHARMACY_DARK} strokeWidth={2.6} />
+                      <BadgeCheck
+                        size={19}
+                        color={PHARMACY_DARK}
+                        strokeWidth={2.6}
+                      />
                     ) : (
-                      <FileText size={19} color={BLUE_DARK} strokeWidth={2.6} />
+                      <FileText
+                        size={19}
+                        color={BLUE_DARK}
+                        strokeWidth={2.6}
+                      />
                     )}
                   </View>
 
-                  <Text style={styles.headerSourceText}>{getSourceLabel(order.orderSource)}</Text>
+                  <Text style={styles.headerSourceText}>
+                    {getSourceLabel(order.orderSource)}
+                  </Text>
 
-                  <View style={[styles.statusChip, { backgroundColor: statusTone.background }]}>
-                    <Text style={[styles.statusText, { color: statusTone.color }]}>
+                  <View
+                    style={[
+                      styles.statusChip,
+                      { backgroundColor: statusTone.background },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: statusTone.color },
+                      ]}
+                    >
                       {formatStatus(order.status)}
                     </Text>
                   </View>
@@ -386,14 +614,29 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 </Text>
 
                 <View style={styles.receivedRow}>
-                  <Clock3 size={14} color="#D9F5E2" strokeWidth={2.3} />
-                  <Text style={styles.receivedText}>{formatDateTime(order.createdAt)}</Text>
+                  <Clock3
+                    size={14}
+                    color="#D9F5E2"
+                    strokeWidth={2.3}
+                  />
+
+                  <Text style={styles.receivedText}>
+                    {formatDateTime(order.createdAt)}
+                  </Text>
                 </View>
 
                 <View style={styles.verificationBar}>
-                  <VerificationStatus active={order.prescriptionConfirmed} label="Confirmed" />
+                  <VerificationStatus
+                    active={order.prescriptionConfirmed}
+                    label="Doctor linked"
+                  />
+
                   <View style={styles.headerDivider} />
-                  <VerificationStatus active={order.fulfilmentAllowed} label="Fulfilment allowed" />
+
+                  <VerificationStatus
+                    active={order.fulfilmentAllowed}
+                    label="Fulfilment allowed"
+                  />
                 </View>
               </View>
             ) : null}
@@ -403,7 +646,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
             <View style={styles.stateArea}>
               <ActivityIndicator color={PHARMACY} />
               <Text style={styles.stateTitle}>Loading order</Text>
-              <Text style={styles.stateText}>Retrieving prescription information</Text>
+              <Text style={styles.stateText}>
+                Retrieving medicine order information
+              </Text>
             </View>
           ) : null}
 
@@ -432,107 +677,399 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               <View style={styles.quickInfoRow}>
                 <QuickInfo
                   background={BLUE_LIGHT}
-                  icon={<UserRound size={20} color={BLUE} strokeWidth={2.5} />}
+                  icon={
+                    <UserRound
+                      size={20}
+                      color={BLUE}
+                      strokeWidth={2.5}
+                    />
+                  }
                   label="Patient"
                   value={order.patient.fullName}
                 />
 
                 <QuickInfo
                   background={PHARMACY_LIGHT}
-                  icon={<Pill size={20} color={PHARMACY} strokeWidth={2.5} />}
+                  icon={
+                    <Pill
+                      size={20}
+                      color={PHARMACY}
+                      strokeWidth={2.5}
+                    />
+                  }
                   label="Medicines"
                   value={String(order.items.length)}
                 />
 
                 <QuickInfo
                   background={WARNING_LIGHT}
-                  icon={<CreditCard size={20} color={WARNING_DARK} strokeWidth={2.5} />}
+                  icon={
+                    <CreditCard
+                      size={20}
+                      color={WARNING_DARK}
+                      strokeWidth={2.5}
+                    />
+                  }
                   label="Payment"
-                  value={order.payment ? formatStatus(order.payment.status) : "None"}
+                  value={
+                    order.payment
+                      ? formatStatus(order.payment.status)
+                      : "None"
+                  }
                 />
               </View>
 
               <SectionHeading
                 title="Order actions"
-                icon={<PackageCheck size={18} color={PHARMACY} strokeWidth={2.5} />}
+                icon={
+                  <PackageCheck
+                    size={18}
+                    color={PHARMACY}
+                    strokeWidth={2.5}
+                  />
+                }
               />
 
               <View style={styles.actionsPanel}>
-                {canVerifyPatientRefill ? (
-                  <View style={styles.verificationRequestPanel}>
-                    <View style={styles.verificationRequestHeader}>
-                      <View style={styles.verificationRequestIcon}>
-                        <ShieldCheck size={21} color={WARNING_DARK} strokeWidth={2.6} />
+                {awaitingDoctorConfirmation ? (
+                  <View style={styles.doctorLockedPanel}>
+                    <View style={styles.verificationHeader}>
+                      <View style={styles.lockIcon}>
+                        <LockKeyhole
+                          size={21}
+                          color={WARNING_DARK}
+                          strokeWidth={2.6}
+                        />
                       </View>
 
-                      <View style={styles.verificationRequestText}>
-                        <Text style={styles.verificationRequestTitle}>
-                          Pharmacist verification required
+                      <View style={styles.verificationContent}>
+                        <Text style={styles.warningTitle}>
+                          Waiting for doctor confirmation
                         </Text>
-                        <Text style={styles.verificationRequestDescription}>
-                          This refill was requested by the patient from their medicine list. Review the medicine
-                          details before allowing fulfilment.
+
+                        <Text style={styles.warningDescription}>
+                          The patient states that{" "}
+                          {refillSubmission?.verificationDoctor?.fullName ||
+                            "their selected CareMate+ doctor"}{" "}
+                          prescribed or recommended this medicine. Pharmacy
+                          cannot fulfil this request until that doctor confirms
+                          it.
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {doctorConfirmedRefill ? (
+                  <View style={styles.successPanel}>
+                    <CheckCircle2
+                      size={19}
+                      color={PHARMACY_DARK}
+                      strokeWidth={2.6}
+                    />
+
+                    <View style={styles.successContent}>
+                      <Text style={styles.successTitle}>
+                        Doctor confirmation completed
+                      </Text>
+
+                      <Text style={styles.successDescription}>
+                        {refillSubmission?.verificationDoctor?.fullName ||
+                          "The selected doctor"}{" "}
+                        confirmed the medicine request. Pharmacy fulfilment is
+                        unlocked.
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {doctorRejectedRefill ? (
+                  <View style={styles.rejectedPanel}>
+                    <XCircle
+                      size={19}
+                      color={DANGER_DARK}
+                      strokeWidth={2.6}
+                    />
+
+                    <View style={styles.rejectedContent}>
+                      <Text style={styles.rejectedTitle}>
+                        Doctor did not confirm this request
+                      </Text>
+
+                      <Text style={styles.rejectedDescription}>
+                        The selected doctor rejected the patient's claim. This
+                        request cannot continue to pharmacy fulfilment.
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {canVerifyExternalEvidence ? (
+                  <View style={styles.evidenceReviewPanel}>
+                    <View style={styles.verificationHeader}>
+                      <View style={styles.evidenceIcon}>
+                        <FileCheck2
+                          size={21}
+                          color={WARNING_DARK}
+                          strokeWidth={2.6}
+                        />
+                      </View>
+
+                      <View style={styles.verificationContent}>
+                        <Text style={styles.warningTitle}>
+                          External evidence review required
+                        </Text>
+
+                        <Text style={styles.warningDescription}>
+                          Review the patient's protected supporting evidence
+                          before allowing pharmacy fulfilment.
                         </Text>
                       </View>
                     </View>
 
                     <Pressable
                       android_ripple={{ color: RIPPLE }}
-                      style={[styles.verifyRequestButton, isVerificationLoading && styles.disabledAction]}
+                      style={[
+                        styles.viewEvidenceButton,
+                        isEvidenceLoading && styles.disabledAction,
+                      ]}
+                      disabled={isEvidenceLoading || isActionLoading}
+                      onPress={() => void openPatientRefillEvidence()}
+                    >
+                      {isEvidenceLoading ? (
+                        <ActivityIndicator color={BLUE_DARK} />
+                      ) : (
+                        <>
+                          <Eye
+                            size={18}
+                            color={BLUE_DARK}
+                            strokeWidth={2.6}
+                          />
+                          <Text style={styles.viewEvidenceButtonText}>
+                            View evidence
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+
+                    <Pressable
+                      android_ripple={{ color: RIPPLE }}
+                      style={[
+                        styles.verifyEvidenceButton,
+                        isVerificationLoading && styles.disabledAction,
+                      ]}
                       disabled={isVerificationLoading || isActionLoading}
-                      onPress={handleVerifyPatientRefill}
+                      onPress={handleVerifyExternalEvidence}
                     >
                       {isVerificationLoading ? (
                         <ActivityIndicator color={SURFACE} />
                       ) : (
                         <>
-                          <ShieldCheck size={18} color={SURFACE} strokeWidth={2.6} />
-                          <Text style={styles.verifyRequestButtonText}>Verify patient request</Text>
+                          <ShieldCheck
+                            size={18}
+                            color={SURFACE}
+                            strokeWidth={2.6}
+                          />
+                          <Text style={styles.verifyEvidenceButtonText}>
+                            Verify evidence
+                          </Text>
                         </>
                       )}
                     </Pressable>
                   </View>
                 ) : null}
 
-                {pharmacistVerifiedPatientRefill ? (
-                  <View style={styles.verifiedRequestPanel}>
-                    <CheckCircle2 size={18} color={PHARMACY_DARK} strokeWidth={2.6} />
-                    <Text style={styles.verifiedRequestText}>
-                      Pharmacy verification completed. Fulfilment is allowed, while doctor prescription confirmation
-                      remains separate.
-                    </Text>
+                {pharmacistVerifiedExternalEvidence ? (
+                  <View style={styles.successPanel}>
+                    <CheckCircle2
+                      size={19}
+                      color={PHARMACY_DARK}
+                      strokeWidth={2.6}
+                    />
+
+                    <View style={styles.successContent}>
+                      <Text style={styles.successTitle}>
+                        External evidence verified
+                      </Text>
+
+                      <Text style={styles.successDescription}>
+                        Pharmacy review is complete and fulfilment is allowed.
+                        This does not represent doctor prescribing.
+                      </Text>
+                    </View>
+
+                    {refillSubmission?.imageUrl ? (
+                      <Pressable
+                        android_ripple={{ color: RIPPLE }}
+                        style={styles.smallEvidenceButton}
+                        onPress={() => void openPatientRefillEvidence()}
+                      >
+                        <Eye
+                          size={16}
+                          color={BLUE_DARK}
+                          strokeWidth={2.5}
+                        />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {isCareMatePrescriptionRefill ? (
+                  <View style={styles.successPanel}>
+                    <BadgeCheck
+                      size={19}
+                      color={PHARMACY_DARK}
+                      strokeWidth={2.6}
+                    />
+
+                    <View style={styles.successContent}>
+                      <Text style={styles.successTitle}>
+                        CareMate+ prescription
+                      </Text>
+
+                      <Text style={styles.successDescription}>
+                        This refill is linked to an existing CareMate+ doctor
+                        prescription.
+                      </Text>
+                    </View>
                   </View>
                 ) : null}
 
                 {!order.fulfilmentAllowed && primaryActions.length > 0 ? (
                   <View style={styles.fulfilmentWarning}>
-                    <AlertCircle size={18} color={WARNING_DARK} strokeWidth={2.5} />
+                    <AlertCircle
+                      size={18}
+                      color={WARNING_DARK}
+                      strokeWidth={2.5}
+                    />
+
                     <Text style={styles.fulfilmentWarningText}>
-                      Fulfilment actions remain unavailable until this order is authorised for fulfilment.
+                      Fulfilment actions remain locked until this request is
+                      authorised.
                     </Text>
                   </View>
                 ) : null}
 
-                {primaryActions.map(status => (
-                  <Pressable
-                    android_ripple={{ color: RIPPLE }}
-                    key={status}
+                {order.status === "RECEIVED" &&
+                order.fulfilmentAllowed &&
+                order.items.length > 0 ? (
+                  <View style={styles.inventoryInfoPanel}>
+                    <PackageSearch
+                      size={18}
+                      color={BLUE_DARK}
+                      strokeWidth={2.5}
+                    />
+
+                    <Text style={styles.inventoryInfoText}>
+                      Accept this order first. Stock matching will then unlock
+                      for each medicine.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {order.status !== "RECEIVED" && order.items.length > 0 ? (
+                  <View
                     style={[
-                      styles.primaryActionButton,
-                      (!order.fulfilmentAllowed || isActionLoading) && styles.disabledAction,
+                      styles.inventorySummary,
+                      allInventoryReady
+                        ? styles.inventorySummaryReady
+                        : styles.inventorySummaryPending,
                     ]}
-                    disabled={!order.fulfilmentAllowed || isActionLoading}
-                    onPress={() => handleAction(status)}
                   >
-                    {status === "OUT_FOR_DELIVERY" ? (
-                      <Truck size={19} color={SURFACE} strokeWidth={2.6} />
+                    {allInventoryReady ? (
+                      <PackageCheck
+                        size={19}
+                        color={PHARMACY_DARK}
+                        strokeWidth={2.6}
+                      />
                     ) : (
-                      <CheckCircle2 size={19} color={SURFACE} strokeWidth={2.6} />
+                      <PackageSearch
+                        size={19}
+                        color={WARNING_DARK}
+                        strokeWidth={2.6}
+                      />
                     )}
 
-                    <Text style={styles.primaryActionText}>{getActionLabel(status)}</Text>
-                  </Pressable>
-                ))}
+                    <View style={styles.inventorySummaryText}>
+                      <Text
+                        style={[
+                          styles.inventorySummaryTitle,
+                          {
+                            color: allInventoryReady
+                              ? PHARMACY_DARK
+                              : WARNING_DARK,
+                          },
+                        ]}
+                      >
+                        {allInventoryReady
+                          ? "Inventory ready"
+                          : "Inventory matching required"}
+                      </Text>
+
+                      <Text style={styles.inventorySummaryMeta}>
+                        {inventoryReadyCount}/{order.items.length} medicines
+                        matched and reserved
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {!allInventoryReady && hasInventoryBlockedAction ? (
+                  <View style={styles.inventoryActionWarning}>
+                    <PackageSearch
+                      size={18}
+                      color={WARNING_DARK}
+                      strokeWidth={2.5}
+                    />
+
+                    <Text style={styles.fulfilmentWarningText}>
+                      Match and reserve pharmacy stock for every medicine before
+                      preparation can continue.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {primaryActions.map(status => {
+                  const inventoryBlocked =
+                    inventoryReservationRequiredStatuses.has(status) &&
+                    !allInventoryReady;
+
+                  const actionDisabled =
+                    !order.fulfilmentAllowed ||
+                    isActionLoading ||
+                    inventoryBlocked;
+
+                  return (
+                    <Pressable
+                      android_ripple={{ color: RIPPLE }}
+                      key={status}
+                      style={[
+                        styles.primaryActionButton,
+                        actionDisabled && styles.disabledAction,
+                      ]}
+                      disabled={actionDisabled}
+                      onPress={() => handleAction(status)}
+                    >
+                      {status === "OUT_FOR_DELIVERY" ? (
+                        <Truck
+                          size={19}
+                          color={SURFACE}
+                          strokeWidth={2.6}
+                        />
+                      ) : (
+                        <CheckCircle2
+                          size={19}
+                          color={SURFACE}
+                          strokeWidth={2.6}
+                        />
+                      )}
+
+                      <Text style={styles.primaryActionText}>
+                        {getActionLabel(status)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
 
                 {exceptionActions.length > 0 ? (
                   <View style={styles.exceptionActions}>
@@ -544,8 +1081,15 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         disabled={isActionLoading}
                         onPress={() => handleAction(status)}
                       >
-                        <XCircle size={16} color={DANGER_DARK} strokeWidth={2.5} />
-                        <Text style={styles.exceptionButtonText}>{getActionLabel(status)}</Text>
+                        <XCircle
+                          size={16}
+                          color={DANGER_DARK}
+                          strokeWidth={2.5}
+                        />
+
+                        <Text style={styles.exceptionButtonText}>
+                          {getActionLabel(status)}
+                        </Text>
                       </Pressable>
                     ))}
                   </View>
@@ -553,12 +1097,20 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
                 {allowedNextStatuses.length === 0 ? (
                   <View style={styles.terminalStatus}>
-                    <CheckCircle2 size={20} color={PHARMACY} strokeWidth={2.6} />
+                    <CheckCircle2
+                      size={20}
+                      color={PHARMACY}
+                      strokeWidth={2.6}
+                    />
 
                     <View style={styles.terminalText}>
-                      <Text style={styles.terminalTitle}>No further pharmacy action</Text>
+                      <Text style={styles.terminalTitle}>
+                        No further pharmacy action
+                      </Text>
+
                       <Text style={styles.terminalSubtitle}>
-                        This order is currently {formatStatus(order.status).toLowerCase()}.
+                        This order is currently{" "}
+                        {formatStatus(order.status).toLowerCase()}.
                       </Text>
                     </View>
                   </View>
@@ -567,36 +1119,67 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 {isActionLoading ? (
                   <View style={styles.actionLoading}>
                     <ActivityIndicator color={PHARMACY} />
-                    <Text style={styles.actionLoadingText}>Updating order...</Text>
+                    <Text style={styles.actionLoadingText}>
+                      Updating order...
+                    </Text>
                   </View>
                 ) : null}
               </View>
 
               <SectionHeading
                 title="Patient"
-                icon={<UserRound size={18} color={BLUE} strokeWidth={2.5} />}
+                icon={
+                  <UserRound
+                    size={18}
+                    color={BLUE}
+                    strokeWidth={2.5}
+                  />
+                }
               />
 
               <View style={styles.patientPanel}>
                 <View style={styles.profileRow}>
                   <View style={styles.patientAvatar}>
-                    <UserRound size={25} color={BLUE_DARK} strokeWidth={2.4} />
+                    <UserRound
+                      size={25}
+                      color={BLUE_DARK}
+                      strokeWidth={2.4}
+                    />
                   </View>
 
                   <View style={styles.profileText}>
-                    <Text style={styles.profileName}>{order.patient.fullName}</Text>
-                    <Text style={styles.profileEmail}>{order.patient.email}</Text>
+                    <Text style={styles.profileName}>
+                      {order.patient.fullName}
+                    </Text>
+
+                    <Text style={styles.profileEmail}>
+                      {order.patient.email}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.contactGrid}>
                   <ContactItem
-                    icon={<Phone size={16} color={BLUE_DARK} strokeWidth={2.3} />}
-                    text={order.patient.patientProfile?.phoneNumber || "No phone"}
+                    icon={
+                      <Phone
+                        size={16}
+                        color={BLUE_DARK}
+                        strokeWidth={2.3}
+                      />
+                    }
+                    text={
+                      order.patient.patientProfile?.phoneNumber || "No phone"
+                    }
                   />
 
                   <ContactItem
-                    icon={<MapPin size={16} color={BLUE_DARK} strokeWidth={2.3} />}
+                    icon={
+                      <MapPin
+                        size={16}
+                        color={BLUE_DARK}
+                        strokeWidth={2.3}
+                      />
+                    }
                     text={address || "No address"}
                   />
                 </View>
@@ -606,16 +1189,28 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 <>
                   <SectionHeading
                     title="Prescriber"
-                    icon={<Stethoscope size={18} color={PHARMACY} strokeWidth={2.5} />}
+                    icon={
+                      <Stethoscope
+                        size={18}
+                        color={PHARMACY}
+                        strokeWidth={2.5}
+                      />
+                    }
                   />
 
                   <View style={styles.prescriberPanel}>
                     <View style={styles.prescriberIcon}>
-                      <Stethoscope size={22} color={PHARMACY_DARK} strokeWidth={2.4} />
+                      <Stethoscope
+                        size={22}
+                        color={PHARMACY_DARK}
+                        strokeWidth={2.4}
+                      />
                     </View>
 
                     <View style={styles.prescriberText}>
-                      <Text style={styles.prescriberName}>{order.doctor.fullName}</Text>
+                      <Text style={styles.prescriberName}>
+                        {order.doctor.fullName}
+                      </Text>
 
                       <Text style={styles.prescriberSpeciality}>
                         {order.doctor.doctorProfile?.specialization || "Doctor"}
@@ -623,20 +1218,31 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
                       {order.prescription ? (
                         <Text style={styles.prescribedDate}>
-                          Prescribed {formatDateTime(order.prescription.prescribedAt)}
+                          Prescribed{" "}
+                          {formatDateTime(order.prescription.prescribedAt)}
                         </Text>
                       ) : null}
                     </View>
 
-                    <BadgeCheck size={20} color={PHARMACY} strokeWidth={2.5} />
+                    <BadgeCheck
+                      size={20}
+                      color={PHARMACY}
+                      strokeWidth={2.5}
+                    />
                   </View>
                 </>
               ) : null}
 
               <SectionHeading
-                title="Medicines"
-                subtitle={`${order.items.length} ${order.items.length === 1 ? "item" : "items"}`}
-                icon={<Pill size={18} color={PHARMACY} strokeWidth={2.5} />}
+                title="Medicines & inventory"
+                subtitle={`${inventoryReadyCount}/${order.items.length} ready`}
+                icon={
+                  <Pill
+                    size={18}
+                    color={PHARMACY}
+                    strokeWidth={2.5}
+                  />
+                }
               />
 
               <View style={styles.medicineContainer}>
@@ -647,45 +1253,86 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       item={item}
                       index={index}
                       last={index === order.items.length - 1}
+                      inventoryEditable={inventoryEditable}
+                      orderStatus={order.status}
+                      onManageStock={() => setInventoryMatchItem(item)}
                     />
                   ))
                 ) : (
                   <View style={styles.medicineEmpty}>
-                    <Pill size={23} color={MUTED} strokeWidth={2.3} />
-                    <Text style={styles.emptyText}>No medicines attached to this order.</Text>
+                    <Pill
+                      size={23}
+                      color={MUTED}
+                      strokeWidth={2.3}
+                    />
+
+                    <Text style={styles.emptyText}>
+                      No medicines attached to this order.
+                    </Text>
                   </View>
                 )}
               </View>
 
-              {order.prescription?.notes || order.requestNote || order.statusReason ? (
+              {order.prescription?.notes ||
+              order.requestNote ||
+              order.statusReason ? (
                 <>
                   <SectionHeading
                     title="Notes"
-                    icon={<FileText size={18} color={WARNING_DARK} strokeWidth={2.4} />}
+                    icon={
+                      <FileText
+                        size={18}
+                        color={WARNING_DARK}
+                        strokeWidth={2.4}
+                      />
+                    }
                   />
 
                   <View style={styles.notesPanel}>
                     {order.prescription?.notes ? (
-                      <NoteItem title="Doctor note" text={order.prescription.notes} />
+                      <NoteItem
+                        title="Doctor note"
+                        text={order.prescription.notes}
+                      />
                     ) : null}
 
-                    {order.requestNote ? <NoteItem title="Request" text={order.requestNote} /> : null}
+                    {order.requestNote ? (
+                      <NoteItem
+                        title="Request"
+                        text={order.requestNote}
+                      />
+                    ) : null}
 
-                    {order.statusReason ? <NoteItem title="Status" text={order.statusReason} /> : null}
+                    {order.statusReason ? (
+                      <NoteItem
+                        title="Status"
+                        text={order.statusReason}
+                      />
+                    ) : null}
                   </View>
                 </>
               ) : null}
 
               <SectionHeading
                 title="Payment"
-                icon={<CreditCard size={18} color={WARNING_DARK} strokeWidth={2.4} />}
+                icon={
+                  <CreditCard
+                    size={18}
+                    color={WARNING_DARK}
+                    strokeWidth={2.4}
+                  />
+                }
               />
 
               <View style={styles.paymentPanel}>
                 {order.payment ? (
                   <View style={styles.paymentTop}>
                     <View style={styles.paymentIcon}>
-                      <CreditCard size={21} color={WARNING_DARK} strokeWidth={2.5} />
+                      <CreditCard
+                        size={21}
+                        color={WARNING_DARK}
+                        strokeWidth={2.5}
+                      />
                     </View>
 
                     <View style={styles.paymentText}>
@@ -694,20 +1341,29 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       </Text>
 
                       <Text style={styles.paymentMode}>
-                        {order.payment.testMode ? "CareMate+ test payment" : "Prescription payment"}
+                        {order.payment.testMode
+                          ? "CareMate+ test payment"
+                          : "Prescription payment"}
                       </Text>
                     </View>
 
                     <View style={styles.paymentAmount}>
                       <Text style={styles.paymentAmountText}>
-                        {formatMoney(order.payment.amountPence, order.payment.currency)}
+                        {formatMoney(
+                          order.payment.amountPence,
+                          order.payment.currency,
+                        )}
                       </Text>
 
-                      <Text style={styles.paymentStatus}>{formatStatus(order.payment.status)}</Text>
+                      <Text style={styles.paymentStatus}>
+                        {formatStatus(order.payment.status)}
+                      </Text>
                     </View>
                   </View>
                 ) : (
-                  <Text style={styles.emptyText}>No payment information required.</Text>
+                  <Text style={styles.emptyText}>
+                    No payment information required.
+                  </Text>
                 )}
               </View>
 
@@ -715,12 +1371,22 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 <>
                   <SectionHeading
                     title="Exemption"
-                    icon={<ShieldCheck size={18} color={BLUE} strokeWidth={2.4} />}
+                    icon={
+                      <ShieldCheck
+                        size={18}
+                        color={BLUE}
+                        strokeWidth={2.4}
+                      />
+                    }
                   />
 
                   <View style={styles.exemptionPanel}>
                     <View style={styles.exemptionTop}>
-                      <ShieldCheck size={23} color={BLUE_DARK} strokeWidth={2.5} />
+                      <ShieldCheck
+                        size={23}
+                        color={BLUE_DARK}
+                        strokeWidth={2.5}
+                      />
 
                       <View style={styles.exemptionText}>
                         <Text style={styles.exemptionType}>
@@ -728,7 +1394,8 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         </Text>
 
                         <Text style={styles.exemptionMeta}>
-                          {order.exemptionClaim.referenceNumber || "No reference"}
+                          {order.exemptionClaim.referenceNumber ||
+                            "No reference"}
                         </Text>
                       </View>
 
@@ -749,13 +1416,23 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               {order.patientSubmission ? (
                 <>
                   <SectionHeading
-                    title="Patient submission"
-                    icon={<FileCheck2 size={18} color={BLUE} strokeWidth={2.4} />}
+                    title="Request verification"
+                    icon={
+                      <FileCheck2
+                        size={18}
+                        color={BLUE}
+                        strokeWidth={2.4}
+                      />
+                    }
                   />
 
                   <View style={styles.submissionPanel}>
                     <View style={styles.submissionIcon}>
-                      <FileText size={22} color={BLUE_DARK} strokeWidth={2.5} />
+                      <FileText
+                        size={22}
+                        color={BLUE_DARK}
+                        strokeWidth={2.5}
+                      />
                     </View>
 
                     <View style={styles.submissionText}>
@@ -766,12 +1443,96 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       <Text style={styles.submissionMeta}>
                         {formatStatus(order.patientSubmission.status)}
                         {"  •  "}
-                        {order.patientSubmission.imageUrl ? "Image attached" : "No image"}
+                        {order.patientSubmission.imageUrl
+                          ? "Evidence attached"
+                          : "No evidence file"}
                       </Text>
+
+                      {order.patientSubmission.verificationPath ? (
+                        <View style={styles.verificationDetails}>
+                          <Text style={styles.verificationLabel}>
+                            VERIFICATION PATH
+                          </Text>
+
+                          <Text style={styles.verificationValue}>
+                            {formatStatus(
+                              order.patientSubmission.verificationPath,
+                            )}
+                          </Text>
+
+                          {order.patientSubmission.verificationPath ===
+                          "ASSIGNED_DOCTOR" ? (
+                            <>
+                              <Text style={styles.verificationDetail}>
+                                Doctor:{" "}
+                                {order.patientSubmission.verificationDoctor
+                                  ?.fullName || "Not available"}
+                              </Text>
+
+                              <Text style={styles.verificationDetail}>
+                                Status:{" "}
+                                {formatStatus(
+                                  order.patientSubmission
+                                    .doctorVerificationStatus,
+                                )}
+                              </Text>
+
+                              {order.patientSubmission
+                                .doctorVerificationNote ? (
+                                <Text style={styles.verificationNote}>
+                                  {
+                                    order.patientSubmission
+                                      .doctorVerificationNote
+                                  }
+                                </Text>
+                              ) : null}
+                            </>
+                          ) : null}
+
+                          {order.patientSubmission.verificationPath ===
+                          "EXTERNAL_EVIDENCE" ? (
+                            <>
+                              <Text style={styles.verificationDetail}>
+                                Evidence:{" "}
+                                {order.patientSubmission.evidenceType
+                                  ? formatStatus(
+                                      order.patientSubmission.evidenceType,
+                                    )
+                                  : "Not recorded"}
+                              </Text>
+
+                              {order.patientSubmission.imageUrl ? (
+                                <Pressable
+                                  android_ripple={{ color: RIPPLE }}
+                                  style={styles.submissionEvidenceButton}
+                                  onPress={() =>
+                                    void openPatientRefillEvidence()
+                                  }
+                                >
+                                  <Eye
+                                    size={16}
+                                    color={BLUE_DARK}
+                                    strokeWidth={2.5}
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.submissionEvidenceButtonText
+                                    }
+                                  >
+                                    View protected evidence
+                                  </Text>
+                                </Pressable>
+                              ) : null}
+                            </>
+                          ) : null}
+                        </View>
+                      ) : null}
 
                       {order.patientSubmission.reviewedAt ? (
                         <Text style={styles.submissionReviewMeta}>
-                          Reviewed {formatDateTime(order.patientSubmission.reviewedAt)}
+                          Reviewed{" "}
+                          {formatDateTime(order.patientSubmission.reviewedAt)}
                         </Text>
                       ) : null}
 
@@ -787,7 +1548,13 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
               <SectionHeading
                 title="Order progress"
-                icon={<History size={18} color={PHARMACY} strokeWidth={2.4} />}
+                icon={
+                  <History
+                    size={18}
+                    color={PHARMACY}
+                    strokeWidth={2.4}
+                  />
+                }
               />
 
               <View style={styles.historyPanel}>
@@ -814,13 +1581,33 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               </View>
 
               <View style={styles.refreshHint}>
-                <PackageCheck size={17} color={PHARMACY} strokeWidth={2.4} />
-                <Text style={styles.refreshHintText}>Pull down to refresh</Text>
+                <PackageCheck
+                  size={17}
+                  color={PHARMACY}
+                  strokeWidth={2.4}
+                />
+
+                <Text style={styles.refreshHintText}>
+                  Pull down to refresh
+                </Text>
               </View>
             </View>
           ) : null}
         </ScrollView>
       </View>
+
+      <PharmacyInventoryMatchModal
+        visible={Boolean(inventoryMatchItem)}
+        orderId={route.params.orderId}
+        item={inventoryMatchItem}
+        canEdit={inventoryEditable}
+        onClose={() => setInventoryMatchItem(null)}
+        onChanged={refreshOrder}
+        onOpenInventory={() => {
+          setInventoryMatchItem(null);
+          navigation.navigate("PharmacyInventory");
+        }}
+      />
 
       <Modal
         visible={reasonModalVisible}
@@ -833,11 +1620,14 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderText}>
                 <Text style={styles.modalTitle}>
-                  {selectedExceptionStatus ? getActionLabel(selectedExceptionStatus) : "Update order"}
+                  {selectedExceptionStatus
+                    ? getActionLabel(selectedExceptionStatus)
+                    : "Update order"}
                 </Text>
 
                 <Text style={styles.modalSubtitle}>
-                  Add a clear reason so this decision is recorded in order history.
+                  Add a clear reason so this decision is recorded in order
+                  history.
                 </Text>
               </View>
 
@@ -861,11 +1651,16 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               textAlignVertical="top"
             />
 
-            <Text style={styles.characterCount}>{statusReason.length}/500</Text>
+            <Text style={styles.characterCount}>
+              {statusReason.length}/500
+            </Text>
 
             <Pressable
               android_ripple={{ color: RIPPLE }}
-              style={[styles.confirmExceptionButton, isActionLoading && styles.disabledAction]}
+              style={[
+                styles.confirmExceptionButton,
+                isActionLoading && styles.disabledAction,
+              ]}
               disabled={isActionLoading}
               onPress={submitExceptionStatus}
             >
@@ -873,24 +1668,101 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 <ActivityIndicator color={SURFACE} />
               ) : (
                 <Text style={styles.confirmExceptionText}>
-                  {selectedExceptionStatus ? getActionLabel(selectedExceptionStatus) : "Confirm"}
+                  {selectedExceptionStatus
+                    ? getActionLabel(selectedExceptionStatus)
+                    : "Confirm"}
                 </Text>
               )}
             </Pressable>
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={evidenceVisible}
+        animationType="slide"
+        onRequestClose={() => setEvidenceVisible(false)}
+      >
+        <SafeAreaView
+          style={styles.viewerSafeArea}
+          edges={["top", "bottom"]}
+        >
+          <View style={styles.viewerHeader}>
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={styles.viewerClose}
+              onPress={() => setEvidenceVisible(false)}
+            >
+              <X size={21} color={TEXT} strokeWidth={2.6} />
+            </Pressable>
+
+            <View style={styles.viewerTitleBlock}>
+              <Text style={styles.viewerTitle}>Medicine evidence</Text>
+
+              <Text
+                style={styles.viewerSubtitle}
+                numberOfLines={1}
+              >
+                {refillSubmission?.evidenceType
+                  ? formatStatus(refillSubmission.evidenceType)
+                  : "Protected patient evidence"}
+              </Text>
+            </View>
+
+            <ShieldCheck
+              size={21}
+              color={PHARMACY}
+              strokeWidth={2.5}
+            />
+          </View>
+
+          {evidenceSource ? (
+            <WebView
+              source={evidenceSource}
+              startInLoadingState
+              javaScriptEnabled
+              domStorageEnabled
+              incognito
+              cacheEnabled={false}
+              style={styles.webView}
+              renderLoading={() => (
+                <View style={styles.webViewLoading}>
+                  <ActivityIndicator color={PHARMACY} />
+                  <Text style={styles.webViewLoadingText}>
+                    Opening protected evidence...
+                  </Text>
+                </View>
+              )}
+            />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
 
-const VerificationStatus = ({ active, label }: { active: boolean; label: string }) => (
+const VerificationStatus = ({
+  active,
+  label,
+}: {
+  active: boolean;
+  label: string;
+}) => (
   <View style={styles.verificationItem}>
     {active ? (
-      <CheckCircle2 size={15} color={SURFACE} strokeWidth={2.5} />
+      <CheckCircle2
+        size={15}
+        color={SURFACE}
+        strokeWidth={2.5}
+      />
     ) : (
-      <AlertCircle size={15} color="#FFE7E7" strokeWidth={2.5} />
+      <AlertCircle
+        size={15}
+        color="#FFE7E7"
+        strokeWidth={2.5}
+      />
     )}
+
     <Text style={styles.verificationText}>{label}</Text>
   </View>
 );
@@ -908,9 +1780,11 @@ const QuickInfo = ({
 }) => (
   <View style={[styles.quickInfo, { backgroundColor: background }]}>
     {icon}
+
     <Text style={styles.quickInfoValue} numberOfLines={1}>
       {value}
     </Text>
+
     <Text style={styles.quickInfoLabel}>{label}</Text>
   </View>
 );
@@ -927,11 +1801,19 @@ const SectionHeading = ({
   <View style={styles.sectionHeading}>
     {icon}
     <Text style={styles.sectionTitle}>{title}</Text>
-    {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+    {subtitle ? (
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    ) : null}
   </View>
 );
 
-const ContactItem = ({ icon, text }: { icon: ReactNode; text: string }) => (
+const ContactItem = ({
+  icon,
+  text,
+}: {
+  icon: ReactNode;
+  text: string;
+}) => (
   <View style={styles.contactItem}>
     {icon}
     <Text style={styles.contactText} numberOfLines={2}>
@@ -944,36 +1826,93 @@ const MedicineItem = ({
   item,
   index,
   last,
+  inventoryEditable,
+  orderStatus,
+  onManageStock,
 }: {
   item: PharmacyMedicineItem;
   index: number;
   last: boolean;
+  inventoryEditable: boolean;
+  orderStatus: PharmacyOrderStatus;
+  onManageStock: () => void;
 }) => {
   const rawQuantity = item.quantity?.trim() || "";
-  const parsedRequired = rawQuantity ? Number.parseFloat(rawQuantity) : Number.NaN;
-  const required = Number.isFinite(parsedRequired) && parsedRequired > 0 ? parsedRequired : null;
+  const requiredMatch = rawQuantity.match(/^(\d+(?:\.\d+)?)/);
+  const required = requiredMatch ? Number(requiredMatch[1]) : null;
   const dispensed = item.dispensedQuantity || 0;
-  const progress = required ? Math.min(100, Math.max(0, (dispensed / required) * 100)) : 0;
+
+  const requiredUnit = normalizeUnit(item.quantityUnit);
+  const dispensedUnit = normalizeUnit(item.dispensedUnit);
+  const unitsComparable =
+    Boolean(requiredUnit && dispensedUnit) && requiredUnit === dispensedUnit;
+
+  const progress =
+    required && required > 0 && unitsComparable
+      ? Math.min(100, Math.max(0, (dispensed / required) * 100))
+      : 0;
 
   const unitAlreadyIncluded = item.quantityUnit
     ? rawQuantity.toLowerCase().includes(item.quantityUnit.toLowerCase())
     : true;
 
   const quantityText = rawQuantity
-    ? `${rawQuantity}${item.quantityUnit && !unitAlreadyIncluded ? ` ${item.quantityUnit}` : ""}`
+    ? `${rawQuantity}${
+        item.quantityUnit && !unitAlreadyIncluded
+          ? ` ${item.quantityUnit}`
+          : ""
+      }`
     : "Not specified";
 
-  const dispensedText = `${dispensed}${item.quantityUnit ? ` ${item.quantityUnit}` : ""}`;
+  const dispensedText =
+    dispensed > 0
+      ? `${dispensed}${
+          item.dispensedUnit
+            ? ` ${pluralize(item.dispensedUnit, dispensed)}`
+            : ""
+        }`
+      : "Not reserved";
+
+  const reservationActive = Boolean(
+    item.inventoryItemId &&
+      item.inventoryReservedQuantity > 0 &&
+      item.inventoryReservedAt &&
+      !item.inventoryReleasedAt &&
+      !item.inventoryConsumedAt,
+  );
+
+  const stockConsumed = Boolean(item.inventoryConsumedAt);
+
+  const inventoryName =
+    item.inventoryItem?.medicineName || "Matched inventory item";
+
+  const inventoryDetail = item.inventoryItem
+    ? [item.inventoryItem.strength, item.inventoryItem.form]
+        .filter(Boolean)
+        .join(" • ")
+    : "";
 
   return (
-    <View style={[styles.medicineItem, last ? styles.medicineItemLast : undefined]}>
+    <View
+      style={[
+        styles.medicineItem,
+        last ? styles.medicineItemLast : undefined,
+      ]}
+    >
       <View style={styles.medicineTopRow}>
         <View style={styles.medicineIcon}>
-          <Pill size={20} color={PHARMACY} strokeWidth={2.5} />
+          <Pill
+            size={20}
+            color={PHARMACY}
+            strokeWidth={2.5}
+          />
         </View>
 
         <View style={styles.medicineMain}>
-          <Text style={styles.medicineName} numberOfLines={2}>
+          <Text
+            style={styles.medicineName}
+            numberOfLines={2}
+          >
             {item.name}
           </Text>
 
@@ -998,36 +1937,184 @@ const MedicineItem = ({
 
       <View style={styles.medicineStockRow}>
         <View style={styles.quantityBlock}>
-          <Text style={styles.quantityLabel}>Required</Text>
+          <Text style={styles.quantityLabel}>Requested</Text>
           <Text style={styles.quantityValue}>{quantityText}</Text>
         </View>
 
         <View style={styles.quantityDivider} />
 
         <View style={styles.quantityBlock}>
-          <Text style={styles.quantityLabel}>Dispensed</Text>
-          <Text style={[styles.quantityValue, dispensed > 0 ? styles.dispensedValue : undefined]}>
+          <Text style={styles.quantityLabel}>Prepared supply</Text>
+
+          <Text
+            style={[
+              styles.quantityValue,
+              dispensed > 0 ? styles.dispensedValue : undefined,
+            ]}
+          >
             {dispensedText}
           </Text>
         </View>
       </View>
 
-      {required !== null && required > 0 ? (
+      {required !== null && required > 0 && unitsComparable ? (
         <View style={styles.progressArea}>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${progress}%` },
+              ]}
+            />
           </View>
 
           <Text style={styles.progressText}>
-            {dispensed >= required ? "Complete" : `${Math.max(required - dispensed, 0)} remaining`}
+            {dispensed >= required
+              ? "Complete"
+              : `${Math.max(required - dispensed, 0)} remaining`}
           </Text>
         </View>
       ) : null}
+
+      {stockConsumed ? (
+        <View style={styles.inventoryMatchedCard}>
+          <View style={styles.inventoryStatusRow}>
+            <PackageCheck
+              size={18}
+              color={PHARMACY_DARK}
+              strokeWidth={2.5}
+            />
+
+            <View style={styles.inventoryStatusText}>
+              <Text style={styles.inventoryMatchedTitle}>
+                Stock completed
+              </Text>
+
+              <Text style={styles.inventoryMatchedName}>
+                {inventoryName}
+              </Text>
+
+              {inventoryDetail ? (
+                <Text style={styles.inventoryMatchedMeta}>
+                  {inventoryDetail}
+                </Text>
+              ) : null}
+
+              <Text style={styles.inventoryReservedText}>
+                Inventory deducted after fulfilment
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : reservationActive ? (
+        <View style={styles.inventoryMatchedCard}>
+          <View style={styles.inventoryStatusRow}>
+            <PackageCheck
+              size={18}
+              color={PHARMACY_DARK}
+              strokeWidth={2.5}
+            />
+
+            <View style={styles.inventoryStatusText}>
+              <Text style={styles.inventoryMatchedTitle}>
+                Stock reserved
+              </Text>
+
+              <Text style={styles.inventoryMatchedName}>
+                {inventoryName}
+              </Text>
+
+              {inventoryDetail ? (
+                <Text style={styles.inventoryMatchedMeta}>
+                  {inventoryDetail}
+                </Text>
+              ) : null}
+
+              <Text style={styles.inventoryReservedText}>
+                {item.inventoryReservedQuantity}{" "}
+                {item.inventoryItem?.stockUnit || "unit"}
+                {item.inventoryReservedQuantity === 1 ? "" : "s"} reserved
+              </Text>
+
+              {dispensed > 0 && item.dispensedUnit ? (
+                <Text style={styles.inventoryDispensedText}>
+                  Supplies {dispensed}{" "}
+                  {pluralize(item.dispensedUnit, dispensed)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
+            style={styles.manageStockButton}
+            onPress={onManageStock}
+          >
+            <Text style={styles.manageStockButtonText}>
+              {inventoryEditable
+                ? "Review / change stock"
+                : "Review stock"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.inventoryUnmatchedCard}>
+          <View style={styles.inventoryStatusRow}>
+            <PackageSearch
+              size={18}
+              color={WARNING_DARK}
+              strokeWidth={2.5}
+            />
+
+            <View style={styles.inventoryStatusText}>
+              <Text style={styles.inventoryUnmatchedTitle}>
+                Stock not matched
+              </Text>
+
+              <Text style={styles.inventoryUnmatchedText}>
+                {orderStatus === "RECEIVED"
+                  ? "Accept the order before selecting and reserving pharmacy stock."
+                  : "A pharmacist must confirm suitable inventory before preparation."}
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
+            style={[
+              styles.matchStockButton,
+              !inventoryEditable && styles.disabledStockButton,
+            ]}
+            disabled={!inventoryEditable}
+            onPress={onManageStock}
+          >
+            <PackageSearch
+              size={15}
+              color={SURFACE}
+              strokeWidth={2.5}
+            />
+
+            <Text style={styles.matchStockButtonText}>
+              {orderStatus === "RECEIVED"
+                ? "Accept order first"
+                : inventoryEditable
+                  ? "Match & reserve stock"
+                  : "Stock matching locked"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 };
 
-const NoteItem = ({ title, text }: { title: string; text: string }) => (
+const NoteItem = ({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) => (
   <View style={styles.noteItem}>
     <Text style={styles.noteTitle}>{title}</Text>
     <Text style={styles.noteText}>{text}</Text>
@@ -1049,7 +2136,13 @@ const HistoryItem = ({
 }) => (
   <View style={styles.historyItem}>
     <View style={styles.timeline}>
-      <View style={[styles.timelineDot, current ? styles.timelineDotCurrent : undefined]} />
+      <View
+        style={[
+          styles.timelineDot,
+          current ? styles.timelineDotCurrent : undefined,
+        ]}
+      />
+
       {!last ? <View style={styles.timelineLine} /> : null}
     </View>
 
@@ -1065,7 +2158,10 @@ const HistoryItem = ({
       </View>
 
       <Text style={styles.historyDate}>{date}</Text>
-      {note ? <Text style={styles.historyNote}>{note}</Text> : null}
+
+      {note ? (
+        <Text style={styles.historyNote}>{note}</Text>
+      ) : null}
     </View>
   </View>
 );
@@ -1098,7 +2194,12 @@ const styles = StyleSheet.create({
 
   appBarText: { flex: 1 },
   appBarTitle: { color: TEXT, fontSize: 20, fontWeight: "700" },
-  appBarSubtitle: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 1 },
+  appBarSubtitle: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "500",
+    marginTop: 1,
+  },
 
   headerContent: {
     backgroundColor: PHARMACY,
@@ -1121,7 +2222,13 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  headerSourceText: { flex: 1, color: "#E9FFF0", fontSize: 10, fontWeight: "600" },
+  headerSourceText: {
+    flex: 1,
+    color: "#E9FFF0",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
   orderNumber: {
     color: SURFACE,
     fontSize: 20,
@@ -1129,9 +2236,27 @@ const styles = StyleSheet.create({
     letterSpacing: -0.25,
     marginTop: 10,
   },
-  receivedRow: { flexDirection: "row", alignItems: "center", marginTop: 5 },
-  receivedText: { color: "#D9F5E2", fontSize: 9, fontWeight: "500", marginLeft: 6 },
-  statusChip: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, marginLeft: 8 },
+
+  receivedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 5,
+  },
+
+  receivedText: {
+    color: "#D9F5E2",
+    fontSize: 9,
+    fontWeight: "500",
+    marginLeft: 6,
+  },
+
+  statusChip: {
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    marginLeft: 8,
+  },
+
   statusText: { fontSize: 8, fontWeight: "700" },
 
   verificationBar: {
@@ -1151,7 +2276,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
   },
 
-  verificationText: { color: SURFACE, fontSize: 8, fontWeight: "600", marginLeft: 5 },
+  verificationText: {
+    color: SURFACE,
+    fontSize: 8,
+    fontWeight: "600",
+    marginLeft: 5,
+  },
 
   headerDivider: {
     width: StyleSheet.hairlineWidth,
@@ -1165,7 +2295,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  stateTitle: { color: TEXT, fontSize: 15, fontWeight: "700", marginTop: 11 },
+  stateTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: 11,
+  },
 
   stateText: {
     color: MUTED,
@@ -1198,9 +2333,20 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
-  retryText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 6 },
+  retryText: {
+    color: SURFACE,
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
   body: { paddingHorizontal: 16 },
-  quickInfoRow: { flexDirection: "row", marginTop: 13, gap: 8 },
+
+  quickInfoRow: {
+    flexDirection: "row",
+    marginTop: 13,
+    gap: 8,
+  },
 
   quickInfo: {
     flex: 1,
@@ -1210,8 +2356,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  quickInfoValue: { color: TEXT, fontSize: 11, fontWeight: "700", marginTop: 8 },
-  quickInfoLabel: { color: MUTED, fontSize: 8, fontWeight: "600", marginTop: 2 },
+  quickInfoValue: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+
+  quickInfoLabel: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginTop: 2,
+  },
 
   sectionHeading: {
     flexDirection: "row",
@@ -1221,27 +2378,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
 
-  sectionTitle: { flex: 1, color: TEXT, fontSize: 15, fontWeight: "700", marginLeft: 7 },
-  sectionSubtitle: { color: MUTED, fontSize: 9, fontWeight: "600" },
+  sectionTitle: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 7,
+  },
+
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "600",
+  },
 
   actionsPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 13,
   },
 
-  verificationRequestPanel: {
+  doctorLockedPanel: {
     backgroundColor: WARNING_LIGHT,
     borderRadius: 13,
     padding: 12,
     marginBottom: 10,
   },
 
-  verificationRequestHeader: { flexDirection: "row", alignItems: "flex-start" },
+  evidenceReviewPanel: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    marginBottom: 10,
+  },
 
-  verificationRequestIcon: {
-    width: 38,
-    height: 38,
+  verificationHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  lockIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 11,
     backgroundColor: "#FFE5BE",
     alignItems: "center",
@@ -1249,10 +2427,24 @@ const styles = StyleSheet.create({
     marginRight: 9,
   },
 
-  verificationRequestText: { flex: 1 },
-  verificationRequestTitle: { color: WARNING_DARK, fontSize: 12, fontWeight: "700" },
+  evidenceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor: "#FFE5BE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+  },
 
-  verificationRequestDescription: {
+  verificationContent: { flex: 1 },
+  warningTitle: {
+    color: WARNING_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  warningDescription: {
     color: TEXT,
     fontSize: 9,
     fontWeight: "500",
@@ -1260,24 +2452,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  verifyRequestButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: WARNING_DARK,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 11,
-  },
-
-  verifyRequestButtonText: {
-    color: SURFACE,
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 6,
-  },
-
-  verifiedRequestPanel: {
+  successPanel: {
     backgroundColor: PHARMACY_LIGHT,
     borderRadius: 12,
     padding: 11,
@@ -1286,16 +2461,103 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  verifiedRequestText: {
-    flex: 1,
+  successContent: { flex: 1, marginLeft: 8 },
+
+  successTitle: {
+    color: PHARMACY_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  successDescription: {
     color: PHARMACY_DARK,
     fontSize: 9,
     fontWeight: "600",
     lineHeight: 14,
+    marginTop: 3,
+  },
+
+  rejectedPanel: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+
+  rejectedContent: { flex: 1, marginLeft: 8 },
+
+  rejectedTitle: {
+    color: DANGER_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  rejectedDescription: {
+    color: DANGER_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  viewEvidenceButton: {
+    minHeight: 43,
+    borderRadius: 12,
+    backgroundColor: BLUE_LIGHT,
+    borderWidth: 1,
+    borderColor: "#C9D9FA",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 11,
+  },
+
+  viewEvidenceButtonText: {
+    color: BLUE_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  verifyEvidenceButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: WARNING_DARK,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+
+  verifyEvidenceButtonText: {
+    color: SURFACE,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  smallEvidenceButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: BLUE_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: 8,
   },
 
   fulfilmentWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10,
+  },
+
+  inventoryActionWarning: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: WARNING_LIGHT,
@@ -1313,6 +2575,48 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
+  inventoryInfoPanel: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: BLUE_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10,
+  },
+
+  inventoryInfoText: {
+    flex: 1,
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    lineHeight: 14,
+    marginLeft: 8,
+  },
+
+  inventorySummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10,
+  },
+
+  inventorySummaryReady: { backgroundColor: PHARMACY_LIGHT },
+  inventorySummaryPending: { backgroundColor: WARNING_LIGHT },
+  inventorySummaryText: { flex: 1, marginLeft: 8 },
+
+  inventorySummaryTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  inventorySummaryMeta: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
   primaryActionButton: {
     minHeight: 48,
     borderRadius: 13,
@@ -1323,7 +2627,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  primaryActionText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 7 },
+  primaryActionText: {
+    color: SURFACE,
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 7,
+  },
 
   exceptionActions: {
     flexDirection: "row",
@@ -1359,8 +2668,19 @@ const styles = StyleSheet.create({
   },
 
   terminalText: { flex: 1, marginLeft: 9 },
-  terminalTitle: { color: PHARMACY_DARK, fontSize: 12, fontWeight: "700" },
-  terminalSubtitle: { color: MUTED, fontSize: 9, fontWeight: "600", marginTop: 3 },
+
+  terminalTitle: {
+    color: PHARMACY_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  terminalSubtitle: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 3,
+  },
 
   actionLoading: {
     flexDirection: "row",
@@ -1369,11 +2689,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  actionLoadingText: { color: MUTED, fontSize: 10, fontWeight: "600", marginLeft: 7 },
+  actionLoadingText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
+    marginLeft: 7,
+  },
 
   patientPanel: {
     backgroundColor: BLUE_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
   },
 
@@ -1390,8 +2715,19 @@ const styles = StyleSheet.create({
   },
 
   profileText: { flex: 1 },
-  profileName: { color: TEXT, fontSize: 15, fontWeight: "700" },
-  profileEmail: { color: BLUE_DARK, fontSize: 10, fontWeight: "500", marginTop: 3 },
+  profileName: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  profileEmail: {
+    color: BLUE_DARK,
+    fontSize: 10,
+    fontWeight: "500",
+    marginTop: 3,
+  },
+
   contactGrid: { marginTop: 12, gap: 7 },
 
   contactItem: {
@@ -1414,7 +2750,7 @@ const styles = StyleSheet.create({
 
   prescriberPanel: {
     backgroundColor: PHARMACY_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -1431,13 +2767,30 @@ const styles = StyleSheet.create({
   },
 
   prescriberText: { flex: 1 },
-  prescriberName: { color: TEXT, fontSize: 14, fontWeight: "700" },
-  prescriberSpeciality: { color: PHARMACY_DARK, fontSize: 10, fontWeight: "600", marginTop: 3 },
-  prescribedDate: { color: MUTED, fontSize: 9, fontWeight: "500", marginTop: 5 },
+
+  prescriberName: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  prescriberSpeciality: {
+    color: PHARMACY_DARK,
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  prescribedDate: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    marginTop: 5,
+  },
 
   medicineContainer: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
   },
 
@@ -1450,7 +2803,11 @@ const styles = StyleSheet.create({
   },
 
   medicineItemLast: { borderBottomWidth: 0 },
-  medicineTopRow: { flexDirection: "row", alignItems: "center" },
+
+  medicineTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
 
   medicineIcon: {
     width: 42,
@@ -1463,8 +2820,20 @@ const styles = StyleSheet.create({
   },
 
   medicineMain: { flex: 1, minWidth: 0 },
-  medicineName: { color: TEXT, fontSize: 14, fontWeight: "700", lineHeight: 18 },
-  medicineSubline: { color: MUTED, fontSize: 9, fontWeight: "600", marginTop: 4 },
+
+  medicineName: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+
+  medicineSubline: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 4,
+  },
 
   itemNumber: {
     width: 27,
@@ -1476,7 +2845,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  itemNumberText: { color: MUTED, fontSize: 9, fontWeight: "700" },
+  itemNumberText: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "700",
+  },
 
   medicineInstructionBox: {
     backgroundColor: PHARMACY_SOFT,
@@ -1501,7 +2874,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  medicineStockRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
+  medicineStockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+  },
+
   quantityBlock: { flex: 1 },
 
   quantityDivider: {
@@ -1511,10 +2889,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
 
-  quantityLabel: { color: MUTED, fontSize: 8, fontWeight: "600" },
-  quantityValue: { color: TEXT, fontSize: 12, fontWeight: "700", marginTop: 3 },
+  quantityLabel: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+
+  quantityValue: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
   dispensedValue: { color: PHARMACY_DARK },
-  progressArea: { flexDirection: "row", alignItems: "center", marginTop: 11 },
+
+  progressArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 11,
+  },
 
   progressTrack: {
     flex: 1,
@@ -1524,18 +2918,144 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  progressFill: { height: "100%", borderRadius: 3, backgroundColor: PHARMACY },
-  progressText: { color: MUTED, fontSize: 8, fontWeight: "600", marginLeft: 9 },
-  medicineEmpty: { alignItems: "center", paddingHorizontal: 16, paddingTop: 18 },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: PHARMACY,
+  },
+
+  progressText: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginLeft: 9,
+  },
+
+  inventoryMatchedCard: {
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 11,
+    padding: 10,
+    marginTop: 11,
+  },
+
+  inventoryUnmatchedCard: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 11,
+    padding: 10,
+    marginTop: 11,
+  },
+
+  inventoryStatusRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  inventoryStatusText: {
+    flex: 1,
+    marginLeft: 8,
+  },
+
+  inventoryMatchedTitle: {
+    color: PHARMACY_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  inventoryMatchedName: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  inventoryMatchedMeta: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  inventoryReservedText: {
+    color: PHARMACY_DARK,
+    fontSize: 8,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+
+  inventoryDispensedText: {
+    color: BLUE_DARK,
+    fontSize: 8,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  inventoryUnmatchedTitle: {
+    color: WARNING_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  inventoryUnmatchedText: {
+    color: TEXT,
+    fontSize: 8,
+    lineHeight: 12,
+    fontWeight: "500",
+    marginTop: 3,
+  },
+
+  manageStockButton: {
+    minHeight: 36,
+    backgroundColor: SURFACE,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 9,
+  },
+
+  manageStockButtonText: {
+    color: PHARMACY_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  matchStockButton: {
+    minHeight: 39,
+    backgroundColor: PHARMACY,
+    borderRadius: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 9,
+  },
+
+  disabledStockButton: { opacity: 0.45 },
+
+  matchStockButtonText: {
+    color: SURFACE,
+    fontSize: 9,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  medicineEmpty: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 18,
+  },
 
   notesPanel: {
     backgroundColor: WARNING_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 13,
   },
 
   noteItem: { paddingVertical: 10 },
-  noteTitle: { color: WARNING_DARK, fontSize: 9, fontWeight: "700" },
+
+  noteTitle: {
+    color: WARNING_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+  },
 
   noteText: {
     color: TEXT,
@@ -1547,11 +3067,14 @@ const styles = StyleSheet.create({
 
   paymentPanel: {
     backgroundColor: WARNING_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
   },
 
-  paymentTop: { flexDirection: "row", alignItems: "center" },
+  paymentTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
 
   paymentIcon: {
     width: 44,
@@ -1564,23 +3087,72 @@ const styles = StyleSheet.create({
   },
 
   paymentText: { flex: 1 },
-  paymentPreference: { color: TEXT, fontSize: 13, fontWeight: "700" },
-  paymentMode: { color: WARNING_DARK, fontSize: 9, fontWeight: "500", marginTop: 3 },
-  paymentAmount: { alignItems: "flex-end", marginLeft: 8 },
-  paymentAmountText: { color: TEXT, fontSize: 15, fontWeight: "700" },
-  paymentStatus: { color: WARNING_DARK, fontSize: 8, fontWeight: "700", marginTop: 3 },
+
+  paymentPreference: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  paymentMode: {
+    color: WARNING_DARK,
+    fontSize: 9,
+    fontWeight: "500",
+    marginTop: 3,
+  },
+
+  paymentAmount: {
+    alignItems: "flex-end",
+    marginLeft: 8,
+  },
+
+  paymentAmountText: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  paymentStatus: {
+    color: WARNING_DARK,
+    fontSize: 8,
+    fontWeight: "700",
+    marginTop: 3,
+  },
 
   exemptionPanel: {
     backgroundColor: BLUE_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
   },
 
-  exemptionTop: { flexDirection: "row", alignItems: "center" },
-  exemptionText: { flex: 1, marginLeft: 10 },
-  exemptionType: { color: TEXT, fontSize: 13, fontWeight: "700" },
-  exemptionMeta: { color: MUTED, fontSize: 9, fontWeight: "500", marginTop: 3 },
-  exemptionStatus: { color: BLUE_DARK, fontSize: 9, fontWeight: "700" },
+  exemptionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  exemptionText: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  exemptionType: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  exemptionMeta: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    marginTop: 3,
+  },
+
+  exemptionStatus: {
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+  },
 
   exemptionReason: {
     color: DANGER_DARK,
@@ -1592,10 +3164,10 @@ const styles = StyleSheet.create({
 
   submissionPanel: {
     backgroundColor: BLUE_LIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 13,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
 
   submissionIcon: {
@@ -1609,9 +3181,80 @@ const styles = StyleSheet.create({
   },
 
   submissionText: { flex: 1 },
-  submissionTitle: { color: TEXT, fontSize: 13, fontWeight: "700" },
-  submissionMeta: { color: BLUE_DARK, fontSize: 9, fontWeight: "600", marginTop: 4 },
-  submissionReviewMeta: { color: PHARMACY_DARK, fontSize: 8, fontWeight: "600", marginTop: 5 },
+
+  submissionTitle: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  submissionMeta: {
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+
+  verificationDetails: {
+    backgroundColor: "rgba(255,255,255,0.65)",
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 9,
+  },
+
+  verificationLabel: {
+    color: MUTED,
+    fontSize: 7,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+
+  verificationValue: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  verificationDetail: {
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+
+  verificationNote: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    lineHeight: 14,
+    marginTop: 6,
+  },
+
+  submissionEvidenceButton: {
+    alignSelf: "flex-start",
+    minHeight: 35,
+    borderRadius: 9,
+    backgroundColor: BLUE_LIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    marginTop: 8,
+  },
+
+  submissionEvidenceButtonText: {
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  submissionReviewMeta: {
+    color: PHARMACY_DARK,
+    fontSize: 8,
+    fontWeight: "600",
+    marginTop: 7,
+  },
 
   submissionReviewNote: {
     color: MUTED,
@@ -1623,7 +3266,7 @@ const styles = StyleSheet.create({
 
   historyPanel: {
     backgroundColor: PHARMACY_SOFT,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 13,
     paddingTop: 13,
   },
@@ -1656,9 +3299,22 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  historyContent: { flex: 1, paddingLeft: 7, paddingBottom: 15 },
-  historyTitleRow: { flexDirection: "row", alignItems: "center" },
-  historyStatus: { color: TEXT, fontSize: 11, fontWeight: "700" },
+  historyContent: {
+    flex: 1,
+    paddingLeft: 7,
+    paddingBottom: 15,
+  },
+
+  historyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  historyStatus: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+  },
 
   currentChip: {
     backgroundColor: PHARMACY_LIGHT,
@@ -1668,8 +3324,18 @@ const styles = StyleSheet.create({
     marginLeft: 7,
   },
 
-  currentChipText: { color: PHARMACY_DARK, fontSize: 7, fontWeight: "700" },
-  historyDate: { color: MUTED, fontSize: 8, fontWeight: "500", marginTop: 3 },
+  currentChipText: {
+    color: PHARMACY_DARK,
+    fontSize: 7,
+    fontWeight: "700",
+  },
+
+  historyDate: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "500",
+    marginTop: 3,
+  },
 
   historyNote: {
     color: MUTED,
@@ -1695,7 +3361,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 
-  refreshHintText: { color: MUTED, fontSize: 9, fontWeight: "500", marginLeft: 6 },
+  refreshHintText: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "500",
+    marginLeft: 6,
+  },
 
   modalBackdrop: {
     flex: 1,
@@ -1715,8 +3386,16 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
 
-  modalHeaderText: { flex: 1, paddingRight: 10 },
-  modalTitle: { color: TEXT, fontSize: 18, fontWeight: "700" },
+  modalHeaderText: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  modalTitle: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "700",
+  },
 
   modalSubtitle: {
     color: MUTED,
@@ -1767,5 +3446,70 @@ const styles = StyleSheet.create({
     color: SURFACE,
     fontSize: 13,
     fontWeight: "700",
+  },
+
+  viewerSafeArea: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
+
+  viewerHeader: {
+    height: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    backgroundColor: SURFACE,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+
+  viewerClose: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  viewerTitleBlock: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+
+  viewerTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  viewerSubtitle: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  webView: {
+    flex: 1,
+    backgroundColor: SURFACE,
+  },
+
+  webViewLoading: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  webViewLoadingText: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 9,
   },
 });

@@ -23,6 +23,7 @@ export type PharmacyDashboardData = {
     ready: number;
     completed: number;
     doctorPrescriptions: number;
+    refillRequests: number;
     patientSubmissions: number;
     paymentPending: number;
     exemptionPending: number;

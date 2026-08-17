@@ -1,13 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  Pressable,
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -22,6 +22,7 @@ import {
   FileText,
   Pill,
   RefreshCw,
+  Repeat2,
   UserRound,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,7 +34,7 @@ import {
 } from "../../services/pharmacy/pharmacy-orders.api";
 import type { RootStackParamList } from "../../types/navigation";
 
-type QueueFilter = "ALL" | "DOCTOR_PRESCRIPTION" | "PATIENT_SUBMISSION";
+type QueueFilter = "ALL" | "NEW" | "DOCTOR_PRESCRIPTION" | "REFILL_REQUEST" | "PAYMENT_PENDING";
 
 type PharmacyOrdersRouteList = {
   PharmacyOrders:
@@ -50,42 +51,40 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
-const RIPPLE = "rgba(17, 25, 54, 0.08)";
 const BORDER = "#E4E8F2";
+const RIPPLE = "rgba(17,25,54,0.08)";
 
-const PHARMACY = "#16A34A";
-const PHARMACY_DARK = "#0F6B3A";
-const PHARMACY_CONTAINER = "#ECFDF3";
-
-const WARNING = "#F6A545";
-const WARNING_DARK = "#A45A08";
-const WARNING_LIGHT = "#FFF3E2";
+const PHARMACY = "#15803D";
+const PHARMACY_DARK = "#14532D";
+const PHARMACY_LIGHT = "#ECFDF3";
 
 const BLUE = "#5B86E5";
 const BLUE_DARK = "#315FBA";
 const BLUE_LIGHT = "#EEF4FF";
 
+const PURPLE = "#7659D8";
+const PURPLE_DARK = "#5636B5";
+const PURPLE_LIGHT = "#F1EDFF";
+
+const WARNING = "#F6A545";
+const WARNING_DARK = "#9A570D";
+const WARNING_LIGHT = "#FFF3E2";
+
 const DANGER = "#EF4D56";
 const DANGER_DARK = "#B42318";
 const DANGER_LIGHT = "#FFEDEE";
 
-const elevate = (level: number) => ({
-  elevation: level,
+const elevate = (level: 1 | 2 = 1) => ({
+  elevation: level === 1 ? 2 : 4,
   shadowColor: "#172033",
-  shadowOpacity: Platform.OS === "android" ? 0 : 0.07 + level * 0.01,
-  shadowRadius: level * 1.6,
-  shadowOffset: {
-    width: 0,
-    height: level,
-  },
+  shadowOpacity: Platform.OS === "android" ? 0 : level === 1 ? 0.06 : 0.09,
+  shadowRadius: level === 1 ? 4 : 8,
+  shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
 });
 
 const formatDate = (value: string) => {
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Recently";
-  }
+  if (Number.isNaN(date.getTime())) return "Recently";
 
   return date.toLocaleString("en-GB", {
     day: "2-digit",
@@ -95,48 +94,34 @@ const formatDate = (value: string) => {
   });
 };
 
-const formatStatus = (status: string) => {
-  return status
+const formatStatus = (status: string) =>
+  status
     .toLowerCase()
     .split("_")
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-};
 
 const getSourceLabel = (source: PharmacyOrderSource) => {
   if (source === "DOCTOR_PRESCRIPTION") return "Doctor prescription";
-  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   if (source === "REFILL_REQUEST") return "Refill request";
-
+  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   return "Manual request";
 };
 
 const getStatusTone = (status: PharmacyOrderListItem["status"]) => {
   if (status === "READY" || status === "COLLECTED" || status === "DELIVERED") {
-    return {
-      background: PHARMACY_CONTAINER,
-      color: PHARMACY_DARK,
-    };
+    return { background: PHARMACY_LIGHT, color: PHARMACY_DARK };
   }
 
-  if (status === "RECEIVED" || status === "PREPARING" || status === "ACCEPTED") {
-    return {
-      background: WARNING_LIGHT,
-      color: WARNING_DARK,
-    };
+  if (status === "RECEIVED" || status === "ACCEPTED" || status === "PREPARING") {
+    return { background: WARNING_LIGHT, color: WARNING_DARK };
   }
 
   if (status === "REJECTED" || status === "CANCELLED" || status === "OUT_OF_STOCK") {
-    return {
-      background: DANGER_LIGHT,
-      color: DANGER_DARK,
-    };
+    return { background: DANGER_LIGHT, color: DANGER_DARK };
   }
 
-  return {
-    background: BLUE_LIGHT,
-    color: BLUE_DARK,
-  };
+  return { background: BLUE_LIGHT, color: BLUE_DARK };
 };
 
 const getPaymentTone = (order: PharmacyOrderListItem) => {
@@ -151,7 +136,7 @@ const getPaymentTone = (order: PharmacyOrderListItem) => {
   if (order.payment.status === "PAID") {
     return {
       label: "Paid",
-      background: PHARMACY_CONTAINER,
+      background: PHARMACY_LIGHT,
       color: PHARMACY_DARK,
     };
   }
@@ -159,7 +144,7 @@ const getPaymentTone = (order: PharmacyOrderListItem) => {
   if (order.payment.status === "NOT_REQUIRED") {
     return {
       label: "Not required",
-      background: PHARMACY_CONTAINER,
+      background: PHARMACY_LIGHT,
       color: PHARMACY_DARK,
     };
   }
@@ -179,70 +164,93 @@ const getPaymentTone = (order: PharmacyOrderListItem) => {
   };
 };
 
+const isPaymentAttention = (order: PharmacyOrderListItem) => {
+  if (!order.payment) return false;
+
+  return order.payment.status !== "PAID" && order.payment.status !== "NOT_REQUIRED";
+};
+
 export const PharmacyOrdersScreen = () => {
   const navigation = useNavigation<PharmacyNavigation>();
   const route = useRoute<RouteProp<PharmacyOrdersRouteList, "PharmacyOrders">>();
   const insets = useSafeAreaInsets();
 
-  const initialSource = route.params?.source;
+  const resolveInitialFilter = (): QueueFilter => {
+    const title = route.params?.title;
 
-  const initialFilter: QueueFilter =
-    initialSource === "DOCTOR_PRESCRIPTION" || initialSource === "PATIENT_SUBMISSION"
-      ? initialSource
-      : "ALL";
+    if (title === "New orders") return "NEW";
+    if (title === "Payment pending" || title === "Payments") return "PAYMENT_PENDING";
+    if (title === "Pharmacy orders" || title === "Prescription orders") return "ALL";
+    if (route.params?.source === "DOCTOR_PRESCRIPTION") return "DOCTOR_PRESCRIPTION";
+    if (route.params?.source === "REFILL_REQUEST") return "REFILL_REQUEST";
 
-  const [filter, setFilter] = useState<QueueFilter>(initialFilter);
+    return "ALL";
+  };
+
+  const [filter, setFilter] = useState<QueueFilter>(resolveInitialFilter);
   const [orders, setOrders] = useState<PharmacyOrderListItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadOrders = useCallback(
-    async (
-      mode: "initial" | "refresh" = "initial",
-      selectedFilter = filter
-    ) => {
-      try {
-        if (mode === "initial") setIsLoading(true);
-        if (mode === "refresh") setIsRefreshing(true);
+  const loadOrders = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    try {
+      if (mode === "initial") setIsLoading(true);
+      if (mode === "refresh") setIsRefreshing(true);
 
-        setErrorMessage("");
+      setErrorMessage("");
 
-        const source = selectedFilter === "ALL" ? undefined : selectedFilter;
+      const result = await pharmacyOrdersApi.getOrders({
+        limit: 100,
+      });
 
-        const result = await pharmacyOrdersApi.getOrders({
-          source,
-          limit: 100,
-        });
-
-        setOrders(result.orders || []);
-        setTotal(result.total || 0);
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to load pharmacy orders"
-        );
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [filter]
-  );
+      setOrders(result.orders || []);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to load pharmacy orders.");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
+      setFilter(resolveInitialFilter());
       void loadOrders("initial");
-    }, [loadOrders])
+    }, [loadOrders, route.params?.source, route.params?.title]),
   );
 
-  const changeFilter = (nextFilter: QueueFilter) => {
-    if (filter === nextFilter) return;
+  const counts = useMemo(
+    () => ({
+      all: orders.length,
+      new: orders.filter(order => order.status === "RECEIVED").length,
+      doctor: orders.filter(order => order.source === "DOCTOR_PRESCRIPTION").length,
+      refills: orders.filter(order => order.source === "REFILL_REQUEST").length,
+      payments: orders.filter(isPaymentAttention).length,
+    }),
+    [orders],
+  );
 
+  const filteredOrders = useMemo(() => {
+    if (filter === "ALL") return orders;
+
+    if (filter === "NEW") {
+      return orders.filter(order => order.status === "RECEIVED");
+    }
+
+    if (filter === "DOCTOR_PRESCRIPTION") {
+      return orders.filter(order => order.source === "DOCTOR_PRESCRIPTION");
+    }
+
+    if (filter === "REFILL_REQUEST") {
+      return orders.filter(order => order.source === "REFILL_REQUEST");
+    }
+
+    return orders.filter(isPaymentAttention);
+  }, [filter, orders]);
+
+  const changeFilter = (nextFilter: QueueFilter) => {
     setFilter(nextFilter);
-    void loadOrders("initial", nextFilter);
   };
 
   const openOrder = (order: PharmacyOrderListItem) => {
@@ -251,7 +259,7 @@ export const PharmacyOrdersScreen = () => {
     });
   };
 
-  const screenTitle = route.params?.title || "Prescription orders";
+  const screenTitle = route.params?.title || "Pharmacy orders";
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -259,7 +267,8 @@ export const PharmacyOrdersScreen = () => {
 
       <View style={styles.screen}>
         <View style={styles.appBar}>
-          <Pressable android_ripple={{ color: RIPPLE }}
+          <Pressable
+            android_ripple={{ color: RIPPLE }}
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
@@ -268,10 +277,7 @@ export const PharmacyOrdersScreen = () => {
 
           <View style={styles.appBarText}>
             <Text style={styles.title}>{screenTitle}</Text>
-
-            <Text style={styles.subtitle}>
-              Review prescriptions routed to your pharmacy
-            </Text>
+            <Text style={styles.subtitle}>Review, verify and fulfil medicine orders</Text>
           </View>
         </View>
 
@@ -295,16 +301,14 @@ export const PharmacyOrdersScreen = () => {
         >
           <View style={styles.summaryCard}>
             <View style={styles.summaryIcon}>
-              <ClipboardList size={24} color={PHARMACY} strokeWidth={2.5} />
+              <ClipboardList size={24} color={PHARMACY} strokeWidth={2.6} />
             </View>
 
             <View style={styles.summaryText}>
-              <Text style={styles.summaryLabel}>
-                Prescription queue
-              </Text>
+              <Text style={styles.summaryLabel}>Current pharmacy queue</Text>
 
               <Text style={styles.summaryValue}>
-                {total} {total === 1 ? "order" : "orders"}
+                {filteredOrders.length} {filteredOrders.length === 1 ? "order" : "orders"}
               </Text>
             </View>
 
@@ -321,20 +325,37 @@ export const PharmacyOrdersScreen = () => {
           >
             <FilterChip
               label="All"
+              count={counts.all}
               selected={filter === "ALL"}
               onPress={() => changeFilter("ALL")}
             />
 
             <FilterChip
-              label="Doctor prescriptions"
+              label="New"
+              count={counts.new}
+              selected={filter === "NEW"}
+              onPress={() => changeFilter("NEW")}
+            />
+
+            <FilterChip
+              label="Doctor Rx"
+              count={counts.doctor}
               selected={filter === "DOCTOR_PRESCRIPTION"}
               onPress={() => changeFilter("DOCTOR_PRESCRIPTION")}
             />
 
             <FilterChip
-              label="Patient submissions"
-              selected={filter === "PATIENT_SUBMISSION"}
-              onPress={() => changeFilter("PATIENT_SUBMISSION")}
+              label="Refills"
+              count={counts.refills}
+              selected={filter === "REFILL_REQUEST"}
+              onPress={() => changeFilter("REFILL_REQUEST")}
+            />
+
+            <FilterChip
+              label="Payments"
+              count={counts.payments}
+              selected={filter === "PAYMENT_PENDING"}
+              onPress={() => changeFilter("PAYMENT_PENDING")}
             />
           </ScrollView>
 
@@ -342,12 +363,10 @@ export const PharmacyOrdersScreen = () => {
             <View style={styles.stateCard}>
               <ActivityIndicator color={PHARMACY} />
 
-              <Text style={styles.stateTitle}>
-                Loading prescription orders
-              </Text>
+              <Text style={styles.stateTitle}>Loading pharmacy orders</Text>
 
               <Text style={styles.stateText}>
-                Checking orders assigned to this pharmacy.
+                Checking prescriptions and refill requests assigned to this pharmacy.
               </Text>
             </View>
           ) : null}
@@ -355,19 +374,15 @@ export const PharmacyOrdersScreen = () => {
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
               <View style={styles.errorIcon}>
-                <AlertCircle size={22} color={DANGER} strokeWidth={2.5} />
+                <AlertCircle size={23} color={DANGER} strokeWidth={2.6} />
               </View>
 
               <View style={styles.errorContent}>
-                <Text style={styles.errorTitle}>
-                  Orders unavailable
-                </Text>
+                <Text style={styles.errorTitle}>Orders unavailable</Text>
+                <Text style={styles.errorText}>{errorMessage}</Text>
 
-                <Text style={styles.errorText}>
-                  {errorMessage}
-                </Text>
-
-                <Pressable android_ripple={{ color: RIPPLE }}
+                <Pressable
+                  android_ripple={{ color: RIPPLE }}
                   style={styles.retryButton}
                   onPress={() => void loadOrders("initial")}
                 >
@@ -378,30 +393,16 @@ export const PharmacyOrdersScreen = () => {
             </View>
           ) : null}
 
-          {!isLoading && !errorMessage && orders.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIcon}>
-                <FileText size={26} color={PHARMACY} strokeWidth={2.5} />
-              </View>
-
-              <Text style={styles.emptyTitle}>
-                No orders in this queue
-              </Text>
-
-              <Text style={styles.emptyText}>
-                New doctor prescriptions or patient submissions routed to this
-                pharmacy will appear here.
-              </Text>
-            </View>
+          {!isLoading && !errorMessage && filteredOrders.length === 0 ? (
+            <EmptyState filter={filter} />
           ) : null}
 
-          {!isLoading && !errorMessage && orders.length > 0 ? (
+          {!isLoading && !errorMessage && filteredOrders.length > 0 ? (
             <View style={styles.orderList}>
-              {orders.map((order, index) => (
+              {filteredOrders.map(order => (
                 <OrderCard
                   key={order.id}
                   order={order}
-                  isLast={index === orders.length - 1}
                   onPress={() => openOrder(order)}
                 />
               ))}
@@ -415,14 +416,17 @@ export const PharmacyOrdersScreen = () => {
 
 const FilterChip = ({
   label,
+  count,
   selected,
   onPress,
 }: {
   label: string;
+  count: number;
   selected: boolean;
   onPress: () => void;
 }) => (
-  <Pressable android_ripple={{ color: RIPPLE }}
+  <Pressable
+    android_ripple={{ color: RIPPLE }}
     style={[
       styles.filterChip,
       selected ? styles.filterChipSelected : undefined,
@@ -437,188 +441,654 @@ const FilterChip = ({
     >
       {label}
     </Text>
+
+    <View
+      style={[
+        styles.filterCount,
+        selected ? styles.filterCountSelected : undefined,
+      ]}
+    >
+      <Text
+        style={[
+          styles.filterCountText,
+          selected ? styles.filterCountTextSelected : undefined,
+        ]}
+      >
+        {count}
+      </Text>
+    </View>
   </Pressable>
 );
 
 const OrderCard = ({
   order,
-  isLast,
   onPress,
 }: {
   order: PharmacyOrderListItem;
-  isLast: boolean;
   onPress: () => void;
 }) => {
   const statusTone = getStatusTone(order.status);
   const paymentTone = getPaymentTone(order);
 
+  const isDoctorPrescription = order.source === "DOCTOR_PRESCRIPTION";
+  const isRefill = order.source === "REFILL_REQUEST";
+
+  const sourceTone = isDoctorPrescription
+    ? {
+        background: PHARMACY_LIGHT,
+        color: PHARMACY_DARK,
+      }
+    : isRefill
+      ? {
+          background: PURPLE_LIGHT,
+          color: PURPLE_DARK,
+        }
+      : {
+          background: BLUE_LIGHT,
+          color: BLUE_DARK,
+        };
+
   return (
-    <Pressable android_ripple={{ color: RIPPLE }}
-      style={[styles.orderCard, isLast ? styles.orderCardLast : undefined]}
+    <Pressable
+      android_ripple={{ color: RIPPLE }}
+      style={styles.orderCard}
       onPress={onPress}
     >
-      <View style={styles.orderHeader}>
-        <View
-          style={[
-            styles.sourceIcon,
-            {
-              backgroundColor:
-                order.source === "DOCTOR_PRESCRIPTION"
-                  ? PHARMACY_CONTAINER
-                  : BLUE_LIGHT,
-            },
-          ]}
-        >
-          {order.source === "DOCTOR_PRESCRIPTION" ? (
-            <BadgeCheck size={21} color={PHARMACY_DARK} strokeWidth={2.5} />
-          ) : (
-            <UserRound size={21} color={BLUE} strokeWidth={2.5} />
-          )}
-        </View>
+      <View
+        style={[
+          styles.cardAccent,
+          {
+            backgroundColor: sourceTone.color,
+          },
+        ]}
+      />
 
-        <View style={styles.orderHeaderText}>
-          <Text style={styles.patientName} numberOfLines={1}>
-            {order.patient.fullName}
-          </Text>
-
-          <Text style={styles.sourceLabel}>
-            {getSourceLabel(order.source)}
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.statusChip,
-            {
-              backgroundColor: statusTone.background,
-            },
-          ]}
-        >
-          <Text
+      <View style={styles.cardBody}>
+        <View style={styles.orderHeader}>
+          <View
             style={[
-              styles.statusText,
+              styles.sourceIcon,
               {
-                color: statusTone.color,
+                backgroundColor: sourceTone.background,
               },
             ]}
           >
-            {formatStatus(order.status)}
-          </Text>
-        </View>
-      </View>
+            {isDoctorPrescription ? (
+              <BadgeCheck size={22} color={sourceTone.color} strokeWidth={2.6} />
+            ) : isRefill ? (
+              <Repeat2 size={22} color={sourceTone.color} strokeWidth={2.6} />
+            ) : (
+              <UserRound size={22} color={sourceTone.color} strokeWidth={2.6} />
+            )}
+          </View>
 
-      <View style={styles.medicinePanel}>
-        <View style={styles.medicineIcon}>
-          <Pill size={19} color={PHARMACY} strokeWidth={2.5} />
-        </View>
+          <View style={styles.orderHeaderText}>
+            <Text style={styles.patientName} numberOfLines={1}>
+              {order.patient.fullName}
+            </Text>
 
-        <View style={styles.medicineText}>
-          <Text style={styles.medicineName} numberOfLines={1}>
-            {order.medicineName}
-          </Text>
+            <Text
+              style={[
+                styles.sourceLabel,
+                {
+                  color: sourceTone.color,
+                },
+              ]}
+            >
+              {getSourceLabel(order.source)}
+            </Text>
+          </View>
 
-          <Text style={styles.itemCount}>
-            {order.itemCount} {order.itemCount === 1 ? "medicine" : "medicines"}
-          </Text>
-        </View>
-
-        <ChevronRight size={19} color={MUTED} strokeWidth={2.4} />
-      </View>
-
-      <View style={styles.orderFooter}>
-        <View
-          style={[
-            styles.paymentChip,
-            {
-              backgroundColor: paymentTone.background,
-            },
-          ]}
-        >
-          <CreditCard size={13} color={paymentTone.color} strokeWidth={2.4} />
-
-          <Text
+          <View
             style={[
-              styles.paymentText,
+              styles.statusChip,
               {
-                color: paymentTone.color,
+                backgroundColor: statusTone.background,
               },
             ]}
           >
-            {paymentTone.label}
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: statusTone.color,
+                },
+              ]}
+            >
+              {formatStatus(order.status)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.medicinePanel}>
+          <View style={styles.medicineIcon}>
+            <Pill size={20} color={PHARMACY} strokeWidth={2.6} />
+          </View>
+
+          <View style={styles.medicineText}>
+            <Text style={styles.medicineName} numberOfLines={1}>
+              {order.medicineName}
+            </Text>
+
+            <Text style={styles.itemCount}>
+              {order.itemCount} {order.itemCount === 1 ? "medicine" : "medicines"}
+            </Text>
+          </View>
+
+          <ChevronRight size={20} color={MUTED} strokeWidth={2.5} />
+        </View>
+
+        <View style={styles.orderFooter}>
+          <View
+            style={[
+              styles.paymentChip,
+              {
+                backgroundColor: paymentTone.background,
+              },
+            ]}
+          >
+            <CreditCard size={14} color={paymentTone.color} strokeWidth={2.5} />
+
+            <Text
+              style={[
+                styles.paymentText,
+                {
+                  color: paymentTone.color,
+                },
+              ]}
+            >
+              {paymentTone.label}
+            </Text>
+          </View>
+
+          <Text style={styles.orderDate}>
+            {formatDate(order.createdAt)}
           </Text>
         </View>
 
-        <Text style={styles.orderDate}>
-          {formatDate(order.createdAt)}
-        </Text>
-      </View>
+        {order.doctor ? (
+          <View style={styles.doctorRow}>
+            <BadgeCheck size={14} color={PHARMACY} strokeWidth={2.5} />
 
-      {order.doctor ? (
-        <Text style={styles.doctorText} numberOfLines={1}>
-          Prescribed by {order.doctor.fullName}
-        </Text>
-      ) : null}
+            <Text style={styles.doctorText} numberOfLines={1}>
+              {isDoctorPrescription ? "Prescribed by " : "Doctor: "}
+              {order.doctor.fullName}
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
+  );
+};
+
+const EmptyState = ({
+  filter,
+}: {
+  filter: QueueFilter;
+}) => {
+  const content =
+    filter === "NEW"
+      ? {
+          title: "No new orders",
+          text: "New prescriptions and refill requests will appear here.",
+        }
+      : filter === "DOCTOR_PRESCRIPTION"
+        ? {
+            title: "No doctor prescriptions",
+            text: "CareMate+ doctor prescriptions routed to this pharmacy will appear here.",
+          }
+        : filter === "REFILL_REQUEST"
+          ? {
+              title: "No refill requests",
+              text: "Patient medicine refill requests will appear here after they are submitted.",
+            }
+          : filter === "PAYMENT_PENDING"
+            ? {
+                title: "No payments need attention",
+                text: "Orders requiring payment action will appear here.",
+              }
+            : {
+                title: "No pharmacy orders",
+                text: "Doctor prescriptions and patient refill requests will appear here.",
+              };
+
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIcon}>
+        <FileText size={27} color={PHARMACY} strokeWidth={2.6} />
+      </View>
+
+      <Text style={styles.emptyTitle}>{content.title}</Text>
+      <Text style={styles.emptyText}>{content.text}</Text>
+    </View>
   );
 };
 
 export default PharmacyOrdersScreen;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: BACKGROUND },
-  screen: { flex: 1, backgroundColor: BACKGROUND },
-  appBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 13 },
-  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", marginRight: 4, overflow: "hidden" },
-  appBarText: { flex: 1 },
-  title: { color: TEXT, fontSize: 22, fontWeight: "700" },
-  subtitle: { color: MUTED, fontSize: 11, fontWeight: "500", marginTop: 3 },
-  scrollView: { flex: 1 },
-  content: { paddingHorizontal: 16 },
-  summaryCard: { backgroundColor: SURFACE, borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", marginBottom: 12, ...elevate(2) },
-  summaryIcon: { width: 46, height: 46, borderRadius: 13, backgroundColor: PHARMACY_CONTAINER, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  summaryText: { flex: 1 },
-  summaryLabel: { color: MUTED, fontSize: 10, fontWeight: "600" },
-  summaryValue: { color: TEXT, fontSize: 17, fontWeight: "700", marginTop: 2 },
-  liveChip: { backgroundColor: PHARMACY_CONTAINER, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center" },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: PHARMACY, marginRight: 5 },
-  liveText: { color: PHARMACY_DARK, fontSize: 9, fontWeight: "700" },
-  filterContent: { paddingBottom: 14 },
-  filterChip: { minHeight: 38, borderRadius: 11, backgroundColor: SURFACE, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", marginRight: 8, borderWidth: 1, borderColor: BORDER },
-  filterChipSelected: { backgroundColor: PHARMACY, borderColor: PHARMACY },
-  filterText: { color: MUTED, fontSize: 11, fontWeight: "700" },
-  filterTextSelected: { color: SURFACE },
-  stateCard: { backgroundColor: SURFACE, borderRadius: 12, padding: 24, alignItems: "center", ...elevate(2) },
-  stateTitle: { color: TEXT, fontSize: 15, fontWeight: "700", marginTop: 11 },
-  stateText: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 17, textAlign: "center", marginTop: 4 },
-  errorCard: { backgroundColor: DANGER_LIGHT, borderRadius: 12, padding: 15, flexDirection: "row" },
-  errorIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  errorContent: { flex: 1 },
-  errorTitle: { color: DANGER_DARK, fontSize: 15, fontWeight: "700" },
-  errorText: { color: DANGER_DARK, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 4 },
-  retryButton: { alignSelf: "flex-start", backgroundColor: DANGER, borderRadius: 11, paddingVertical: 9, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", marginTop: 11 },
-  retryText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 6 },
-  emptyCard: { backgroundColor: SURFACE, borderRadius: 12, padding: 24, alignItems: "center", ...elevate(2) },
-  emptyIcon: { width: 52, height: 52, borderRadius: 12, backgroundColor: PHARMACY_CONTAINER, alignItems: "center", justifyContent: "center", marginBottom: 11 },
-  emptyTitle: { color: TEXT, fontSize: 15, fontWeight: "700" },
-  emptyText: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 17, textAlign: "center", marginTop: 5 },
-  orderList: { backgroundColor: SURFACE, borderRadius: 12, overflow: "hidden", ...elevate(1) },
-  orderCard: { padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
-  orderCardLast: { borderBottomWidth: 0 },
-  orderHeader: { flexDirection: "row", alignItems: "center" },
-  sourceIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 10 },
-  orderHeaderText: { flex: 1, minWidth: 0 },
-  patientName: { color: TEXT, fontSize: 14, fontWeight: "700" },
-  sourceLabel: { color: MUTED, fontSize: 10, fontWeight: "600", marginTop: 3 },
-  statusChip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, marginLeft: 8 },
-  statusText: { fontSize: 9, fontWeight: "700" },
-  medicinePanel: { backgroundColor: BACKGROUND, borderRadius: 13, padding: 11, flexDirection: "row", alignItems: "center", marginTop: 12 },
-  medicineIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: PHARMACY_CONTAINER, alignItems: "center", justifyContent: "center", marginRight: 9 },
-  medicineText: { flex: 1 },
-  medicineName: { color: TEXT, fontSize: 13, fontWeight: "700" },
-  itemCount: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 3 },
-  orderFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 11 },
-  paymentChip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, flexDirection: "row", alignItems: "center" },
-  paymentText: { fontSize: 9, fontWeight: "700", marginLeft: 4 },
-  orderDate: { color: MUTED, fontSize: 9, fontWeight: "500" },
-  doctorText: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 9 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
+
+  screen: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
+
+  appBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 13,
+  },
+
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 5,
+    overflow: "hidden",
+  },
+
+  appBarText: {
+    flex: 1,
+  },
+
+  title: {
+    color: TEXT,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+
+  subtitle: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  scrollView: {
+    flex: 1,
+  },
+
+  content: {
+    paddingHorizontal: 16,
+  },
+
+  summaryCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 13,
+    ...elevate(1),
+  },
+
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: PHARMACY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  summaryText: {
+    flex: 1,
+  },
+
+  summaryLabel: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
+  summaryValue: {
+    color: TEXT,
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+
+  liveChip: {
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: PHARMACY,
+    marginRight: 5,
+  },
+
+  liveText: {
+    color: PHARMACY_DARK,
+    fontSize: 8,
+    fontWeight: "800",
+  },
+
+  filterContent: {
+    paddingBottom: 14,
+  },
+
+  filterChip: {
+    minHeight: 39,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingLeft: 13,
+    paddingRight: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+
+  filterChipSelected: {
+    backgroundColor: PHARMACY,
+    borderColor: PHARMACY,
+  },
+
+  filterText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  filterTextSelected: {
+    color: SURFACE,
+  },
+
+  filterCount: {
+    minWidth: 21,
+    height: 21,
+    borderRadius: 11,
+    backgroundColor: BACKGROUND,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+    marginLeft: 7,
+  },
+
+  filterCountSelected: {
+    backgroundColor: "rgba(255,255,255,0.20)",
+  },
+
+  filterCountText: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "800",
+  },
+
+  filterCountTextSelected: {
+    color: SURFACE,
+  },
+
+  stateCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 25,
+    alignItems: "center",
+    ...elevate(1),
+  },
+
+  stateTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: 11,
+  },
+
+  stateText: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: 4,
+  },
+
+  errorCard: {
+    backgroundColor: DANGER_LIGHT,
+    borderRadius: 16,
+    padding: 15,
+    flexDirection: "row",
+  },
+
+  errorIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  errorContent: {
+    flex: 1,
+  },
+
+  errorTitle: {
+    color: DANGER_DARK,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  errorText: {
+    color: DANGER_DARK,
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  retryButton: {
+    alignSelf: "flex-start",
+    backgroundColor: DANGER,
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 11,
+  },
+
+  retryText: {
+    color: SURFACE,
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
+
+  emptyCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    padding: 26,
+    alignItems: "center",
+    ...elevate(1),
+  },
+
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 17,
+    backgroundColor: PHARMACY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 11,
+  },
+
+  emptyTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  emptyText: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: 5,
+  },
+
+  orderList: {
+    paddingBottom: 2,
+  },
+
+  orderCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 17,
+    marginBottom: 12,
+    overflow: "hidden",
+    flexDirection: "row",
+    ...elevate(1),
+  },
+
+  cardAccent: {
+    width: 4,
+  },
+
+  cardBody: {
+    flex: 1,
+    padding: 14,
+  },
+
+  orderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  sourceIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  orderHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  patientName: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  sourceLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  statusChip: {
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginLeft: 8,
+  },
+
+  statusText: {
+    fontSize: 8,
+    fontWeight: "800",
+  },
+
+  medicinePanel: {
+    backgroundColor: BACKGROUND,
+    borderRadius: 13,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+  },
+
+  medicineIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: PHARMACY_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+  },
+
+  medicineText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  medicineName: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  itemCount: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  orderFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 11,
+  },
+
+  paymentChip: {
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  paymentText: {
+    fontSize: 8,
+    fontWeight: "800",
+    marginLeft: 5,
+  },
+
+  orderDate: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+
+  doctorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  doctorText: {
+    flex: 1,
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
 });

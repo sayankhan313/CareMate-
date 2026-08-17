@@ -3,32 +3,34 @@ import {
   ActivityIndicator,
   FlatList,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  Pressable,
   View,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
-import { CommonActions, useFocusEffect } from "@react-navigation/native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   BadgeCheck,
+  Bell,
   ChevronRight,
-  ClipboardList,
   Clock3,
   CreditCard,
+  FileCheck2,
   FileText,
-  LogOut,
   PackageCheck,
   Pill,
   RefreshCw,
+  Repeat2,
   ShieldCheck,
+  ShoppingBag,
   Store,
   Truck,
-  Upload,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -36,13 +38,10 @@ import {
   pharmacyDashboardApi,
   type PharmacyDashboardData,
 } from "../../services/pharmacy/pharmacy-dashboard.api";
-import type {
-  PharmacyOrderListItem,
-} from "../../services/pharmacy/pharmacy-orders.api";
-import { tokenStorage } from "../../services/tokenStorage";
-import type { RootStackParamList } from "../../types/navigation";
+import type { PharmacyOrderListItem } from "../../services/pharmacy/pharmacy-orders.api";
+import type { PharmacyTabParamList, RootStackParamList } from "../../types/navigation";
 
-type Props = NativeStackScreenProps<RootStackParamList, "PharmacyDashboard">;
+type Props = BottomTabScreenProps<PharmacyTabParamList, "Home">;
 
 type PharmacyQuickAction = {
   key: string;
@@ -56,50 +55,49 @@ const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
 const TEXT = "#111936";
 const MUTED = "#7A8194";
-const RIPPLE = "rgba(17, 25, 54, 0.08)";
+const BORDER = "#E4E8F2";
+const RIPPLE = "rgba(17,25,54,0.08)";
 
-const PHARMACY_PRIMARY = "#15803D";
+const PHARMACY = "#15803D";
 const PHARMACY_SECONDARY = "#22C55E";
 const PHARMACY_DARK = "#14532D";
 const PHARMACY_LIGHT = "#ECFDF3";
 
-const SUCCESS = "#42B883";
-const SUCCESS_LIGHT = "#EAF8F2";
+const BLUE = "#5B86E5";
+const BLUE_DARK = "#315FBA";
+const BLUE_LIGHT = "#EEF4FF";
 
 const WARNING = "#F6A545";
-const WARNING_LIGHT = "#FFF3E2";
 const WARNING_DARK = "#9A570D";
-
-const BLUE = "#5B86E5";
-const BLUE_LIGHT = "#EEF4FF";
-const BLUE_DARK = "#315FBA";
+const WARNING_LIGHT = "#FFF3E2";
 
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
+const SUCCESS_LIGHT = "#EAF8F2";
 
-const elevate = (level: 1 | 2 | 3 = 2) => {
-  const elevation = level === 1 ? 2 : level === 2 ? 4 : 7;
-
-  return {
-    elevation,
-    shadowColor: "#172033",
-    shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
-    shadowOpacity: Platform.OS === "android" ? 0 : level === 1 ? 0.06 : 0.1,
-    shadowRadius: level === 1 ? 4 : 9,
-  };
-};
+const elevate = (level: 1 | 2 | 3 = 2) => ({
+  elevation: level === 1 ? 2 : level === 2 ? 4 : 7,
+  shadowColor: "#172033",
+  shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
+  shadowOpacity: Platform.OS === "android" ? 0 : level === 1 ? 0.06 : 0.1,
+  shadowRadius: level === 1 ? 4 : 9,
+});
 
 const getGreetingText = () => {
-  const currentHour = new Date().getHours();
-
-  if (currentHour < 12) return "Good morning";
-  if (currentHour < 18) return "Good afternoon";
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
   return "Good evening";
+};
+
+const getInitials = (value: string) => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "P";
+  return parts.slice(0, 2).map(part => part[0]?.toUpperCase()).join("");
 };
 
 const formatDateTime = (value: string) => {
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "Recently";
 
   return date.toLocaleString("en-GB", {
@@ -110,10 +108,17 @@ const formatDateTime = (value: string) => {
   });
 };
 
+const formatStatus = (status: PharmacyOrderListItem["status"]) =>
+  status
+    .toLowerCase()
+    .split("_")
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
 const getSourceLabel = (source: PharmacyOrderListItem["source"]) => {
   if (source === "DOCTOR_PRESCRIPTION") return "Doctor prescription";
-  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   if (source === "REFILL_REQUEST") return "Refill request";
+  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   return "Manual request";
 };
 
@@ -122,7 +127,7 @@ const getStatusTone = (status: PharmacyOrderListItem["status"]) => {
     return { background: SUCCESS_LIGHT, text: "#167A58" };
   }
 
-  if (status === "RECEIVED" || status === "PREPARING" || status === "ACCEPTED") {
+  if (status === "RECEIVED" || status === "ACCEPTED" || status === "PREPARING") {
     return { background: WARNING_LIGHT, text: WARNING_DARK };
   }
 
@@ -131,14 +136,6 @@ const getStatusTone = (status: PharmacyOrderListItem["status"]) => {
   }
 
   return { background: BLUE_LIGHT, text: BLUE_DARK };
-};
-
-const formatStatus = (status: PharmacyOrderListItem["status"]) => {
-  return status
-    .toLowerCase()
-    .split("_")
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 };
 
 export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
@@ -155,12 +152,12 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
       if (mode === "refresh") setIsRefreshing(true);
 
       setErrorMessage("");
-
       const result = await pharmacyDashboardApi.getDashboard();
       setDashboard(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load pharmacy dashboard.";
-      setErrorMessage(message);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load pharmacy dashboard.",
+      );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -173,51 +170,62 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
     }, [loadDashboard]),
   );
 
-  const logout = async () => {
-    await tokenStorage.removeToken();
+  const getRootNavigation = () =>
+    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
 
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: "Login" }],
-      }),
-    );
+  const openNotifications = () => {
+    const rootNavigation = getRootNavigation();
+    if (!rootNavigation) return;
+
+    rootNavigation.navigate("Notifications");
+  };
+
+  const openProfile = () => {
+    const rootNavigation = getRootNavigation();
+    if (!rootNavigation) return;
+
+    rootNavigation.navigate("PharmacyProfile");
+  };
+
+  const openNewOrders = () => {
+    navigation.navigate("Orders", { title: "New orders" });
   };
 
   const openDoctorPrescriptions = () => {
-    navigation.navigate("PharmacyOrders", {
+    navigation.navigate("Orders", {
       source: "DOCTOR_PRESCRIPTION",
       title: "Doctor prescriptions",
     });
   };
 
-  const openPatientSubmissions = () => {
-    navigation.navigate("PharmacyOrders", {
-      source: "PATIENT_SUBMISSION",
-      title: "Patient submissions",
+  const openRefillRequests = () => {
+    navigation.navigate("Orders", {
+      source: "REFILL_REQUEST",
+      title: "Medicine refill requests",
     });
   };
 
-  const openAllOrders = () => {
-    navigation.navigate("PharmacyOrders", {
-      title: "Prescription orders",
-    });
+  const openPayments = () => {
+    navigation.navigate("Orders", { title: "Payment pending" });
   };
 
-  const openPaymentChecks = () => {
-    navigation.navigate("PharmacyExemptionReviews", {
-      status: "PENDING",
-    });
+  const openReviews = () => {
+    navigation.navigate("Reviews", { status: "PENDING" });
   };
 
   const openInventory = () => {
-    navigation.navigate("PharmacyInventory");
+    navigation.navigate("Inventory");
+  };
+
+  const openAllOrders = () => {
+    navigation.navigate("Orders", { title: "Pharmacy orders" });
   };
 
   const openOrderDetail = (order: PharmacyOrderListItem) => {
-    navigation.navigate("PharmacyOrderDetail", {
-      orderId: order.id,
-    });
+    const rootNavigation = getRootNavigation();
+    if (!rootNavigation) return;
+
+    rootNavigation.navigate("PharmacyOrderDetail", { orderId: order.id });
   };
 
   const pharmacyName =
@@ -229,6 +237,8 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
     dashboard?.pharmacy.city ||
     "Pharmacy workspace";
 
+  const initials = getInitials(pharmacyName);
+
   const counts =
     dashboard?.counts || {
       newOrders: 0,
@@ -236,6 +246,7 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
       ready: 0,
       completed: 0,
       doctorPrescriptions: 0,
+      refillRequests: 0,
       patientSubmissions: 0,
       paymentPending: 0,
       exemptionPending: 0,
@@ -243,37 +254,44 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
 
   const quickActions: PharmacyQuickAction[] = [
     {
-      key: "doctor-prescriptions",
+      key: "new-orders",
+      title: "New Orders",
+      icon: <ShoppingBag size={23} color={PHARMACY} strokeWidth={2.6} />,
+      badgeCount: counts.newOrders,
+      onPress: openNewOrders,
+    },
+    {
+      key: "doctor-rx",
       title: "Doctor Rx",
-      icon: <BadgeCheck size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
+      icon: <BadgeCheck size={23} color={PHARMACY} strokeWidth={2.6} />,
       badgeCount: counts.doctorPrescriptions,
       onPress: openDoctorPrescriptions,
     },
     {
-      key: "patient-submissions",
-      title: "Uploads",
-      icon: <Upload size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
-      badgeCount: counts.patientSubmissions,
-      onPress: openPatientSubmissions,
+      key: "refills",
+      title: "Refills",
+      icon: <Repeat2 size={23} color={PHARMACY} strokeWidth={2.6} />,
+      badgeCount: counts.refillRequests,
+      onPress: openRefillRequests,
     },
     {
-      key: "orders",
-      title: "Orders",
-      icon: <ClipboardList size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
-      badgeCount: counts.newOrders,
-      onPress: openAllOrders,
+      key: "payments",
+      title: "Payments",
+      icon: <CreditCard size={23} color={WARNING} strokeWidth={2.6} />,
+      badgeCount: counts.paymentPending,
+      onPress: openPayments,
     },
     {
       key: "exemptions",
       title: "Exemptions",
-      icon: <CreditCard size={23} color={WARNING} strokeWidth={2.6} />,
+      icon: <FileCheck2 size={23} color={PHARMACY} strokeWidth={2.6} />,
       badgeCount: counts.exemptionPending,
-      onPress: openPaymentChecks,
+      onPress: openReviews,
     },
     {
       key: "inventory",
       title: "Inventory",
-      icon: <Pill size={23} color={PHARMACY_PRIMARY} strokeWidth={2.6} />,
+      icon: <Pill size={23} color={PHARMACY} strokeWidth={2.6} />,
       onPress: openInventory,
     },
   ];
@@ -291,37 +309,52 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
               {pharmacyName}
             </Text>
 
-            <Text style={styles.headerSubtitle}>{pharmacyLocation}</Text>
+            <Text style={styles.headerSubtitle}>
+              {pharmacyLocation}
+            </Text>
           </View>
 
-          <Pressable android_ripple={{ color: RIPPLE }}
-            style={styles.logoutCircle}
-            onPress={logout}
-          >
-            <LogOut size={20} color={PHARMACY_PRIMARY} strokeWidth={2.6} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={styles.notificationButton}
+              onPress={openNotifications}
+            >
+              <Bell size={21} color={TEXT} strokeWidth={2.6} />
+            </Pressable>
+
+            <Pressable
+              android_ripple={{ color: RIPPLE }}
+              style={styles.profileButton}
+              onPress={openProfile}
+            >
+              <Text style={styles.profileInitials}>{initials}</Text>
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(insets.bottom + 40, 56) },
+            { paddingBottom: Math.max(insets.bottom + 24, 38) },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => void loadDashboard("refresh")}
-              tintColor={PHARMACY_PRIMARY}
-              colors={[PHARMACY_PRIMARY]}
+              tintColor={PHARMACY}
+              colors={[PHARMACY]}
             />
           }
         >
           {isLoading ? (
             <View style={styles.stateCard}>
-              <ActivityIndicator color={PHARMACY_PRIMARY} />
-              <Text style={styles.stateText}>Loading pharmacy dashboard...</Text>
+              <ActivityIndicator color={PHARMACY} />
+              <Text style={styles.stateText}>
+                Loading pharmacy dashboard...
+              </Text>
             </View>
           ) : null}
 
@@ -331,10 +364,14 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
                 <RefreshCw size={25} color={DANGER} strokeWidth={2.6} />
               </View>
 
-              <Text style={styles.errorTitle}>Unable to load dashboard</Text>
+              <Text style={styles.errorTitle}>
+                Unable to load dashboard
+              </Text>
+
               <Text style={styles.errorText}>{errorMessage}</Text>
 
-              <Pressable android_ripple={{ color: RIPPLE }}
+              <Pressable
+                android_ripple={{ color: RIPPLE }}
                 style={styles.retryButton}
                 onPress={() => void loadDashboard("initial")}
               >
@@ -347,27 +384,30 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
           {!isLoading && !errorMessage && dashboard ? (
             <>
               <LinearGradient
-                colors={[PHARMACY_PRIMARY, PHARMACY_SECONDARY]}
+                colors={[PHARMACY, PHARMACY_SECONDARY]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.heroCard}
               >
                 <View style={styles.heroTopRow}>
                   <View style={styles.heroIcon}>
-                    <Store size={26} color={PHARMACY_PRIMARY} strokeWidth={2.7} />
+                    <Store size={26} color={PHARMACY} strokeWidth={2.7} />
                   </View>
 
                   <View style={styles.heroBadge}>
                     <ShieldCheck size={14} color={SURFACE} strokeWidth={2.5} />
-                    <Text style={styles.heroBadgeText}>Verified Workspace</Text>
+                    <Text style={styles.heroBadgeText}>
+                      Verified Workspace
+                    </Text>
                   </View>
                 </View>
 
-                <Text style={styles.heroTitle}>Pharmacy Dashboard</Text>
+                <Text style={styles.heroTitle}>
+                  Pharmacy Dashboard
+                </Text>
 
                 <Text style={styles.heroDescription}>
-                  Review prescriptions, manage medicine orders and monitor
-                  fulfilment from one workspace.
+                  Review prescriptions, verify requests and manage medicine fulfilment.
                 </Text>
 
                 <View style={styles.heroStats}>
@@ -406,13 +446,17 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>Recent Orders</Text>
+                  <Text style={styles.sectionTitle}>
+                    Recent Orders
+                  </Text>
+
                   <Text style={styles.sectionSubtitle}>
-                    Latest prescriptions assigned to your pharmacy
+                    Latest prescriptions and refill requests
                   </Text>
                 </View>
 
-                <Pressable android_ripple={{ color: RIPPLE }}
+                <Pressable
+                  android_ripple={{ color: RIPPLE }}
                   onPress={openAllOrders}
                 >
                   <Text style={styles.sectionLink}>View all</Text>
@@ -436,7 +480,10 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={styles.sectionTitle}>Fulfilment</Text>
+                  <Text style={styles.sectionTitle}>
+                    Fulfilment
+                  </Text>
+
                   <Text style={styles.sectionSubtitle}>
                     Current pharmacy order progress
                   </Text>
@@ -470,8 +517,8 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
                     />
                   }
                   iconBackground={BLUE_LIGHT}
-                  title="Ready for collection"
-                  subtitle="Orders ready for the patient"
+                  title="Ready"
+                  subtitle="Ready for collection or delivery"
                   value={counts.ready}
                   onPress={openAllOrders}
                 />
@@ -501,20 +548,12 @@ export const PharmacyDashboardScreen = ({ navigation, route }: Props) => {
   );
 };
 
-const HeroStat = ({
-  value,
-  label,
-}: {
-  value: number;
-  label: string;
-}) => {
-  return (
-    <View style={styles.heroStat}>
-      <Text style={styles.heroStatValue}>{value}</Text>
-      <Text style={styles.heroStatLabel}>{label}</Text>
-    </View>
-  );
-};
+const HeroStat = ({ value, label }: { value: number; label: string }) => (
+  <View style={styles.heroStat}>
+    <Text style={styles.heroStatValue}>{value}</Text>
+    <Text style={styles.heroStatLabel}>{label}</Text>
+  </View>
+);
 
 const QuickAction = ({
   title,
@@ -526,30 +565,29 @@ const QuickAction = ({
   icon: ReactNode;
   badgeCount?: number;
   onPress: () => void;
-}) => {
-  return (
-    <Pressable android_ripple={{ color: RIPPLE }}
-      style={styles.quickAction}
-      onPress={onPress}
-    >
-      <View style={styles.quickActionIcon}>
-        {icon}
+}) => (
+  <Pressable
+    android_ripple={{ color: RIPPLE }}
+    style={styles.quickAction}
+    onPress={onPress}
+  >
+    <View style={styles.quickActionIcon}>
+      {icon}
 
-        {badgeCount !== undefined && badgeCount > 0 ? (
-          <View style={styles.quickActionBadge}>
-            <Text style={styles.quickActionBadgeText}>
-              {badgeCount > 99 ? "99+" : badgeCount}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      {badgeCount !== undefined && badgeCount > 0 ? (
+        <View style={styles.quickActionBadge}>
+          <Text style={styles.quickActionBadgeText}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </Text>
+        </View>
+      ) : null}
+    </View>
 
-      <Text style={styles.quickActionText} numberOfLines={1}>
-        {title}
-      </Text>
-    </Pressable>
-  );
-};
+    <Text style={styles.quickActionText} numberOfLines={1}>
+      {title}
+    </Text>
+  </Pressable>
+);
 
 const OrderCard = ({
   order,
@@ -561,11 +599,16 @@ const OrderCard = ({
   onPress: () => void;
 }) => {
   const statusTone = getStatusTone(order.status);
-  const isDoctorPrescription = order.source === "DOCTOR_PRESCRIPTION";
+  const isDoctorPrescription =
+    order.source === "DOCTOR_PRESCRIPTION";
 
   return (
-    <Pressable android_ripple={{ color: RIPPLE }}
-      style={[styles.orderCard, isLast ? styles.orderCardLast : undefined]}
+    <Pressable
+      android_ripple={{ color: RIPPLE }}
+      style={[
+        styles.orderCard,
+        isLast ? styles.orderCardLast : undefined,
+      ]}
       onPress={onPress}
     >
       <View
@@ -579,7 +622,7 @@ const OrderCard = ({
         {isDoctorPrescription ? (
           <BadgeCheck
             size={22}
-            color={PHARMACY_PRIMARY}
+            color={PHARMACY}
             strokeWidth={2.6}
           />
         ) : (
@@ -646,66 +689,61 @@ const FulfilmentRow = ({
   subtitle: string;
   value: number;
   onPress: () => void;
-}) => {
-  return (
-    <Pressable android_ripple={{ color: RIPPLE }}
-      style={styles.fulfilmentRow}
-      onPress={onPress}
+}) => (
+  <Pressable
+    android_ripple={{ color: RIPPLE }}
+    style={styles.fulfilmentRow}
+    onPress={onPress}
+  >
+    <View
+      style={[
+        styles.fulfilmentIcon,
+        { backgroundColor: iconBackground },
+      ]}
     >
-      <View
-        style={[
-          styles.fulfilmentIcon,
-          { backgroundColor: iconBackground },
-        ]}
-      >
-        {icon}
-      </View>
+      {icon}
+    </View>
 
-      <View style={styles.fulfilmentText}>
-        <Text style={styles.fulfilmentTitle}>{title}</Text>
-        <Text style={styles.fulfilmentSubtitle}>{subtitle}</Text>
-      </View>
+    <View style={styles.fulfilmentText}>
+      <Text style={styles.fulfilmentTitle}>{title}</Text>
+      <Text style={styles.fulfilmentSubtitle}>{subtitle}</Text>
+    </View>
 
-      <View style={styles.fulfilmentValue}>
-        <Text style={styles.fulfilmentValueText}>{value}</Text>
-      </View>
+    <View style={styles.fulfilmentValue}>
+      <Text style={styles.fulfilmentValueText}>{value}</Text>
+    </View>
 
-      <ChevronRight
-        size={18}
-        color={MUTED}
+    <ChevronRight
+      size={18}
+      color={MUTED}
+      strokeWidth={2.5}
+    />
+  </Pressable>
+);
+
+const EmptyOrders = ({ onPress }: { onPress: () => void }) => (
+  <Pressable
+    android_ripple={{ color: RIPPLE }}
+    style={styles.emptyCard}
+    onPress={onPress}
+  >
+    <View style={styles.emptyIcon}>
+      <PackageCheck
+        size={25}
+        color={PHARMACY}
         strokeWidth={2.5}
       />
-    </Pressable>
-  );
-};
+    </View>
 
-const EmptyOrders = ({
-  onPress,
-}: {
-  onPress: () => void;
-}) => {
-  return (
-    <Pressable android_ripple={{ color: RIPPLE }}
-      style={styles.emptyCard}
-      onPress={onPress}
-    >
-      <View style={styles.emptyIcon}>
-        <ClipboardList
-          size={25}
-          color={PHARMACY_PRIMARY}
-          strokeWidth={2.5}
-        />
-      </View>
+    <Text style={styles.emptyTitle}>
+      No pharmacy orders yet
+    </Text>
 
-      <Text style={styles.emptyTitle}>No pharmacy orders yet</Text>
-
-      <Text style={styles.emptyText}>
-        Doctor prescriptions and patient submissions routed to this pharmacy
-        will appear here.
-      </Text>
-    </Pressable>
-  );
-};
+    <Text style={styles.emptyText}>
+      Doctor prescriptions and patient refill requests routed to this pharmacy will appear here.
+    </Text>
+  </Pressable>
+);
 
 export default PharmacyDashboardScreen;
 
@@ -722,7 +760,7 @@ const styles = StyleSheet.create({
 
   header: {
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -754,13 +792,38 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  logoutCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: SURFACE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+    overflow: "hidden",
+    ...elevate(1),
+  },
+
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: PHARMACY,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
+    ...elevate(1),
+  },
+
+  profileInitials: {
+    color: SURFACE,
+    fontSize: 13,
+    fontWeight: "800",
   },
 
   scrollView: {
@@ -774,7 +837,7 @@ const styles = StyleSheet.create({
 
   stateCard: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 22,
     alignItems: "center",
     marginTop: 12,
@@ -790,7 +853,7 @@ const styles = StyleSheet.create({
 
   errorCard: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 22,
     alignItems: "center",
     marginTop: 12,
@@ -800,7 +863,7 @@ const styles = StyleSheet.create({
   errorIcon: {
     width: 58,
     height: 58,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: DANGER_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -811,7 +874,6 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 18,
     fontWeight: "700",
-    textAlign: "center",
   },
 
   errorText: {
@@ -824,7 +886,7 @@ const styles = StyleSheet.create({
   },
 
   retryButton: {
-    backgroundColor: PHARMACY_PRIMARY,
+    backgroundColor: PHARMACY,
     borderRadius: 13,
     paddingHorizontal: 18,
     paddingVertical: 12,
@@ -841,7 +903,7 @@ const styles = StyleSheet.create({
   },
 
   heroCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 18,
     overflow: "hidden",
     ...elevate(2),
@@ -856,7 +918,7 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 52,
     height: 52,
-    borderRadius: 12,
+    borderRadius: 15,
     backgroundColor: SURFACE,
     alignItems: "center",
     justifyContent: "center",
@@ -952,7 +1014,7 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 56,
     height: 56,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: PHARMACY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -962,8 +1024,8 @@ const styles = StyleSheet.create({
 
   quickActionBadge: {
     position: "absolute",
-    top: -5,
-    right: -5,
+    top: -6,
+    right: -6,
     minWidth: 22,
     height: 22,
     borderRadius: 11,
@@ -973,14 +1035,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
-    zIndex: 10,
-    elevation: 10,
+    zIndex: 20,
+    elevation: 20,
   },
 
   quickActionBadgeText: {
     color: SURFACE,
     fontSize: 9,
-    fontWeight: "700",
+    fontWeight: "800",
   },
 
   quickActionText: {
@@ -1012,14 +1074,14 @@ const styles = StyleSheet.create({
   },
 
   sectionLink: {
-    color: PHARMACY_PRIMARY,
+    color: PHARMACY,
     fontSize: 13,
     fontWeight: "700",
   },
 
   orderStack: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
     ...elevate(1),
   },
@@ -1030,7 +1092,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E4E8F2",
+    borderBottomColor: BORDER,
   },
 
   orderCardLast: {
@@ -1098,7 +1160,7 @@ const styles = StyleSheet.create({
 
   fulfilmentPanel: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     ...elevate(1),
   },
@@ -1153,13 +1215,13 @@ const styles = StyleSheet.create({
 
   rowDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E4E8F2",
+    backgroundColor: BORDER,
     marginLeft: 56,
   },
 
   emptyCard: {
     backgroundColor: SURFACE,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 24,
     alignItems: "center",
@@ -1169,7 +1231,7 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 54,
     height: 54,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: PHARMACY_LIGHT,
     alignItems: "center",
     justifyContent: "center",
