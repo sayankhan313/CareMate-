@@ -16,6 +16,7 @@ export const pharmacyDashboardService = {
       ready,
       completed,
       doctorPrescriptions,
+      refillRequests,
       patientSubmissions,
       paymentPending,
       exemptionPending,
@@ -24,11 +25,24 @@ export const pharmacyDashboardService = {
       prisma.medicineOrder.count({ where: { pharmacyId, status: "RECEIVED" } }),
       prisma.medicineOrder.count({ where: { pharmacyId, status: "PREPARING" } }),
       prisma.medicineOrder.count({ where: { pharmacyId, status: "READY" } }),
-      prisma.medicineOrder.count({ where: { pharmacyId, status: { in: ["COLLECTED", "DELIVERED"] } } }),
-      prisma.medicineOrder.count({ where: { pharmacyId, orderSource: "DOCTOR_PRESCRIPTION" } }),
-      prisma.medicineOrder.count({ where: { pharmacyId, orderSource: "PATIENT_SUBMISSION" } }),
-      prisma.prescriptionPayment.count({ where: { order: { pharmacyId }, status: "PENDING" } }),
-      prisma.patientPharmacyExemptionEvidence.count({ where: { pharmacyId, status: "PENDING" } }),
+      prisma.medicineOrder.count({
+        where: { pharmacyId, status: { in: ["COLLECTED", "DELIVERED"] } },
+      }),
+      prisma.medicineOrder.count({
+        where: { pharmacyId, orderSource: "DOCTOR_PRESCRIPTION" },
+      }),
+      prisma.medicineOrder.count({
+        where: { pharmacyId, orderSource: "REFILL_REQUEST" },
+      }),
+      prisma.medicineOrder.count({
+        where: { pharmacyId, orderSource: "PATIENT_SUBMISSION" },
+      }),
+      prisma.prescriptionPayment.count({
+        where: { order: { pharmacyId }, status: "PENDING" },
+      }),
+      prisma.patientPharmacyExemptionEvidence.count({
+        where: { pharmacyId, status: "PENDING" },
+      }),
       prisma.medicineOrder.findMany({
         where: { pharmacyId },
         include: pharmacyOrderListInclude,
@@ -52,6 +66,7 @@ export const pharmacyDashboardService = {
         ready,
         completed,
         doctorPrescriptions,
+        refillRequests,
         patientSubmissions,
         paymentPending,
         exemptionPending,

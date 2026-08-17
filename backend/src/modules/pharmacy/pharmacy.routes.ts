@@ -16,53 +16,26 @@ router.use(authorizeRoles("PHARMACY"));
 router.get("/dashboard", pharmacyDashboardController.getDashboard);
 
 router.get("/orders", pharmacyOrdersController.listOrders);
+router.get("/orders/:orderId/items/:orderItemId/inventory-candidates", pharmacyInventoryMatchController.getCandidates);
+router.patch("/orders/:orderId/items/:orderItemId/inventory-match", pharmacyInventoryMatchController.confirmMatch);
+router.delete("/orders/:orderId/items/:orderItemId/inventory-match", pharmacyInventoryMatchController.releaseMatch);
 
-router.get(
-  "/orders/:orderId/items/:orderItemId/inventory-candidates",
-  pharmacyInventoryMatchController.getCandidates,
-);
-
-router.patch(
-  "/orders/:orderId/items/:orderItemId/inventory-match",
-  pharmacyInventoryMatchController.confirmMatch,
-);
-
-router.delete(
-  "/orders/:orderId/items/:orderItemId/inventory-match",
-  pharmacyInventoryMatchController.releaseMatch,
-);
+router.get("/orders/:orderId/patient-refill-evidence", pharmacyOrdersController.getPatientRefillEvidence);
+router.patch("/orders/:orderId/verify-patient-request", pharmacyOrdersController.verifyPatientRefill);
 
 router.get("/orders/:orderId", pharmacyOrdersController.getOrderDetail);
 router.patch("/orders/:orderId/status", pharmacyOrdersController.updateOrderStatus);
 
 router.get("/exemption-reviews", pharmacyExemptionController.listReviews);
 router.get("/exemption-reviews/:evidenceId", pharmacyExemptionController.getReview);
-
-router.get(
-  "/exemption-reviews/:evidenceId/documents/:documentIndex",
-  pharmacyExemptionController.getDocument,
-);
-
-router.patch(
-  "/exemption-reviews/:evidenceId/verify",
-  pharmacyExemptionController.verify,
-);
-
-router.patch(
-  "/exemption-reviews/:evidenceId/reject",
-  pharmacyExemptionController.reject,
-);
+router.get("/exemption-reviews/:evidenceId/documents/:documentIndex", pharmacyExemptionController.getDocument);
+router.patch("/exemption-reviews/:evidenceId/verify", pharmacyExemptionController.verify);
+router.patch("/exemption-reviews/:evidenceId/reject", pharmacyExemptionController.reject);
 
 router.get("/inventory", pharmacyInventoryController.listInventory);
 router.post("/inventory", pharmacyInventoryController.createInventoryItem);
 router.patch("/inventory/:itemId", pharmacyInventoryController.updateInventoryItem);
-router.patch(
-  "/inventory/:itemId/archive",
-  pharmacyInventoryController.archiveInventoryItem,
-);
-router.patch(
-  "/inventory/:itemId/restore",
-  pharmacyInventoryController.restoreInventoryItem,
-);
+router.patch("/inventory/:itemId/archive", pharmacyInventoryController.archiveInventoryItem);
+router.patch("/inventory/:itemId/restore", pharmacyInventoryController.restoreInventoryItem);
 
 export default router;

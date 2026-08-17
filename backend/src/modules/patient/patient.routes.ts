@@ -10,7 +10,9 @@ import { consultationController } from "./consultation.controller.js";
 import { dashboardController } from "./dashboard.controller.js";
 import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
+import { medicinePackReferenceController } from "./medicine-pack-reference.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
+import { patientOrdersController } from "./patient-orders.controller.js";
 import { pharmacyLinkController } from "./pharmacy-link.controller.js";
 import { pharmacyRefillController } from "./pharmacy-refill.controller.js";
 import { profileController } from "./profile.controller.js";
@@ -56,24 +58,14 @@ router.get("/pharmacies", pharmacyLinkController.listApprovedPharmacies);
 router.post("/pharmacies/:pharmacyId/save", pharmacyLinkController.savePharmacy);
 router.patch("/pharmacies/:pharmacyId/primary", pharmacyLinkController.setPrimaryPharmacy);
 router.patch("/pharmacies/:pharmacyId/charge-preference", pharmacyLinkController.updateChargePreference);
-router.post(
-  "/pharmacies/:pharmacyId/exemption-evidence",
-  uploadPatientPharmacyExemptionEvidence,
-  pharmacyLinkController.submitExemptionEvidence,
-);
+
+router.post("/pharmacies/:pharmacyId/exemption-evidence", uploadPatientPharmacyExemptionEvidence, pharmacyLinkController.submitExemptionEvidence);
 router.get("/pharmacies/:pharmacyId/exemption-evidence", pharmacyLinkController.listExemptionEvidence);
 router.delete("/pharmacies/:pharmacyId", pharmacyLinkController.removePharmacy);
 
-router.get(
-  "/pharmacy-refills/active",
-  pharmacyRefillController.listActiveRefillRequests,
-);
-
-router.post(
-  "/pharmacy-refills",
-  uploadPatientRefillEvidence,
-  pharmacyRefillController.createRefillRequest,
-);
+router.get("/pharmacy-orders", patientOrdersController.listOrders);
+router.get("/pharmacy-refills/active", pharmacyRefillController.listActiveRefillRequests);
+router.post("/pharmacy-refills", uploadPatientRefillEvidence, pharmacyRefillController.createRefillRequest);
 
 router.post("/reports", uploadSinglePatientReport, reportController.createReport);
 router.get("/reports", reportController.listReports);
@@ -112,6 +104,7 @@ router.post("/medicine-reviews/:requestId/resubmit", medicineController.resubmit
 router.post("/medicine-reminders/:reminderId/taken", medicineController.markReminderTaken);
 router.post("/medicine-reminders/:reminderId/snooze", medicineController.snoozeReminder);
 
+router.get("/medicine-pack-reference", medicinePackReferenceController.getPackReference);
 router.get("/medicine-references/search", medicineReferenceController.searchMedicineReferences);
 router.post("/medicine-scan/parse", medicineReferenceController.parseMedicineScan);
 router.post("/medicine-scan/prescription/parse", medicineReferenceController.parsePrescriptionScan);
