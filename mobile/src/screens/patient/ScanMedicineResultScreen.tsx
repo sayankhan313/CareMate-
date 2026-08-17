@@ -42,9 +42,15 @@ import {
   medicineScanApi,
   type ParsedMedicineScan,
 } from "../../services/medicineScanApi";
-import type { RootStackParamList } from "../../types/navigation";
+import type {
+  MedicineDraft,
+  RootStackParamList,
+} from "../../types/navigation";
 
-type Props = NativeStackScreenProps<RootStackParamList, "ScanMedicineResult">;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "ScanMedicineResult"
+>;
 
 const BACKGROUND = "#EEF1FA";
 const SURFACE = "#FFFFFF";
@@ -119,7 +125,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
   }, [route.params.detectedText, route.params.ocrConfidence]);
 
   useEffect(() => {
-    loadScanResult();
+    void loadScanResult();
   }, [loadScanResult]);
 
   const handleAddToReminder = () => {
@@ -130,13 +136,22 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
     if (!scanResult.matched) {
       Alert.alert(
         "Medicine not found",
-        "This scan did not confidently match a medicine in the catalogue. Please scan again or add the medicine manually."
+        "This scan did not confidently match a medicine in the catalogue. Please scan again or add the medicine manually.",
       );
       return;
     }
 
-    navigation.navigate("ConfirmReminder", {
-      medicineDraft: scanResult.medicineDraft,
+    const scannedDraft: MedicineDraft = {
+      ...scanResult.medicineDraft,
+      hasMedicineOnHand: undefined,
+      currentStock: undefined,
+      stockUnit: undefined,
+      lowStockThreshold: undefined,
+    };
+
+    navigation.navigate("AddMedicine", {
+      medicineDraft: scannedDraft,
+      mode: "EDIT_DRAFT",
     });
   };
 
@@ -147,7 +162,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
   const handleAskDoctor = () => {
     Alert.alert(
       "Doctor confirmation",
-      "Please confirm this medicine with your prescription, doctor, or pharmacist before saving."
+      "Please confirm this medicine with your prescription, doctor, or pharmacist before saving.",
     );
   };
 
@@ -166,6 +181,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
             <View style={styles.panelTitleBlock}>
               <Text style={styles.panelTitle}>Dose timing detected</Text>
+
               <Text style={styles.panelSubtitle}>
                 Prescription pattern converted into reminder times
               </Text>
@@ -202,6 +218,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
         <View style={styles.detectedInstructionBox}>
           <FileText size={17} color={PRIMARY_DARK} strokeWidth={2.5} />
+
           <Text style={styles.detectedInstructionText}>
             {scanResult.prescriptionSchedule.instructionText}
           </Text>
@@ -228,6 +245,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
           <View style={styles.appBarTextBlock}>
             <Text style={styles.appBarTitle}>Scan Result</Text>
+
             <Text style={styles.appBarSubtitle}>
               Smart medicine recognition
             </Text>
@@ -269,6 +287,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
               <View style={styles.scanPreviewTopRow}>
                 <View>
                   <Text style={styles.scanPreviewTitle}>Captured scan</Text>
+
                   <Text style={styles.scanPreviewSubtitle}>
                     OCR confidence {confidenceText}
                   </Text>
@@ -276,7 +295,6 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                 <View style={styles.ocrBadge}>
                   <Sparkles size={14} color={PRIMARY} strokeWidth={2.6} />
-                  
                 </View>
               </View>
 
@@ -290,6 +308,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                 ) : (
                   <View style={styles.noImageBox}>
                     <Camera size={34} color={MUTED} strokeWidth={2.5} />
+
                     <Text style={styles.noImageText}>Preview unavailable</Text>
                   </View>
                 )}
@@ -328,8 +347,6 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                   </Text>
                 </View>
               </View>
-
-              
             </View>
 
             {isMatched ? (
@@ -342,9 +359,11 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                     <View style={styles.passportTextBlock}>
                       <Text style={styles.passportLabel}>Matched medicine</Text>
+
                       <Text style={styles.medicineName}>
                         {scanResult.brandName}
                       </Text>
+
                       <Text style={styles.genericName}>
                         {scanResult.genericName}
                       </Text>
@@ -355,6 +374,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                   <View style={styles.factGrid}>
                     <FactTile label="Dose" value={scanResult.dose} />
+
                     <FactTile label="Form" value={scanResult.form} />
                   </View>
                 </View>
@@ -372,6 +392,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                         <Text style={styles.panelTitle}>
                           Medicine information
                         </Text>
+
                         <Text style={styles.panelSubtitle}>
                           Catalogue details shown for patient awareness
                         </Text>
@@ -382,7 +403,9 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                   <InfoRow
                     label="Category"
                     value={scanResult.category}
-                    icon={<Pill size={19} color={PRIMARY} strokeWidth={2.5} />}
+                    icon={
+                      <Pill size={19} color={PRIMARY} strokeWidth={2.5} />
+                    }
                   />
 
                   <InfoRow
@@ -414,6 +437,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                         <Text style={styles.panelTitle}>
                           Common side effects
                         </Text>
+
                         <Text style={styles.panelSubtitle}>
                           Review before creating the reminder
                         </Text>
@@ -423,7 +447,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                   <View style={styles.sideEffectWrap}>
                     {scanResult.commonSideEffects.length > 0 ? (
-                      scanResult.commonSideEffects.map((sideEffect) => (
+                      scanResult.commonSideEffects.map(sideEffect => (
                         <View key={sideEffect} style={styles.sideEffectChip}>
                           <Text style={styles.sideEffectText}>{sideEffect}</Text>
                         </View>
@@ -438,6 +462,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                 <View style={styles.instructionsCard}>
                   <Text style={styles.instructionsTitle}>Instructions</Text>
+
                   <Text style={styles.instructionsText}>
                     {scanResult.instructions}
                   </Text>
@@ -450,6 +475,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
 
                   <View style={styles.safetyTextBlock}>
                     <Text style={styles.safetyTitle}>Safety note</Text>
+
                     <Text style={styles.safetyText}>
                       {scanResult.safetyNote}
                     </Text>
@@ -482,7 +508,9 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                   <Text style={styles.quickTipsTitle}>Scan tips</Text>
 
                   <TipRow text="Place the medicine label flat and avoid glare." />
+
                   <TipRow text="Keep the brand name and strength clearly visible." />
+
                   <TipRow text="Use good lighting and hold the camera steady." />
                 </View>
               </>
@@ -491,21 +519,24 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
         ) : null}
 
         {shouldShowFooter && scanResult ? (
-         <View
-  style={[
-    styles.footer,
-    {
-      paddingBottom: Math.max(insets.bottom + 6, 14),
-    },
-  ]}
->
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom: Math.max(insets.bottom + 6, 14),
+              },
+            ]}
+          >
             {isMatched ? (
               <TouchableOpacity
                 style={styles.primaryButton}
                 activeOpacity={0.86}
                 onPress={handleAddToReminder}
               >
-                <Text style={styles.primaryButtonText}>Add to Reminder</Text>
+                <Text style={styles.primaryButtonText}>
+                  Review & Add Medicine
+                </Text>
+
                 <ChevronRight size={20} color={SURFACE} strokeWidth={2.7} />
               </TouchableOpacity>
             ) : (
@@ -515,6 +546,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
                 onPress={handleScanAgain}
               >
                 <RefreshCw size={19} color={SURFACE} strokeWidth={2.6} />
+
                 <Text style={styles.primaryButtonText}>Scan Again</Text>
               </TouchableOpacity>
             )}
@@ -525,6 +557,7 @@ const ScanMedicineResultScreen = ({ navigation, route }: Props) => {
               onPress={handleAskDoctor}
             >
               <HelpCircle size={19} color={TEXT} strokeWidth={2.5} />
+
               <Text style={styles.secondaryButtonText}>Ask Doctor</Text>
             </TouchableOpacity>
           </View>
@@ -552,6 +585,7 @@ const CenterState = ({
       {icon}
 
       <Text style={styles.centerTitle}>{title}</Text>
+
       <Text style={styles.centerSubtitle}>{subtitle}</Text>
 
       {actionLabel && onAction ? (
@@ -561,6 +595,7 @@ const CenterState = ({
           onPress={onAction}
         >
           <RefreshCw size={18} color={SURFACE} strokeWidth={2.5} />
+
           <Text style={styles.retryButtonText}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
@@ -568,10 +603,17 @@ const CenterState = ({
   );
 };
 
-const FactTile = ({ label, value }: { label: string; value: string }) => {
+const FactTile = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) => {
   return (
     <View style={styles.factTile}>
       <Text style={styles.factLabel}>{label}</Text>
+
       <Text style={styles.factValue} numberOfLines={1}>
         {value}
       </Text>
@@ -579,7 +621,13 @@ const FactTile = ({ label, value }: { label: string; value: string }) => {
   );
 };
 
-const TimelineItem = ({ label, active }: { label: string; active: boolean }) => {
+const TimelineItem = ({
+  label,
+  active,
+}: {
+  label: string;
+  active: boolean;
+}) => {
   return (
     <View style={styles.timelineItem}>
       <View
@@ -588,7 +636,9 @@ const TimelineItem = ({ label, active }: { label: string; active: boolean }) => 
           active ? styles.timelineDotActive : styles.timelineDotInactive,
         ]}
       >
-        {active ? <CheckCircle2 size={14} color={SURFACE} strokeWidth={3} /> : null}
+        {active ? (
+          <CheckCircle2 size={14} color={SURFACE} strokeWidth={3} />
+        ) : null}
       </View>
 
       <Text
@@ -620,6 +670,7 @@ const InfoRow = ({
 
       <View style={styles.infoTextBlock}>
         <Text style={styles.infoLabel}>{label}</Text>
+
         <Text style={styles.infoValue}>{value}</Text>
       </View>
     </View>
@@ -630,6 +681,7 @@ const TipRow = ({ text }: { text: string }) => {
   return (
     <View style={styles.tipRow}>
       <View style={styles.tipDot} />
+
       <Text style={styles.tipText}>{text}</Text>
     </View>
   );
@@ -642,10 +694,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   screen: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   appBar: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -653,6 +707,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+
   backButton: {
     width: 42,
     height: 42,
@@ -664,34 +719,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   appBarTextBlock: {
     flex: 1,
   },
+
   appBarTitle: {
     color: TEXT,
     fontSize: 27,
     fontWeight: "900",
     letterSpacing: -0.5,
   },
+
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     marginTop: 3,
   },
+
   content: {
     flex: 1,
   },
+
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 4,
   },
+
   centerState: {
     flex: 1,
     paddingHorizontal: 28,
     alignItems: "center",
     justifyContent: "center",
   },
+
   centerTitle: {
     color: TEXT,
     fontSize: 19,
@@ -699,6 +761,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: "center",
   },
+
   centerSubtitle: {
     color: MUTED,
     fontSize: 14,
@@ -707,6 +770,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+
   errorStateIcon: {
     width: 58,
     height: 58,
@@ -715,6 +779,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   retryButton: {
     marginTop: 22,
     backgroundColor: PRIMARY,
@@ -724,12 +789,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+
   retryButtonText: {
     color: SURFACE,
     fontSize: 14,
     fontWeight: "900",
     marginLeft: 8,
   },
+
   scanPreviewCard: {
     backgroundColor: SURFACE,
     borderRadius: 26,
@@ -738,24 +805,28 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   scanPreviewTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 12,
   },
+
   scanPreviewTitle: {
     color: TEXT,
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: -0.3,
   },
+
   scanPreviewSubtitle: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "800",
     marginTop: 3,
   },
+
   ocrBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -764,12 +835,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
+
   ocrBadgeText: {
     color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "900",
     marginLeft: 5,
   },
+
   scannedImageBox: {
     width: "100%",
     height: 245,
@@ -779,21 +852,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   scannedImage: {
     width: "100%",
     height: "100%",
   },
+
   noImageBox: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
+
   noImageText: {
     color: MUTED,
     fontSize: 12,
     fontWeight: "900",
     marginTop: 8,
   },
+
   floatingResultBadge: {
     position: "absolute",
     left: 12,
@@ -806,25 +883,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
+
   floatingResultBadgeSuccess: {
     backgroundColor: "rgba(234,248,242,0.96)",
     borderColor: "#B7E8D3",
   },
+
   floatingResultBadgeWarning: {
     backgroundColor: "rgba(255,243,226,0.96)",
     borderColor: "#FED7AA",
   },
+
   floatingResultText: {
     fontSize: 13,
     fontWeight: "900",
     marginLeft: 8,
   },
+
   floatingResultTextSuccess: {
     color: SUCCESS_DARK,
   },
+
   floatingResultTextWarning: {
     color: WARNING_DARK,
   },
+
   detectedTextBox: {
     backgroundColor: SOFT_PANEL,
     borderRadius: 16,
@@ -833,18 +916,21 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginTop: 12,
   },
+
   detectedTextLabel: {
     color: MUTED,
     fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   detectedTextValue: {
     color: TEXT,
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 18,
   },
+
   medicinePassportCard: {
     backgroundColor: SURFACE,
     borderRadius: 26,
@@ -853,10 +939,12 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   passportTopRow: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   passportIconCircle: {
     width: 58,
     height: 58,
@@ -866,21 +954,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 13,
   },
+
   passportTextBlock: {
     flex: 1,
   },
+
   passportLabel: {
     color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   medicineName: {
     color: TEXT,
     fontSize: 25,
     fontWeight: "900",
     letterSpacing: -0.5,
   },
+
   genericName: {
     color: MUTED,
     fontSize: 13,
@@ -888,14 +980,17 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4,
   },
+
   passportDivider: {
     height: 1,
     backgroundColor: BORDER,
     marginVertical: 16,
   },
+
   factGrid: {
     flexDirection: "row",
   },
+
   factTile: {
     flex: 1,
     backgroundColor: SOFT_PANEL,
@@ -905,17 +1000,20 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginRight: 10,
   },
+
   factLabel: {
     color: MUTED,
     fontSize: 11,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   factValue: {
     color: TEXT,
     fontSize: 15,
     fontWeight: "900",
   },
+
   panel: {
     backgroundColor: SURFACE,
     borderRadius: 24,
@@ -924,21 +1022,25 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   panelHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: 14,
   },
+
   panelHeaderSimple: {
     marginBottom: 5,
   },
+
   panelTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
     paddingRight: 10,
   },
+
   panelIconCircle: {
     width: 43,
     height: 43,
@@ -948,6 +1050,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 11,
   },
+
   dangerIconCircle: {
     width: 43,
     height: 43,
@@ -957,15 +1060,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 11,
   },
+
   panelTitleBlock: {
     flex: 1,
   },
+
   panelTitle: {
     color: TEXT,
     fontSize: 17,
     fontWeight: "900",
     letterSpacing: -0.2,
   },
+
   panelSubtitle: {
     color: MUTED,
     fontSize: 12,
@@ -973,17 +1079,20 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 3,
   },
+
   patternBadge: {
     backgroundColor: PRIMARY_LIGHT,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
+
   patternBadgeText: {
     color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "900",
   },
+
   timelineBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -994,10 +1103,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   timelineItem: {
     alignItems: "center",
     minWidth: 64,
   },
+
   timelineDot: {
     width: 26,
     height: 26,
@@ -1006,28 +1117,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 7,
   },
+
   timelineDotActive: {
     backgroundColor: PRIMARY,
   },
+
   timelineDotInactive: {
     backgroundColor: SURFACE,
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   timelineLabel: {
     color: MUTED,
     fontSize: 11,
     fontWeight: "900",
   },
+
   timelineLabelActive: {
     color: TEXT,
   },
+
   timelineConnector: {
     flex: 1,
     height: 2,
     backgroundColor: "#DDE3EF",
     marginBottom: 28,
   },
+
   detectedInstructionBox: {
     backgroundColor: PRIMARY_LIGHT,
     borderRadius: 16,
@@ -1036,6 +1153,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginTop: 12,
   },
+
   detectedInstructionText: {
     flex: 1,
     color: PRIMARY_DARK,
@@ -1044,6 +1162,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginLeft: 8,
   },
+
   infoRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1051,9 +1170,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
+
   rowLast: {
     borderBottomWidth: 0,
   },
+
   infoRowIcon: {
     width: 37,
     height: 37,
@@ -1063,26 +1184,31 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 11,
   },
+
   infoTextBlock: {
     flex: 1,
   },
+
   infoLabel: {
     color: TEXT,
     fontSize: 13,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   infoValue: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19,
   },
+
   sideEffectWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     marginTop: 10,
   },
+
   sideEffectChip: {
     backgroundColor: DANGER_LIGHT,
     borderRadius: 999,
@@ -1091,16 +1217,19 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
+
   sideEffectText: {
     color: DANGER_DARK,
     fontSize: 12,
     fontWeight: "900",
   },
+
   emptyInlineText: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "700",
   },
+
   instructionsCard: {
     backgroundColor: SURFACE,
     borderRadius: 24,
@@ -1109,18 +1238,21 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   instructionsTitle: {
     color: TEXT,
     fontSize: 16,
     fontWeight: "900",
     marginBottom: 7,
   },
+
   instructionsText: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 20,
   },
+
   safetyCard: {
     backgroundColor: DANGER_LIGHT,
     borderRadius: 22,
@@ -1130,6 +1262,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 14,
   },
+
   safetyIconCircle: {
     width: 43,
     height: 43,
@@ -1141,21 +1274,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FECACA",
   },
+
   safetyTextBlock: {
     flex: 1,
   },
+
   safetyTitle: {
     color: DANGER_DARK,
     fontSize: 14,
     fontWeight: "900",
     marginBottom: 5,
   },
+
   safetyText: {
     color: DANGER_DARK,
     fontSize: 12,
     fontWeight: "800",
     lineHeight: 18,
   },
+
   notFoundCard: {
     backgroundColor: SURFACE,
     borderRadius: 26,
@@ -1165,6 +1302,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   notFoundIconCircle: {
     width: 62,
     height: 62,
@@ -1174,12 +1312,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 14,
   },
+
   notFoundTitle: {
     color: TEXT,
     fontSize: 20,
     fontWeight: "900",
     textAlign: "center",
   },
+
   notFoundText: {
     color: MUTED,
     fontSize: 13,
@@ -1188,6 +1328,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
+
   quickTipsCard: {
     backgroundColor: SURFACE,
     borderRadius: 24,
@@ -1196,17 +1337,20 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginBottom: 14,
   },
+
   quickTipsTitle: {
     color: TEXT,
     fontSize: 17,
     fontWeight: "900",
     marginBottom: 12,
   },
+
   tipRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     paddingVertical: 8,
   },
+
   tipDot: {
     width: 8,
     height: 8,
@@ -1215,6 +1359,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginRight: 10,
   },
+
   tipText: {
     flex: 1,
     color: MUTED,
@@ -1222,6 +1367,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19,
   },
+
   footer: {
     position: "absolute",
     left: 0,
@@ -1235,6 +1381,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   primaryButton: {
     minHeight: 52,
     borderRadius: 17,
@@ -1244,12 +1391,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: 16,
   },
+
   primaryButtonText: {
     color: SURFACE,
     fontSize: 15,
     fontWeight: "900",
     marginHorizontal: 8,
   },
+
   secondaryButton: {
     minHeight: 50,
     borderRadius: 17,
@@ -1261,6 +1410,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: "row",
   },
+
   secondaryButtonText: {
     color: TEXT,
     fontSize: 15,

@@ -95,6 +95,8 @@ export type PatientMedicineReviewActionData = {
 export type ResubmitMedicineReviewInput = {
   name: string;
   dose: string;
+   doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   frequency:
     | "ONCE_DAILY"
