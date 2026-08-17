@@ -59,7 +59,7 @@ export const getRoleHomeRoute = (user: AppUser) => {
   if (user.role === "PHARMACY") {
     if (isActiveAccount(user.accountStatus)) {
       return {
-        name: "PharmacyDashboard" as const,
+        name: "PharmacyTabs" as const,
         params: {
           user,
         },

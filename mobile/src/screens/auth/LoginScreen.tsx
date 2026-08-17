@@ -157,7 +157,7 @@ if (user.role === "PHARMACY") {
       index: 0,
       routes: [
         {
-          name: "PharmacyDashboard",
+          name: "PharmacyTabs",
           params: {
             user,
           },
