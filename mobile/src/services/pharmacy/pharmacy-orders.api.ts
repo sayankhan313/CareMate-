@@ -1,8 +1,5 @@
 import { API_BASE_URL } from "../../constants/api";
-import {
-  getPharmacyAuthHeaders,
-  readPharmacyResponse,
-} from "./pharmacy-api.utils";
+import { getPharmacyAuthHeaders, readPharmacyResponse } from "./pharmacy-api.utils";
 
 export type PharmacyOrderSource =
   | "DOCTOR_PRESCRIPTION"
@@ -77,24 +74,19 @@ export type PharmacyInventoryMatchCandidate = {
   strength: string | null;
   form: string | null;
   stockUnit: string;
+  unitPricePence: number;
   quantityInStock: number;
   reservedQuantity: number;
   availableQuantity: number;
   lowStockThreshold: number;
   isLowStock: boolean;
-  nameMatchedBy:
-    | "EXACT"
-    | "ALIAS"
-    | "FUZZY"
-    | "PARTIAL";
+  nameMatchedBy: "EXACT" | "ALIAS" | "FUZZY" | "PARTIAL";
   nameMatchConfidence: number;
   strengthMatch: InventoryCandidateComparison;
   formMatch: InventoryCandidateComparison;
   matchQuality: InventoryCandidateMatchQuality;
   reasons: string[];
-  packageReference:
-    | PharmacyPackReferencePreview
-    | null;
+  packageReference: PharmacyPackReferencePreview | null;
 };
 
 export type PharmacyInventoryCandidatesResponse = {
@@ -104,6 +96,8 @@ export type PharmacyInventoryCandidatesResponse = {
     dose: string | null;
     quantity: string | null;
     quantityUnit: string | null;
+    unitPricePence: number | null;
+    lineTotalPence: number | null;
     dispensedQuantity: number | null;
     dispensedUnit: string | null;
     inventoryItemId: string | null;
@@ -161,6 +155,7 @@ export type PharmacyOrderInventoryItem = {
   strength: string | null;
   form: string | null;
   stockUnit: string;
+  unitPricePence: number;
   quantityInStock: number;
   reservedQuantity: number;
   lowStockThreshold: number;
@@ -171,35 +166,18 @@ export type PharmacyPatientSubmission = {
   id: string;
   requestType: string;
   status: string;
-
-  verificationPath:
-    | PatientRefillVerificationPath
-    | null;
-
-  doctorVerificationStatus:
-    PatientRefillDoctorVerificationStatus;
-
-  doctorVerificationRequestedAt:
-    | string
-    | null;
-
-  doctorVerificationNote:
-    | string
-    | null;
-
-  doctorVerifiedAt:
-    | string
-    | null;
+  verificationPath: PatientRefillVerificationPath | null;
+  doctorVerificationStatus: PatientRefillDoctorVerificationStatus;
+  doctorVerificationRequestedAt: string | null;
+  doctorVerificationNote: string | null;
+  doctorVerifiedAt: string | null;
 
   verificationDoctor: {
     id: string;
     fullName: string;
   } | null;
 
-  evidenceType:
-    | PatientMedicineEvidenceType
-    | null;
-
+  evidenceType: PatientMedicineEvidenceType | null;
   imageUrl: string | null;
   notes: string | null;
   reviewedByPharmacyId: string | null;
@@ -270,9 +248,7 @@ export type PharmacyOrderDetail = {
     notes: string | null;
   } | null;
 
-  patientSubmission:
-    | PharmacyPatientSubmission
-    | null;
+  patientSubmission: PharmacyPatientSubmission | null;
 
   items: {
     id: string;
@@ -285,6 +261,9 @@ export type PharmacyOrderDetail = {
     quantity: string | null;
     instructions: string | null;
 
+    unitPricePence: number | null;
+    lineTotalPence: number | null;
+
     dispensedQuantity: number | null;
     dispensedUnit: string | null;
     quantityUnit: string | null;
@@ -295,9 +274,7 @@ export type PharmacyOrderDetail = {
     inventoryConsumedAt: string | null;
     inventoryReleasedAt: string | null;
 
-    inventoryItem:
-      | PharmacyOrderInventoryItem
-      | null;
+    inventoryItem: PharmacyOrderInventoryItem | null;
   }[];
 
   payment: {
@@ -347,40 +324,19 @@ export const pharmacyOrdersApi = {
     status?: PharmacyOrderStatus;
     limit?: number;
   }) {
-    const params =
-      new URLSearchParams();
+    const params = new URLSearchParams();
 
-    if (options?.source) {
-      params.set(
-        "source",
-        options.source,
-      );
-    }
-
-    if (options?.status) {
-      params.set(
-        "status",
-        options.status,
-      );
-    }
-
-    if (options?.limit) {
-      params.set(
-        "limit",
-        String(options.limit),
-      );
-    }
+    if (options?.source) params.set("source", options.source);
+    if (options?.status) params.set("status", options.status);
+    if (options?.limit) params.set("limit", String(options.limit));
 
     const query = params.toString();
 
     const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders${
-        query ? `?${query}` : ""
-      }`,
+      `${API_BASE_URL}/pharmacy/orders${query ? `?${query}` : ""}`,
       {
         method: "GET",
-        headers:
-          await getPharmacyAuthHeaders(),
+        headers: await getPharmacyAuthHeaders(),
       },
     );
 
@@ -390,30 +346,20 @@ export const pharmacyOrdersApi = {
     }>(response);
   },
 
-  async getOrderDetail(
-    orderId: string,
-  ) {
+  async getOrderDetail(orderId: string) {
     const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
-        orderId,
-      )}`,
+      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}`,
       {
         method: "GET",
-        headers:
-          await getPharmacyAuthHeaders(),
+        headers: await getPharmacyAuthHeaders(),
       },
     );
 
-    return readPharmacyResponse<PharmacyOrderDetailResponse>(
-      response,
-    );
+    return readPharmacyResponse<PharmacyOrderDetailResponse>(response);
   },
 
-  async getPatientRefillEvidenceSource(
-    orderId: string,
-  ) {
-    const headers =
-      await getPharmacyAuthHeaders();
+  async getPatientRefillEvidenceSource(orderId: string) {
+    const headers = await getPharmacyAuthHeaders();
 
     return {
       uri: `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
@@ -423,10 +369,7 @@ export const pharmacyOrdersApi = {
     };
   },
 
-  async verifyPatientRefillRequest(
-    orderId: string,
-    note?: string,
-  ) {
+  async verifyPatientRefillRequest(orderId: string, note?: string) {
     const response = await fetch(
       `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
         orderId,
@@ -435,22 +378,13 @@ export const pharmacyOrdersApi = {
         method: "PATCH",
         headers: {
           ...(await getPharmacyAuthHeaders()),
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(
-          note?.trim()
-            ? {
-                note: note.trim(),
-              }
-            : {},
-        ),
+        body: JSON.stringify(note?.trim() ? { note: note.trim() } : {}),
       },
     );
 
-    return readPharmacyResponse<PharmacyOrderDetailResponse>(
-      response,
-    );
+    return readPharmacyResponse<PharmacyOrderDetailResponse>(response);
   },
 
   async updateOrderStatus(
@@ -459,24 +393,16 @@ export const pharmacyOrdersApi = {
     reason?: string,
   ) {
     const response = await fetch(
-      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
-        orderId,
-      )}/status`,
+      `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(orderId)}/status`,
       {
         method: "PATCH",
         headers: {
           ...(await getPharmacyAuthHeaders()),
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           status,
-          ...(reason?.trim()
-            ? {
-                reason:
-                  reason.trim(),
-              }
-            : {}),
+          ...(reason?.trim() ? { reason: reason.trim() } : {}),
         }),
       },
     );
@@ -494,26 +420,18 @@ export const pharmacyOrdersApi = {
     }>(response);
   },
 
-  async getInventoryCandidates(
-    orderId: string,
-    orderItemId: string,
-  ) {
+  async getInventoryCandidates(orderId: string, orderItemId: string) {
     const response = await fetch(
       `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
         orderId,
-      )}/items/${encodeURIComponent(
-        orderItemId,
-      )}/inventory-candidates`,
+      )}/items/${encodeURIComponent(orderItemId)}/inventory-candidates`,
       {
         method: "GET",
-        headers:
-          await getPharmacyAuthHeaders(),
+        headers: await getPharmacyAuthHeaders(),
       },
     );
 
-    return readPharmacyResponse<PharmacyInventoryCandidatesResponse>(
-      response,
-    );
+    return readPharmacyResponse<PharmacyInventoryCandidatesResponse>(response);
   },
 
   async confirmInventoryMatch(
@@ -525,15 +443,12 @@ export const pharmacyOrdersApi = {
     const response = await fetch(
       `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
         orderId,
-      )}/items/${encodeURIComponent(
-        orderItemId,
-      )}/inventory-match`,
+      )}/items/${encodeURIComponent(orderItemId)}/inventory-match`,
       {
         method: "PATCH",
         headers: {
           ...(await getPharmacyAuthHeaders()),
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           inventoryItemId,
@@ -550,21 +465,19 @@ export const pharmacyOrdersApi = {
         quantity: string | null;
         quantityUnit: string | null;
 
+        unitPricePence: number;
+        lineTotalPence: number;
+
         dispensedQuantity: number | null;
         dispensedUnit: string | null;
 
         inventoryItemId: string;
         inventoryReservedQuantity: number;
         inventoryReservedAt: string;
-        inventoryConsumedAt:
-          | string
-          | null;
-        inventoryReleasedAt:
-          | string
-          | null;
+        inventoryConsumedAt: string | null;
+        inventoryReleasedAt: string | null;
 
-        inventoryItem:
-          PharmacyOrderInventoryItem;
+        inventoryItem: PharmacyOrderInventoryItem;
       };
 
       dispensing: {
@@ -575,24 +488,26 @@ export const pharmacyOrdersApi = {
         dispensedQuantity: number;
       };
 
+      pricing: {
+        unitPricePence: number;
+        lineTotalPence: number;
+        orderAmountPence: number;
+        pricingComplete: boolean;
+        currency: string;
+      };
+
       availableAfterReservation: number;
     }>(response);
   },
 
-  async releaseInventoryMatch(
-    orderId: string,
-    orderItemId: string,
-  ) {
+  async releaseInventoryMatch(orderId: string, orderItemId: string) {
     const response = await fetch(
       `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
         orderId,
-      )}/items/${encodeURIComponent(
-        orderItemId,
-      )}/inventory-match`,
+      )}/items/${encodeURIComponent(orderItemId)}/inventory-match`,
       {
         method: "DELETE",
-        headers:
-          await getPharmacyAuthHeaders(),
+        headers: await getPharmacyAuthHeaders(),
       },
     );
 
@@ -603,12 +518,18 @@ export const pharmacyOrdersApi = {
         inventoryItemId: null;
         inventoryReservedQuantity: number;
         inventoryReservedAt: null;
-        inventoryConsumedAt:
-          | string
-          | null;
+        inventoryConsumedAt: string | null;
         inventoryReleasedAt: string;
+        unitPricePence: null;
+        lineTotalPence: null;
         dispensedQuantity: null;
         dispensedUnit: null;
+      };
+
+      pricing: {
+        orderAmountPence: number;
+        pricingComplete: boolean;
+        currency: string;
       };
     }>(response);
   },

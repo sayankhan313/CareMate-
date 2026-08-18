@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import {
   AlertTriangle,
+  Banknote,
   Check,
   CheckCircle2,
   CircleAlert,
@@ -44,7 +45,6 @@ const SURFACE = "#FFFFFF";
 const BACKGROUND = "#EEF1FA";
 const TEXT = "#111936";
 const MUTED = "#747C91";
-const BORDER = "#E1E6EF";
 const PHARMACY = "#15803D";
 const PHARMACY_DARK = "#14532D";
 const PHARMACY_LIGHT = "#E9F8EF";
@@ -87,12 +87,12 @@ const normalizeUnit = (value?: string | null) => {
 };
 
 const pluralize = (value: string, quantity: number) => {
-  if (quantity === 1) return value;
-
-  if (value === "ml" || value === "g") return value;
-
+  if (quantity === 1 || value === "ml" || value === "g") return value;
   return `${value}s`;
 };
+
+const formatMoney = (amountPence: number) =>
+  `£${(amountPence / 100).toFixed(2)}`;
 
 const formatComparison = (
   value: PharmacyInventoryMatchCandidate["strengthMatch"],
@@ -136,7 +136,9 @@ const getNameMatchLabel = (candidate: PharmacyInventoryMatchCandidate) => {
   if (candidate.nameMatchedBy === "ALIAS") return "Known alias";
 
   if (candidate.nameMatchedBy === "FUZZY") {
-    return `Likely match · ${Math.round(candidate.nameMatchConfidence * 100)}%`;
+    return `Likely match · ${Math.round(
+      candidate.nameMatchConfidence * 100,
+    )}%`;
   }
 
   return "Partial name match";
@@ -151,35 +153,64 @@ export const PharmacyInventoryMatchModal = ({
   onChanged,
   onOpenInventory,
 }: Props) => {
-  const [data, setData] = useState<PharmacyInventoryCandidatesResponse | null>(null);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [data, setData] =
+    useState<PharmacyInventoryCandidatesResponse | null>(null);
+
+  const [selectedCandidateId, setSelectedCandidateId] =
+    useState<string | null>(null);
+
   const [reserveQuantity, setReserveQuantity] = useState("1");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const selectedCandidate = useMemo(
-    () => data?.candidates.find(candidate => candidate.id === selectedCandidateId) || null,
+    () =>
+      data?.candidates.find(
+        candidate => candidate.id === selectedCandidateId,
+      ) || null,
     [data, selectedCandidateId],
   );
 
   const numericReserveQuantity = useMemo(() => {
     const quantity = Number(reserveQuantity.trim());
 
-    return Number.isInteger(quantity) && quantity > 0 ? quantity : 0;
+    return Number.isInteger(quantity) && quantity > 0
+      ? quantity
+      : 0;
   }, [reserveQuantity]);
 
   const totalDispensedQuantity = useMemo(() => {
-    if (!selectedCandidate?.packageReference || numericReserveQuantity < 1) {
+    if (
+      !selectedCandidate?.packageReference ||
+      numericReserveQuantity < 1
+    ) {
       return null;
     }
 
-    return selectedCandidate.packageReference.packSize * numericReserveQuantity;
+    return (
+      selectedCandidate.packageReference.packSize *
+      numericReserveQuantity
+    );
   }, [selectedCandidate, numericReserveQuantity]);
 
-  const getEffectiveAvailable = (candidate: PharmacyInventoryMatchCandidate) => {
+  const lineTotalPence = useMemo(() => {
+    if (!selectedCandidate || numericReserveQuantity < 1) return 0;
+
+    return (
+      selectedCandidate.unitPricePence *
+      numericReserveQuantity
+    );
+  }, [selectedCandidate, numericReserveQuantity]);
+
+  const getEffectiveAvailable = (
+    candidate: PharmacyInventoryMatchCandidate,
+  ) => {
     if (candidate.id === item?.inventoryItemId) {
-      return candidate.availableQuantity + (item.inventoryReservedQuantity || 0);
+      return (
+        candidate.availableQuantity +
+        (item.inventoryReservedQuantity || 0)
+      );
     }
 
     return candidate.availableQuantity;
@@ -192,18 +223,28 @@ export const PharmacyInventoryMatchModal = ({
       setIsLoading(true);
       setErrorMessage("");
 
-      const result = await pharmacyOrdersApi.getInventoryCandidates(orderId, item.id);
+      const result =
+        await pharmacyOrdersApi.getInventoryCandidates(
+          orderId,
+          item.id,
+        );
 
       setData(result);
 
       const currentCandidate = item.inventoryItemId
-        ? result.candidates.find(candidate => candidate.id === item.inventoryItemId)
+        ? result.candidates.find(
+            candidate =>
+              candidate.id === item.inventoryItemId,
+          )
         : null;
 
-      setSelectedCandidateId(currentCandidate?.id || null);
+      setSelectedCandidateId(
+        currentCandidate?.id || null,
+      );
 
       setReserveQuantity(
-        currentCandidate && item.inventoryReservedQuantity > 0
+        currentCandidate &&
+          item.inventoryReservedQuantity > 0
           ? String(item.inventoryReservedQuantity)
           : "1",
       );
@@ -227,16 +268,24 @@ export const PharmacyInventoryMatchModal = ({
     void loadCandidates();
   }, [visible, item?.id, orderId]);
 
-  const selectCandidate = (candidate: PharmacyInventoryMatchCandidate) => {
+  const selectCandidate = (
+    candidate: PharmacyInventoryMatchCandidate,
+  ) => {
     if (!canEdit) return;
 
     const conflict =
       candidate.strengthMatch === "MISMATCH" ||
       candidate.formMatch === "MISMATCH";
 
-    const available = getEffectiveAvailable(candidate);
+    const available =
+      getEffectiveAvailable(candidate);
 
-    if (conflict || available <= 0 || !candidate.packageReference) {
+    if (
+      conflict ||
+      available <= 0 ||
+      !candidate.packageReference ||
+      candidate.unitPricePence <= 0
+    ) {
       return;
     }
 
@@ -246,22 +295,34 @@ export const PharmacyInventoryMatchModal = ({
       candidate.id === item?.inventoryItemId &&
       item.inventoryReservedQuantity > 0
     ) {
-      setReserveQuantity(String(item.inventoryReservedQuantity));
+      setReserveQuantity(
+        String(item.inventoryReservedQuantity),
+      );
       return;
     }
 
-    const suggested = data?.extracted.suggestedReserveQuantity;
-    const orderUnit = normalizeUnit(item?.quantityUnit);
-    const stockUnit = normalizeUnit(candidate.stockUnit);
+    const suggested =
+      data?.extracted.suggestedReserveQuantity;
 
-    if (suggested && orderUnit && stockUnit && orderUnit === stockUnit) {
+    const orderUnit =
+      normalizeUnit(item?.quantityUnit);
+
+    const stockUnit =
+      normalizeUnit(candidate.stockUnit);
+
+    if (
+      suggested &&
+      orderUnit &&
+      stockUnit &&
+      orderUnit === stockUnit
+    ) {
       setReserveQuantity(String(suggested));
     } else {
       setReserveQuantity("1");
     }
   };
 
-  const saveReservation = async (
+  const saveAllocation = async (
     candidate: PharmacyInventoryMatchCandidate,
     quantity: number,
   ) => {
@@ -270,51 +331,68 @@ export const PharmacyInventoryMatchModal = ({
     try {
       setIsSaving(true);
 
-      const result = await pharmacyOrdersApi.confirmInventoryMatch(
-        orderId,
-        item.id,
-        candidate.id,
-        quantity,
-      );
+      const result =
+        await pharmacyOrdersApi.confirmInventoryMatch(
+          orderId,
+          item.id,
+          candidate.id,
+          quantity,
+        );
 
       await onChanged();
       onClose();
 
       Alert.alert(
-        "Stock reserved",
+        "Stock allocated",
         `${result.dispensing.dispensedQuantity} ${pluralize(
           result.dispensing.contentUnit,
           result.dispensing.dispensedQuantity,
-        )} prepared for fulfilment.`,
+        )} prepared · ${formatMoney(
+          result.pricing.lineTotalPence,
+        )}`,
       );
     } catch (error) {
       Alert.alert(
-        "Unable to reserve stock",
+        "Unable to allocate stock",
         error instanceof Error
           ? error.message
-          : "Unable to reserve this inventory item.",
+          : "Unable to allocate this inventory item.",
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const confirmReservation = () => {
+  const confirmAllocation = () => {
     if (!item || !selectedCandidate || !canEdit) return;
 
-    const quantity = Number(reserveQuantity.trim());
-    const available = getEffectiveAvailable(selectedCandidate);
-    const reference = selectedCandidate.packageReference;
+    const quantity =
+      Number(reserveQuantity.trim());
 
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      Alert.alert("Invalid quantity", "Enter at least 1.");
+    const available =
+      getEffectiveAvailable(selectedCandidate);
+
+    const reference =
+      selectedCandidate.packageReference;
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      Alert.alert(
+        "Invalid quantity",
+        "Enter at least 1.",
+      );
       return;
     }
 
     if (quantity > available) {
       Alert.alert(
         "Not enough stock",
-        `${available} ${pluralize(selectedCandidate.stockUnit, available)} available.`,
+        `${available} ${pluralize(
+          selectedCandidate.stockUnit,
+          available,
+        )} available.`,
       );
       return;
     }
@@ -322,19 +400,39 @@ export const PharmacyInventoryMatchModal = ({
     if (!reference) {
       Alert.alert(
         "Pack size unavailable",
-        "Add a pack reference before reserving this medicine.",
+        "Add a pack reference before using this medicine.",
       );
       return;
     }
 
-    const total = quantity * reference.packSize;
+    if (
+      selectedCandidate.unitPricePence <= 0
+    ) {
+      Alert.alert(
+        "Price unavailable",
+        "Set a valid inventory price before using this medicine.",
+      );
+      return;
+    }
+
+    const total =
+      quantity * reference.packSize;
+
+    const price =
+      quantity *
+      selectedCandidate.unitPricePence;
 
     Alert.alert(
-      "Confirm dispensing",
-      `${quantity} ${pluralize(reference.packageUnit, quantity)} = ${total} ${pluralize(
+      "Confirm stock",
+      `${quantity} ${pluralize(
+        reference.packageUnit,
+        quantity,
+      )} = ${total} ${pluralize(
         reference.contentUnit,
         total,
-      )}`,
+      )}\n\n${quantity} × ${formatMoney(
+        selectedCandidate.unitPricePence,
+      )} = ${formatMoney(price)}`,
       [
         {
           text: "Cancel",
@@ -342,27 +440,34 @@ export const PharmacyInventoryMatchModal = ({
         },
         {
           text: "Confirm",
-          onPress: () => {
-            void saveReservation(selectedCandidate, quantity);
-          },
+          onPress: () =>
+            void saveAllocation(
+              selectedCandidate,
+              quantity,
+            ),
         },
       ],
     );
   };
 
-  const releaseReservation = () => {
-    if (!item?.inventoryItemId || !canEdit) return;
+  const removeAllocation = () => {
+    if (
+      !item?.inventoryItemId ||
+      !canEdit
+    ) {
+      return;
+    }
 
     Alert.alert(
-      "Release reservation",
-      "Release reserved stock?",
+      "Remove stock allocation",
+      "Remove the selected pharmacy stock from this medicine?",
       [
         {
           text: "Cancel",
           style: "cancel",
         },
         {
-          text: "Release",
+          text: "Remove",
           style: "destructive",
           onPress: () => {
             void (async () => {
@@ -378,7 +483,7 @@ export const PharmacyInventoryMatchModal = ({
                 onClose();
               } catch (error) {
                 Alert.alert(
-                  "Unable to release stock",
+                  "Unable to remove stock",
                   error instanceof Error
                     ? error.message
                     : "Please try again.",
@@ -416,9 +521,14 @@ export const PharmacyInventoryMatchModal = ({
             </View>
 
             <View style={styles.headerText}>
-              <Text style={styles.title}>Match Stock</Text>
+              <Text style={styles.title}>
+                Match Stock
+              </Text>
 
-              <Text style={styles.subtitle} numberOfLines={2}>
+              <Text
+                style={styles.subtitle}
+                numberOfLines={2}
+              >
                 {item.name}
               </Text>
             </View>
@@ -428,7 +538,11 @@ export const PharmacyInventoryMatchModal = ({
               activeOpacity={0.75}
               onPress={onClose}
             >
-              <X size={20} color={TEXT} strokeWidth={2.5} />
+              <X
+                size={20}
+                color={TEXT}
+                strokeWidth={2.5}
+              />
             </TouchableOpacity>
           </View>
 
@@ -445,29 +559,42 @@ export const PharmacyInventoryMatchModal = ({
                   strokeWidth={2.5}
                 />
 
-                <Text style={styles.sourceTitle}>Order medicine</Text>
+                <Text style={styles.sourceTitle}>
+                  Order medicine
+                </Text>
               </View>
 
               <Text style={styles.sourceMedicine}>
-                {data?.extracted.medicineName || item.name}
+                {data?.extracted.medicineName ||
+                  item.name}
               </Text>
 
               <View style={styles.sourceMetaRow}>
                 <SourceMeta
                   label="Strength"
-                  value={data?.extracted.strength || "Not confirmed"}
+                  value={
+                    data?.extracted.strength ||
+                    "Not confirmed"
+                  }
                 />
 
                 <SourceMeta
                   label="Form"
-                  value={data?.extracted.form || "Not confirmed"}
+                  value={
+                    data?.extracted.form ||
+                    "Not confirmed"
+                  }
                 />
 
                 <SourceMeta
                   label="Requested"
                   value={
                     item.quantity
-                      ? `${item.quantity}${item.quantityUnit ? ` ${item.quantityUnit}` : ""}`
+                      ? `${item.quantity}${
+                          item.quantityUnit
+                            ? ` ${item.quantityUnit}`
+                            : ""
+                        }`
                       : "Not specified"
                   }
                 />
@@ -502,7 +629,9 @@ export const PharmacyInventoryMatchModal = ({
 
             {isLoading ? (
               <View style={styles.loadingArea}>
-                <ActivityIndicator color={PHARMACY} />
+                <ActivityIndicator
+                  color={PHARMACY}
+                />
 
                 <Text style={styles.loadingText}>
                   Checking inventory...
@@ -525,7 +654,9 @@ export const PharmacyInventoryMatchModal = ({
                 <TouchableOpacity
                   style={styles.retryButton}
                   activeOpacity={0.75}
-                  onPress={() => void loadCandidates()}
+                  onPress={() =>
+                    void loadCandidates()
+                  }
                 >
                   <Text style={styles.retryText}>
                     Try Again
@@ -534,7 +665,9 @@ export const PharmacyInventoryMatchModal = ({
               </View>
             ) : null}
 
-            {!isLoading && !errorMessage && data ? (
+            {!isLoading &&
+            !errorMessage &&
+            data ? (
               <>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>
@@ -562,45 +695,74 @@ export const PharmacyInventoryMatchModal = ({
 
                 {data.candidates.length > 0 ? (
                   data.candidates.map(candidate => {
-                    const tone = getCandidateTone(candidate);
-                    const selected = selectedCandidateId === candidate.id;
+                    const tone =
+                      getCandidateTone(candidate);
+
+                    const selected =
+                      selectedCandidateId ===
+                      candidate.id;
 
                     const conflict =
-                      candidate.strengthMatch === "MISMATCH" ||
-                      candidate.formMatch === "MISMATCH";
+                      candidate.strengthMatch ===
+                        "MISMATCH" ||
+                      candidate.formMatch ===
+                        "MISMATCH";
 
                     const effectiveAvailable =
-                      getEffectiveAvailable(candidate);
+                      getEffectiveAvailable(
+                        candidate,
+                      );
 
-                    const unavailable = effectiveAvailable <= 0;
-                    const missingReference = !candidate.packageReference;
+                    const unavailable =
+                      effectiveAvailable <= 0;
+
+                    const missingReference =
+                      !candidate.packageReference;
+
+                    const missingPrice =
+                      candidate.unitPricePence <= 0;
 
                     const disabled =
                       !canEdit ||
                       conflict ||
                       unavailable ||
-                      missingReference;
+                      missingReference ||
+                      missingPrice;
 
                     const recommended =
-                      data.suggestedCandidateId === candidate.id;
+                      data.suggestedCandidateId ===
+                      candidate.id;
 
                     return (
                       <TouchableOpacity
                         key={candidate.id}
-                        activeOpacity={disabled ? 1 : 0.75}
+                        activeOpacity={
+                          disabled ? 1 : 0.75
+                        }
                         disabled={disabled}
-                        onPress={() => selectCandidate(candidate)}
+                        onPress={() =>
+                          selectCandidate(
+                            candidate,
+                          )
+                        }
                         style={[
                           styles.candidateCard,
-                          selected && styles.candidateCardSelected,
-                          disabled && styles.candidateCardDisabled,
+                          selected &&
+                            styles.candidateCardSelected,
+                          disabled &&
+                            styles.candidateCardDisabled,
                         ]}
                       >
-                        <View style={styles.candidateTopRow}>
+                        <View
+                          style={
+                            styles.candidateTopRow
+                          }
+                        >
                           <View
                             style={[
                               styles.radio,
-                              selected && styles.radioSelected,
+                              selected &&
+                                styles.radioSelected,
                             ]}
                           >
                             {selected ? (
@@ -612,32 +774,64 @@ export const PharmacyInventoryMatchModal = ({
                             ) : null}
                           </View>
 
-                          <View style={styles.candidateMain}>
-                            <View style={styles.candidateTitleRow}>
+                          <View
+                            style={
+                              styles.candidateMain
+                            }
+                          >
+                            <View
+                              style={
+                                styles.candidateTitleRow
+                              }
+                            >
                               <Text
-                                style={styles.candidateName}
+                                style={
+                                  styles.candidateName
+                                }
                                 numberOfLines={2}
                               >
-                                {candidate.medicineName}
+                                {
+                                  candidate.medicineName
+                                }
                               </Text>
 
                               {recommended ? (
-                                <View style={styles.recommendedChip}>
-                                  <Text style={styles.recommendedText}>
+                                <View
+                                  style={
+                                    styles.recommendedChip
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.recommendedText
+                                    }
+                                  >
                                     Recommended
                                   </Text>
                                 </View>
                               ) : null}
                             </View>
 
-                            <Text style={styles.candidateDetails}>
-                              {candidate.strength || "No strength"}
+                            <Text
+                              style={
+                                styles.candidateDetails
+                              }
+                            >
+                              {candidate.strength ||
+                                "No strength"}
                               {" • "}
-                              {candidate.form || "No form"}
+                              {candidate.form ||
+                                "No form"}
                             </Text>
 
-                            <Text style={styles.nameMatchText}>
-                              {getNameMatchLabel(candidate)}
+                            <Text
+                              style={
+                                styles.nameMatchText
+                              }
+                            >
+                              {getNameMatchLabel(
+                                candidate,
+                              )}
                             </Text>
                           </View>
 
@@ -645,7 +839,8 @@ export const PharmacyInventoryMatchModal = ({
                             style={[
                               styles.matchChip,
                               {
-                                backgroundColor: tone.background,
+                                backgroundColor:
+                                  tone.background,
                               },
                             ]}
                           >
@@ -653,7 +848,8 @@ export const PharmacyInventoryMatchModal = ({
                               style={[
                                 styles.matchChipText,
                                 {
-                                  color: tone.color,
+                                  color:
+                                    tone.color,
                                 },
                               ]}
                             >
@@ -662,88 +858,217 @@ export const PharmacyInventoryMatchModal = ({
                           </View>
                         </View>
 
-                        <View style={styles.stockRow}>
-                          <StockValue
-                            label="Stock"
-                            value={candidate.quantityInStock}
+                        <View
+                          style={
+                            styles.stockPriceRow
+                          }
+                        >
+                          <View
+                            style={
+                              styles.factBlock
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.factLabel
+                              }
+                            >
+                              AVAILABLE
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.factValue
+                              }
+                            >
+                              {
+                                effectiveAvailable
+                              }{" "}
+                              {pluralize(
+                                candidate.stockUnit,
+                                effectiveAvailable,
+                              )}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={
+                              styles.factDivider
+                            }
                           />
 
-                          <StockValue
-                            label="Reserved"
-                            value={candidate.reservedQuantity}
-                          />
+                          <View
+                            style={[
+                              styles.factBlock,
+                              styles.factBlockRight,
+                            ]}
+                          >
+                            <Text
+                              style={
+                                styles.factLabel
+                              }
+                            >
+                              PRICE
+                            </Text>
 
-                          <StockValue
-                            label="Available"
-                            value={effectiveAvailable}
-                            strong
-                          />
+                            <Text
+                              style={
+                                styles.priceValue
+                              }
+                            >
+                              {candidate.unitPricePence >
+                              0
+                                ? formatMoney(
+                                    candidate.unitPricePence,
+                                  )
+                                : "Not set"}
+                            </Text>
 
-                          <Text style={styles.stockUnit}>
-                            {candidate.stockUnit}
-                          </Text>
+                            <Text
+                              style={
+                                styles.priceUnit
+                              }
+                            >
+                              per{" "}
+                              {
+                                candidate.stockUnit
+                              }
+                            </Text>
+                          </View>
                         </View>
 
                         {candidate.packageReference ? (
-                          <View style={styles.packReference}>
+                          <View
+                            style={
+                              styles.packReference
+                            }
+                          >
                             <PackageCheck
                               size={17}
                               color={PHARMACY_DARK}
                               strokeWidth={2.5}
                             />
 
-                            <View style={styles.packReferenceText}>
-                              <Text style={styles.packReferenceLabel}>
+                            <View
+                              style={
+                                styles.packReferenceText
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.packReferenceLabel
+                                }
+                              >
                                 Pack size
                               </Text>
 
-                              <Text style={styles.packReferenceValue}>
-                                1 {candidate.packageReference.packageUnit} ={" "}
-                                {candidate.packageReference.packSize}{" "}
+                              <Text
+                                style={
+                                  styles.packReferenceValue
+                                }
+                              >
+                                1{" "}
+                                {
+                                  candidate
+                                    .packageReference
+                                    .packageUnit
+                                }{" "}
+                                ={" "}
+                                {
+                                  candidate
+                                    .packageReference
+                                    .packSize
+                                }{" "}
                                 {pluralize(
-                                  candidate.packageReference.contentUnit,
-                                  candidate.packageReference.packSize,
+                                  candidate
+                                    .packageReference
+                                    .contentUnit,
+                                  candidate
+                                    .packageReference
+                                    .packSize,
                                 )}
                               </Text>
                             </View>
                           </View>
                         ) : (
-                          <View style={styles.packMissing}>
+                          <View
+                            style={
+                              styles.packMissing
+                            }
+                          >
                             <AlertTriangle
                               size={15}
                               color={WARNING_DARK}
                               strokeWidth={2.5}
                             />
 
-                            <Text style={styles.packMissingText}>
+                            <Text
+                              style={
+                                styles.packMissingText
+                              }
+                            >
                               Pack size unavailable
                             </Text>
                           </View>
                         )}
 
-                        <View style={styles.comparisonRow}>
+                        <View
+                          style={
+                            styles.comparisonRow
+                          }
+                        >
                           <ComparisonBadge
                             label="Strength"
-                            value={formatComparison(candidate.strengthMatch)}
-                            danger={candidate.strengthMatch === "MISMATCH"}
+                            value={formatComparison(
+                              candidate.strengthMatch,
+                            )}
+                            danger={
+                              candidate.strengthMatch ===
+                              "MISMATCH"
+                            }
                           />
 
                           <ComparisonBadge
                             label="Form"
-                            value={formatComparison(candidate.formMatch)}
-                            danger={candidate.formMatch === "MISMATCH"}
+                            value={formatComparison(
+                              candidate.formMatch,
+                            )}
+                            danger={
+                              candidate.formMatch ===
+                              "MISMATCH"
+                            }
                           />
                         </View>
 
                         {unavailable ? (
-                          <Text style={styles.unavailableText}>
+                          <Text
+                            style={
+                              styles.unavailableText
+                            }
+                          >
                             No stock available.
                           </Text>
                         ) : null}
 
+                        {missingPrice ? (
+                          <Text
+                            style={
+                              styles.conflictText
+                            }
+                          >
+                            Set an inventory price
+                            before continuing.
+                          </Text>
+                        ) : null}
+
                         {conflict ? (
-                          <Text style={styles.conflictText}>
-                            Medicine details conflict.
+                          <Text
+                            style={
+                              styles.conflictText
+                            }
+                          >
+                            Medicine details
+                            conflict.
                           </Text>
                         ) : null}
                       </TouchableOpacity>
@@ -762,11 +1087,17 @@ export const PharmacyInventoryMatchModal = ({
                     </Text>
 
                     <TouchableOpacity
-                      style={styles.openInventoryButton}
+                      style={
+                        styles.openInventoryButton
+                      }
                       activeOpacity={0.75}
                       onPress={onOpenInventory}
                     >
-                      <Text style={styles.openInventoryText}>
+                      <Text
+                        style={
+                          styles.openInventoryText
+                        }
+                      >
                         Open Inventory
                       </Text>
                     </TouchableOpacity>
@@ -776,107 +1107,271 @@ export const PharmacyInventoryMatchModal = ({
                 {selectedCandidate ? (
                   <View style={styles.reserveCard}>
                     <Text style={styles.reserveTitle}>
-                      Dispense
+                      Allocate stock
                     </Text>
 
                     {selectedCandidate.packageReference ? (
-                      <View style={styles.selectedPackBox}>
-                        <Text style={styles.selectedPackLabel}>
+                      <View
+                        style={
+                          styles.selectedPackBox
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.selectedPackLabel
+                          }
+                        >
                           Pack size
                         </Text>
 
-                        <Text style={styles.selectedPackValue}>
-                          1 {selectedCandidate.packageReference.packageUnit} ={" "}
-                          {selectedCandidate.packageReference.packSize}{" "}
+                        <Text
+                          style={
+                            styles.selectedPackValue
+                          }
+                        >
+                          1{" "}
+                          {
+                            selectedCandidate
+                              .packageReference
+                              .packageUnit
+                          }{" "}
+                          ={" "}
+                          {
+                            selectedCandidate
+                              .packageReference
+                              .packSize
+                          }{" "}
                           {pluralize(
-                            selectedCandidate.packageReference.contentUnit,
-                            selectedCandidate.packageReference.packSize,
+                            selectedCandidate
+                              .packageReference
+                              .contentUnit,
+                            selectedCandidate
+                              .packageReference
+                              .packSize,
                           )}
                         </Text>
                       </View>
                     ) : null}
 
-                    <Text style={styles.inputLabel}>
-                      Number of {pluralize(selectedCandidate.stockUnit, 2)}
-                    </Text>
-
-                    <View style={styles.reserveInputRow}>
-                      <TextInput
-                        value={reserveQuantity}
-                        onChangeText={value =>
-                          setReserveQuantity(
-                            value.replace(/[^0-9]/g, ""),
-                          )
-                        }
-                        style={styles.reserveInput}
-                        keyboardType="number-pad"
-                        editable={canEdit && !isSaving}
-                        maxLength={7}
-                        placeholder="1"
-                        placeholderTextColor="#9AA0AF"
+                    <View style={styles.priceBox}>
+                      <Banknote
+                        size={18}
+                        color={PHARMACY_DARK}
+                        strokeWidth={2.5}
                       />
 
-                      <View style={styles.unitBox}>
-                        <Text style={styles.unitText}>
-                          {pluralize(
-                            selectedCandidate.stockUnit,
-                            numericReserveQuantity || 1,
+                      <View
+                        style={
+                          styles.priceBoxText
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.priceBoxLabel
+                          }
+                        >
+                          Price per{" "}
+                          {
+                            selectedCandidate.stockUnit
+                          }
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.priceBoxValue
+                          }
+                        >
+                          {formatMoney(
+                            selectedCandidate.unitPricePence,
                           )}
                         </Text>
                       </View>
                     </View>
 
-                    <Text style={styles.availableHint}>
-                      {getEffectiveAvailable(selectedCandidate)}{" "}
+                    <Text style={styles.inputLabel}>
+                      Number of{" "}
                       {pluralize(
                         selectedCandidate.stockUnit,
-                        getEffectiveAvailable(selectedCandidate),
+                        2,
+                      )}
+                    </Text>
+
+                    <View
+                      style={
+                        styles.reserveInputRow
+                      }
+                    >
+                      <TextInput
+                        value={reserveQuantity}
+                        onChangeText={value =>
+                          setReserveQuantity(
+                            value.replace(
+                              /[^0-9]/g,
+                              "",
+                            ),
+                          )
+                        }
+                        style={
+                          styles.reserveInput
+                        }
+                        keyboardType="number-pad"
+                        editable={
+                          canEdit &&
+                          !isSaving
+                        }
+                        maxLength={7}
+                        placeholder="1"
+                        placeholderTextColor="#9AA0AF"
+                      />
+
+                      <View
+                        style={styles.unitBox}
+                      >
+                        <Text
+                          style={
+                            styles.unitText
+                          }
+                        >
+                          {pluralize(
+                            selectedCandidate.stockUnit,
+                            numericReserveQuantity ||
+                              1,
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text
+                      style={
+                        styles.availableHint
+                      }
+                    >
+                      {getEffectiveAvailable(
+                        selectedCandidate,
+                      )}{" "}
+                      {pluralize(
+                        selectedCandidate.stockUnit,
+                        getEffectiveAvailable(
+                          selectedCandidate,
+                        ),
                       )}{" "}
                       available
                     </Text>
 
                     {selectedCandidate.packageReference &&
-                    totalDispensedQuantity !== null ? (
+                    totalDispensedQuantity !==
+                      null ? (
                       <View style={styles.totalBox}>
                         <View>
-                          <Text style={styles.totalLabel}>
+                          <Text
+                            style={
+                              styles.totalLabel
+                            }
+                          >
                             Total supplied
                           </Text>
 
-                          <Text style={styles.totalCalculation}>
-                            {numericReserveQuantity} ×{" "}
-                            {selectedCandidate.packageReference.packSize}
+                          <Text
+                            style={
+                              styles.totalCalculation
+                            }
+                          >
+                            {
+                              numericReserveQuantity
+                            }{" "}
+                            ×{" "}
+                            {
+                              selectedCandidate
+                                .packageReference
+                                .packSize
+                            }
                           </Text>
                         </View>
 
-                        <Text style={styles.totalValue}>
-                          {totalDispensedQuantity}{" "}
+                        <Text
+                          style={
+                            styles.totalValue
+                          }
+                        >
+                          {
+                            totalDispensedQuantity
+                          }{" "}
                           {pluralize(
-                            selectedCandidate.packageReference.contentUnit,
+                            selectedCandidate
+                              .packageReference
+                              .contentUnit,
                             totalDispensedQuantity,
                           )}
                         </Text>
                       </View>
                     ) : null}
 
+                    <View
+                      style={
+                        styles.orderPriceBox
+                      }
+                    >
+                      <View>
+                        <Text
+                          style={
+                            styles.orderPriceLabel
+                          }
+                        >
+                          Medicine total
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.orderPriceCalculation
+                          }
+                        >
+                          {
+                            numericReserveQuantity
+                          }{" "}
+                          ×{" "}
+                          {formatMoney(
+                            selectedCandidate.unitPricePence,
+                          )}
+                        </Text>
+                      </View>
+
+                      <Text
+                        style={
+                          styles.orderPriceValue
+                        }
+                      >
+                        {formatMoney(
+                          lineTotalPence,
+                        )}
+                      </Text>
+                    </View>
+
                     <TouchableOpacity
                       style={[
                         styles.confirmButton,
                         (!canEdit ||
                           isSaving ||
-                          !selectedCandidate.packageReference) &&
+                          !selectedCandidate.packageReference ||
+                          selectedCandidate.unitPricePence <=
+                            0) &&
                           styles.disabledButton,
                       ]}
                       activeOpacity={0.75}
                       disabled={
                         !canEdit ||
                         isSaving ||
-                        !selectedCandidate.packageReference
+                        !selectedCandidate.packageReference ||
+                        selectedCandidate.unitPricePence <=
+                          0
                       }
-                      onPress={confirmReservation}
+                      onPress={
+                        confirmAllocation
+                      }
                     >
                       {isSaving ? (
-                        <ActivityIndicator color={SURFACE} />
+                        <ActivityIndicator
+                          color={SURFACE}
+                        />
                       ) : (
                         <>
                           <PackageCheck
@@ -885,8 +1380,12 @@ export const PharmacyInventoryMatchModal = ({
                             strokeWidth={2.6}
                           />
 
-                          <Text style={styles.confirmButtonText}>
-                            Confirm & Reserve
+                          <Text
+                            style={
+                              styles.confirmButtonText
+                            }
+                          >
+                            Confirm Stock
                           </Text>
                         </>
                       )}
@@ -895,19 +1394,25 @@ export const PharmacyInventoryMatchModal = ({
                 ) : null}
 
                 {item.inventoryItemId &&
-                item.inventoryReservedQuantity > 0 &&
+                item.inventoryReservedQuantity >
+                  0 &&
                 canEdit ? (
                   <TouchableOpacity
                     style={[
                       styles.releaseButton,
-                      isSaving && styles.disabledButton,
+                      isSaving &&
+                        styles.disabledButton,
                     ]}
                     disabled={isSaving}
                     activeOpacity={0.75}
-                    onPress={releaseReservation}
+                    onPress={removeAllocation}
                   >
-                    <Text style={styles.releaseButtonText}>
-                      Release Reservation
+                    <Text
+                      style={
+                        styles.releaseButtonText
+                      }
+                    >
+                      Remove Stock Allocation
                     </Text>
                   </TouchableOpacity>
                 ) : null}
@@ -941,31 +1446,6 @@ const SourceMeta = ({
   </View>
 );
 
-const StockValue = ({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: number;
-  strong?: boolean;
-}) => (
-  <View style={styles.stockValue}>
-    <Text style={styles.stockValueLabel}>
-      {label}
-    </Text>
-
-    <Text
-      style={[
-        styles.stockValueText,
-        strong && styles.stockValueStrong,
-      ]}
-    >
-      {value}
-    </Text>
-  </View>
-);
-
 const ComparisonBadge = ({
   label,
   value,
@@ -978,13 +1458,15 @@ const ComparisonBadge = ({
   <View
     style={[
       styles.comparisonBadge,
-      danger && styles.comparisonBadgeDanger,
+      danger &&
+        styles.comparisonBadgeDanger,
     ]}
   >
     <Text
       style={[
         styles.comparisonLabel,
-        danger && styles.comparisonLabelDanger,
+        danger &&
+          styles.comparisonLabelDanger,
       ]}
     >
       {label}
@@ -993,7 +1475,8 @@ const ComparisonBadge = ({
     <Text
       style={[
         styles.comparisonValue,
-        danger && styles.comparisonValueDanger,
+        danger &&
+          styles.comparisonValueDanger,
       ]}
     >
       {value}
@@ -1346,42 +1829,55 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  stockRow: {
+  stockPriceRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     backgroundColor: BACKGROUND,
-    borderRadius: 10,
-    padding: 9,
+    borderRadius: 11,
+    padding: 10,
     marginTop: 10,
   },
 
-  stockValue: {
-    marginRight: 16,
+  factBlock: {
+    flex: 1,
   },
 
-  stockValueLabel: {
+  factBlockRight: {
+    alignItems: "flex-end",
+  },
+
+  factDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 40,
+    backgroundColor: "#D7DCE6",
+    marginHorizontal: 14,
+  },
+
+  factLabel: {
     color: MUTED,
     fontSize: 7,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
-  stockValueText: {
+  factValue: {
     color: TEXT,
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+
+  priceValue: {
+    color: PHARMACY_DARK,
+    fontSize: 13,
+    fontWeight: "800",
     marginTop: 2,
   },
 
-  stockValueStrong: {
-    color: PHARMACY_DARK,
-  },
-
-  stockUnit: {
-    flex: 1,
+  priceUnit: {
     color: MUTED,
-    fontSize: 8,
-    fontWeight: "700",
-    textAlign: "right",
+    fontSize: 7,
+    fontWeight: "600",
+    marginTop: 2,
   },
 
   packReference: {
@@ -1542,6 +2038,33 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  priceBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 11,
+    padding: 10,
+    marginTop: 9,
+  },
+
+  priceBoxText: {
+    flex: 1,
+    marginLeft: 8,
+  },
+
+  priceBoxLabel: {
+    color: WARNING_DARK,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+
+  priceBoxValue: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+
   inputLabel: {
     color: TEXT,
     fontSize: 9,
@@ -1616,6 +2139,35 @@ const styles = StyleSheet.create({
   totalValue: {
     color: BLUE_DARK,
     fontSize: 16,
+    fontWeight: "800",
+  },
+
+  orderPriceBox: {
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 9,
+  },
+
+  orderPriceLabel: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+
+  orderPriceCalculation: {
+    color: PHARMACY_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  orderPriceValue: {
+    color: PHARMACY_DARK,
+    fontSize: 17,
     fontWeight: "800",
   },
 

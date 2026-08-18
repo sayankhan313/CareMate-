@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { initPaymentSheet, initStripe, presentPaymentSheet } from "@stripe/stripe-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertCircle, AlertTriangle, CheckCircle2, Clock3, FileCheck2, PackageCheck, Pill, RefreshCcw, ShieldCheck, ShoppingBag, Stethoscope, XCircle } from "lucide-react-native";
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock3, CreditCard, FileCheck2, PackageCheck, Pill, RefreshCcw, ShieldCheck, ShoppingBag, Stethoscope, XCircle } from "lucide-react-native";
 
 import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { STRIPE_PUBLISHABLE_KEY } from "../../constants/stripe";
 import { patientOrdersApi, type PatientOrder, type PatientOrderStatus, type PatientOrdersResponse } from "../../services/patientOrdersApi";
+import { patientPaymentApi } from "../../services/patientPaymentApi";
 
 type OrderFilter = "ACTIVE" | "COMPLETED" | "ATTENTION" | "ALL";
 
@@ -13,6 +16,13 @@ type StatusTone = {
   background: string;
   soft: string;
   text: string;
+};
+
+type PaymentPresentation = {
+  title: string;
+  subtitle: string;
+  value: string;
+  tone: StatusTone;
 };
 
 const BACKGROUND = "#F4F6FB";
@@ -95,6 +105,12 @@ const formatDateTime = (value?: string | null) => {
   return date.toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
+const formatMoney = (amountPence: number, currency = "GBP") => {
+  const amount = Math.max(0, Number(amountPence || 0)) / 100;
+  if (currency.toUpperCase() === "GBP") return `£${amount.toFixed(2)}`;
+  return `${currency.toUpperCase()} ${amount.toFixed(2)}`;
+};
+
 const getStatusTone = (status: PatientOrderStatus): StatusTone => {
   if (status === "DELIVERED" || status === "COLLECTED") return { background: SUCCESS, soft: SUCCESS_LIGHT, text: SUCCESS_DARK };
   if (status === "REJECTED" || status === "CANCELLED" || status === "OUT_OF_STOCK") return { background: DANGER, soft: DANGER_LIGHT, text: DANGER_DARK };
@@ -107,19 +123,11 @@ const getVerificationState = (order: PatientOrder) => {
   if (!verification) return null;
 
   if (verification.verificationPath === "ASSIGNED_DOCTOR" && verification.doctorVerificationStatus === "PENDING") {
-    return {
-      type: "DOCTOR" as const,
-      title: "Doctor confirmation",
-      subtitle: verification.verificationDoctor?.fullName || "Waiting for your doctor",
-    };
+    return { type: "DOCTOR" as const, title: "Doctor confirmation", subtitle: verification.verificationDoctor?.fullName || "Waiting for your doctor" };
   }
 
   if (verification.verificationPath === "ASSIGNED_DOCTOR" && verification.doctorVerificationStatus === "REJECTED") {
-    return {
-      type: "ATTENTION" as const,
-      title: "Doctor declined",
-      subtitle: verification.doctorVerificationNote || "Medicine not confirmed",
-    };
+    return { type: "ATTENTION" as const, title: "Doctor declined", subtitle: verification.doctorVerificationNote || "Medicine not confirmed" };
   }
 
   if (verification.verificationPath === "EXTERNAL_EVIDENCE" && !order.fulfilmentAllowed) {
@@ -127,6 +135,91 @@ const getVerificationState = (order: PatientOrder) => {
   }
 
   return null;
+};
+
+const getPaymentPresentation = (order: PatientOrder): PaymentPresentation | null => {
+  const payment = order.payment;
+  if (!payment) return null;
+
+  if (payment.status === "NOT_REQUIRED") {
+    return {
+      title: "No payment required",
+      subtitle: "Your exemption has been verified for this eligible prescription order.",
+      value: "£0.00",
+      tone: { background: SUCCESS, soft: SUCCESS_LIGHT, text: SUCCESS_DARK },
+    };
+  }
+
+  if (payment.status === "PAID") {
+    return {
+      title: "Payment completed",
+      subtitle: payment.paidAt ? `Paid ${formatDateTime(payment.paidAt)}` : "This order has been paid.",
+      value: formatMoney(payment.amountPence, payment.currency),
+      tone: { background: SUCCESS, soft: SUCCESS_LIGHT, text: SUCCESS_DARK },
+    };
+  }
+
+  if (payment.status === "REFUNDED") {
+    return {
+      title: "Payment refunded",
+      subtitle: payment.refundedAt ? `Refunded ${formatDateTime(payment.refundedAt)}` : "The payment for this order has been refunded.",
+      value: formatMoney(payment.amountPence, payment.currency),
+      tone: { background: PRIMARY, soft: PRIMARY_LIGHT, text: PRIMARY_DARK },
+    };
+  }
+
+  if (payment.status === "FAILED") {
+    return {
+      title: "Payment failed",
+      subtitle: "The previous payment was not completed. You can try again.",
+      value: formatMoney(payment.amountPence, payment.currency),
+      tone: { background: DANGER, soft: DANGER_LIGHT, text: DANGER_DARK },
+    };
+  }
+
+  if ((payment.chargePreference === "EXEMPT" || payment.chargePreference === "PPC") && payment.status === "PENDING") {
+    return {
+      title: "Exemption verification pending",
+      subtitle: "Your exemption evidence is awaiting pharmacy review. This order is not treated as £0 until verification is complete.",
+      value: "Review pending",
+      tone: { background: WARNING, soft: WARNING_LIGHT, text: WARNING_DARK },
+    };
+  }
+
+  if (payment.chargePreference === "CHARGEABLE" && payment.status === "PENDING" && payment.amountPence > 0) {
+    return {
+      title: "Payment required",
+      subtitle: "Pharmacy pricing is complete. Payment is required before final fulfilment.",
+      value: formatMoney(payment.amountPence, payment.currency),
+      tone: { background: PRIMARY, soft: PRIMARY_LIGHT, text: PRIMARY_DARK },
+    };
+  }
+
+  if (payment.chargePreference === "CHARGEABLE" && payment.status === "PENDING") {
+    return {
+      title: "Waiting for pharmacy pricing",
+      subtitle: "The pharmacy must confirm stock and calculate the order total before payment becomes available.",
+      value: "Pending",
+      tone: { background: WARNING, soft: WARNING_LIGHT, text: WARNING_DARK },
+    };
+  }
+
+  return {
+    title: "Payment status",
+    subtitle: "Payment information is being updated.",
+    value: payment.status.replaceAll("_", " "),
+    tone: { background: PRIMARY, soft: PRIMARY_LIGHT, text: PRIMARY_DARK },
+  };
+};
+
+const canPayOrder = (order: PatientOrder) => {
+  const payment = order.payment;
+  if (!payment) return false;
+  if (payment.chargePreference !== "CHARGEABLE") return false;
+  if (payment.amountPence <= 0) return false;
+  if (payment.status !== "PENDING" && payment.status !== "FAILED") return false;
+  if (["REJECTED", "CANCELLED", "DELIVERED", "COLLECTED"].includes(order.status)) return false;
+  return true;
 };
 
 const getMainMedicine = (order: PatientOrder) => {
@@ -164,6 +257,7 @@ export const PatientOrdersScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
 
   const loadOrders = useCallback(async (refresh = false) => {
     try {
@@ -188,6 +282,56 @@ export const PatientOrdersScreen = () => {
       void loadOrders();
     }, [loadOrders]),
   );
+
+  const handlePayment = useCallback(async (order: PatientOrder) => {
+    if (!canPayOrder(order) || payingOrderId) return;
+
+    try {
+      setPayingOrderId(order.id);
+
+      await initStripe({ publishableKey: STRIPE_PUBLISHABLE_KEY });
+
+      const intent = await patientPaymentApi.createPaymentIntent(order.id);
+
+      if (intent.alreadyPaid) {
+        Alert.alert("Payment complete", "This prescription order has already been paid.");
+        await loadOrders(true);
+        return;
+      }
+
+      if (!intent.clientSecret) throw new Error("Stripe payment information is unavailable. Please try again.");
+
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: "CareMate+",
+        paymentIntentClientSecret: intent.clientSecret,
+        allowsDelayedPaymentMethods: false,
+      });
+
+      if (initResult.error) throw new Error(initResult.error.message || "Unable to prepare Stripe payment.");
+
+      const paymentResult = await presentPaymentSheet();
+
+      if (paymentResult.error) {
+        if (paymentResult.error.code === "Canceled") return;
+        throw new Error(paymentResult.error.message || "Stripe payment was not completed.");
+      }
+
+      const confirmation = await patientPaymentApi.confirmPayment(order.id);
+
+      if (confirmation.paid) {
+        Alert.alert("Payment successful", `${formatMoney(confirmation.payment.amountPence, confirmation.payment.currency)} payment completed successfully.`);
+      } else {
+        Alert.alert("Payment processing", "Stripe has not confirmed the payment yet. Pull down to refresh the order status.");
+      }
+
+      await loadOrders(true);
+    } catch (error) {
+      Alert.alert("Payment unavailable", error instanceof Error ? error.message : "Unable to complete payment.");
+      await loadOrders(true);
+    } finally {
+      setPayingOrderId(null);
+    }
+  }, [loadOrders, payingOrderId]);
 
   const filteredOrders = useMemo(() => {
     if (selectedFilter === "ALL") return orders;
@@ -251,14 +395,21 @@ export const PatientOrdersScreen = () => {
                       ? "Needs Attention"
                       : "All Orders"}
               </Text>
-
               <Text style={styles.sectionCount}>{filteredOrders.length}</Text>
             </View>
 
             {filteredOrders.length === 0 ? (
               <EmptyState filter={selectedFilter} />
             ) : (
-              filteredOrders.map(order => <OrderCard key={order.id} order={order} />)
+              filteredOrders.map(order => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isPaying={payingOrderId === order.id}
+                  paymentDisabled={payingOrderId !== null && payingOrderId !== order.id}
+                  onPay={() => void handlePayment(order)}
+                />
+              ))
             )}
           </ScrollView>
         )}
@@ -279,7 +430,6 @@ const ErrorState = ({ message, onRetry }: { message: string; onRetry: () => void
     <View style={styles.errorIcon}>
       <AlertCircle size={27} color={DANGER} strokeWidth={2.6} />
     </View>
-
     <Text style={styles.centerTitle}>Unable to load orders</Text>
     <Text style={styles.centerText}>{message}</Text>
 
@@ -290,22 +440,9 @@ const ErrorState = ({ message, onRetry }: { message: string; onRetry: () => void
   </View>
 );
 
-const OverviewItem = ({
-  value,
-  label,
-  icon,
-  color,
-  soft,
-}: {
-  value: number;
-  label: string;
-  icon: ReactNode;
-  color: string;
-  soft: string;
-}) => (
+const OverviewItem = ({ value, label, icon, color, soft }: { value: number; label: string; icon: ReactNode; color: string; soft: string }) => (
   <View style={styles.overviewItem}>
     <View style={[styles.overviewIcon, { backgroundColor: soft }]}>{icon}</View>
-
     <View>
       <Text style={[styles.overviewValue, { color }]}>{value}</Text>
       <Text style={styles.overviewLabel}>{label}</Text>
@@ -313,26 +450,9 @@ const OverviewItem = ({
   </View>
 );
 
-const FilterButton = ({
-  label,
-  count,
-  selected,
-  color,
-  onPress,
-}: {
-  label: string;
-  count: number;
-  selected: boolean;
-  color: string;
-  onPress: () => void;
-}) => (
-  <TouchableOpacity
-    style={[styles.filterButton, selected ? { backgroundColor: color, borderColor: color } : undefined]}
-    onPress={onPress}
-    activeOpacity={0.85}
-  >
+const FilterButton = ({ label, count, selected, color, onPress }: { label: string; count: number; selected: boolean; color: string; onPress: () => void }) => (
+  <TouchableOpacity style={[styles.filterButton, selected ? { backgroundColor: color, borderColor: color } : undefined]} onPress={onPress} activeOpacity={0.85}>
     <Text style={[styles.filterText, selected ? styles.filterTextSelected : undefined]}>{label}</Text>
-
     <View style={[styles.filterCount, selected ? styles.filterCountSelected : undefined]}>
       <Text style={[styles.filterCountText, selected ? styles.filterCountTextSelected : undefined]}>{count}</Text>
     </View>
@@ -354,17 +474,28 @@ const EmptyState = ({ filter }: { filter: OrderFilter }) => {
       <View style={styles.emptyIcon}>
         <PackageCheck size={28} color={PRIMARY} strokeWidth={2.6} />
       </View>
-
       <Text style={styles.emptyTitle}>{title}</Text>
       {filter === "ALL" ? <Text style={styles.emptyText}>Pharmacy requests will appear here.</Text> : null}
     </View>
   );
 };
 
-const OrderCard = ({ order }: { order: PatientOrder }) => {
+const OrderCard = ({
+  order,
+  isPaying,
+  paymentDisabled,
+  onPay,
+}: {
+  order: PatientOrder;
+  isPaying: boolean;
+  paymentDisabled: boolean;
+  onPay: () => void;
+}) => {
   const tone = getStatusTone(order.status);
   const medicine = getMainMedicine(order);
   const verification = getVerificationState(order);
+  const payment = getPaymentPresentation(order);
+  const payable = canPayOrder(order);
   const latestTimeline = order.timeline.length > 0 ? order.timeline[order.timeline.length - 1] : null;
 
   return (
@@ -411,26 +542,26 @@ const OrderCard = ({ order }: { order: PatientOrder }) => {
           </View>
 
           <View style={styles.infoRows}>
-            <InfoRow
-              icon={<ShoppingBag size={16} color={tone.text} strokeWidth={2.5} />}
-              label="Pharmacy"
-              value={order.pharmacy?.pharmacyName || "Not assigned"}
-              accent={tone}
-              isLast={!order.doctor}
-            />
+            <InfoRow icon={<ShoppingBag size={16} color={tone.text} strokeWidth={2.5} />} label="Pharmacy" value={order.pharmacy?.pharmacyName || "Not assigned"} accent={tone} isLast={!order.doctor} />
 
             {order.doctor ? (
-              <InfoRow
-                icon={<Stethoscope size={16} color={tone.text} strokeWidth={2.5} />}
-                label="Doctor"
-                value={order.doctor.fullName}
-                accent={tone}
-                isLast
-              />
+              <InfoRow icon={<Stethoscope size={16} color={tone.text} strokeWidth={2.5} />} label="Doctor" value={order.doctor.fullName} accent={tone} isLast />
             ) : null}
           </View>
 
           {verification ? <VerificationCard verification={verification} /> : null}
+
+          {payment ? (
+            <PaymentCard
+              payment={payment}
+              testMode={Boolean(order.payment?.testMode)}
+              payable={payable}
+              paymentStatus={order.payment?.status}
+              isPaying={isPaying}
+              disabled={paymentDisabled}
+              onPay={onPay}
+            />
+          ) : null}
 
           {order.statusReason ? (
             <View style={styles.reasonPanel}>
@@ -457,22 +588,9 @@ const OrderCard = ({ order }: { order: PatientOrder }) => {
   );
 };
 
-const InfoRow = ({
-  icon,
-  label,
-  value,
-  accent,
-  isLast,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  accent: StatusTone;
-  isLast?: boolean;
-}) => (
+const InfoRow = ({ icon, label, value, accent, isLast }: { icon: ReactNode; label: string; value: string; accent: StatusTone; isLast?: boolean }) => (
   <View style={[styles.infoRow, isLast ? styles.infoRowLast : undefined]}>
     <View style={[styles.infoIcon, { backgroundColor: accent.soft }]}>{icon}</View>
-
     <View style={styles.infoText}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue} numberOfLines={1}>{value}</Text>
@@ -483,11 +601,7 @@ const InfoRow = ({
 const VerificationCard = ({
   verification,
 }: {
-  verification: {
-    type: "DOCTOR" | "PHARMACY" | "ATTENTION";
-    title: string;
-    subtitle: string;
-  };
+  verification: { type: "DOCTOR" | "PHARMACY" | "ATTENTION"; title: string; subtitle: string };
 }) => {
   const danger = verification.type === "ATTENTION";
 
@@ -510,6 +624,63 @@ const VerificationCard = ({
     </View>
   );
 };
+
+const PaymentCard = ({
+  payment,
+  testMode,
+  payable,
+  paymentStatus,
+  isPaying,
+  disabled,
+  onPay,
+}: {
+  payment: PaymentPresentation;
+  testMode: boolean;
+  payable: boolean;
+  paymentStatus?: string;
+  isPaying: boolean;
+  disabled: boolean;
+  onPay: () => void;
+}) => (
+  <View style={[styles.paymentCard, { backgroundColor: payment.tone.soft, borderLeftColor: payment.tone.background }]}>
+    <View style={styles.paymentTopRow}>
+      <View style={[styles.paymentIcon, { backgroundColor: SURFACE }]}>
+        <CreditCard size={19} color={payment.tone.text} strokeWidth={2.6} />
+      </View>
+
+      <View style={styles.paymentText}>
+        <View style={styles.paymentTitleRow}>
+          <Text style={[styles.paymentTitle, { color: payment.tone.text }]}>{payment.title}</Text>
+
+          {testMode ? (
+            <View style={[styles.testBadge, { backgroundColor: payment.tone.background }]}>
+              <Text style={styles.testBadgeText}>TEST</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <Text style={styles.paymentSubtitle}>{payment.subtitle}</Text>
+      </View>
+
+      <Text style={[styles.paymentValue, { color: payment.tone.text }]}>{payment.value}</Text>
+    </View>
+
+    {payable ? (
+      <TouchableOpacity
+        style={[styles.payButton, { backgroundColor: disabled ? "#A8B2C8" : PRIMARY }]}
+        activeOpacity={0.86}
+        disabled={disabled || isPaying}
+        onPress={onPay}
+      >
+        {isPaying ? <ActivityIndicator size="small" color={SURFACE} /> : <CreditCard size={18} color={SURFACE} strokeWidth={2.6} />}
+
+        <Text style={styles.payButtonText}>
+          {isPaying ? "Opening Stripe..." : paymentStatus === "FAILED" ? `Retry ${payment.value}` : `Pay ${payment.value}`}
+        </Text>
+      </TouchableOpacity>
+    ) : null}
+  </View>
+);
 
 const OrderTimeline = ({ order, tone }: { order: PatientOrder; tone: StatusTone }) => {
   if (order.timeline.length === 0) {
@@ -534,11 +705,7 @@ const OrderTimeline = ({ order, tone }: { order: PatientOrder; tone: StatusTone 
           <View key={step.id} style={styles.timelineItem}>
             <View style={styles.timelineLeft}>
               <View style={[styles.timelineCircle, { backgroundColor: isLast ? stepTone.background : SUCCESS }]}>
-                {isLast ? (
-                  <Clock3 size={12} color={SURFACE} strokeWidth={2.7} />
-                ) : (
-                  <CheckCircle2 size={13} color={SURFACE} strokeWidth={2.7} />
-                )}
+                {isLast ? <Clock3 size={12} color={SURFACE} strokeWidth={2.7} /> : <CheckCircle2 size={13} color={SURFACE} strokeWidth={2.7} />}
               </View>
 
               {!isLast ? <View style={styles.timelineLine} /> : null}
@@ -562,17 +729,14 @@ const OrderTimeline = ({ order, tone }: { order: PatientOrder; tone: StatusTone 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: BACKGROUND },
   screen: { flex: 1, backgroundColor: BACKGROUND },
-
   header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 14 },
   headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerTitle: { color: TEXT, fontSize: 28, fontWeight: "800", letterSpacing: -0.6 },
   headerSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 2 },
   headerCount: { minWidth: 54, height: 42, borderRadius: 14, backgroundColor: PRIMARY_LIGHT, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   headerCountText: { color: PRIMARY_DARK, fontSize: 14, fontWeight: "800", marginLeft: 6 },
-
   content: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 2 },
-
   centerState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
   loadingText: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 11 },
   errorIcon: { width: 58, height: 58, borderRadius: 18, backgroundColor: DANGER_LIGHT, alignItems: "center", justifyContent: "center" },
@@ -580,14 +744,12 @@ const styles = StyleSheet.create({
   centerText: { color: MUTED, fontSize: 11, fontWeight: "500", textAlign: "center", marginTop: 6 },
   retryButton: { minHeight: 44, borderRadius: 13, paddingHorizontal: 18, backgroundColor: PRIMARY, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 17 },
   retryButtonText: { color: SURFACE, fontSize: 12, fontWeight: "700", marginLeft: 7 },
-
   overviewCard: { backgroundColor: SURFACE, borderRadius: 18, borderWidth: 1, borderColor: BORDER, flexDirection: "row", alignItems: "center", paddingVertical: 13, marginBottom: 14, ...elevate(1) },
   overviewItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center" },
   overviewIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", marginRight: 8 },
   overviewValue: { fontSize: 18, fontWeight: "800" },
   overviewLabel: { color: MUTED, fontSize: 8, fontWeight: "700", marginTop: 1 },
   overviewDivider: { width: StyleSheet.hairlineWidth, height: 38, backgroundColor: BORDER },
-
   filters: { paddingBottom: 17, paddingRight: 12 },
   filterButton: { height: 38, borderRadius: 12, borderWidth: 1, borderColor: BORDER, backgroundColor: SURFACE, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", marginRight: 8 },
   filterText: { color: MUTED, fontSize: 10, fontWeight: "700" },
@@ -596,20 +758,16 @@ const styles = StyleSheet.create({
   filterCountSelected: { backgroundColor: "rgba(255,255,255,0.20)" },
   filterCountText: { color: MUTED, fontSize: 8, fontWeight: "800" },
   filterCountTextSelected: { color: SURFACE },
-
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   sectionTitle: { color: TEXT, fontSize: 16, fontWeight: "800" },
   sectionCount: { color: MUTED, fontSize: 10, fontWeight: "700" },
-
   emptyCard: { backgroundColor: SURFACE, borderRadius: 20, borderWidth: 1, borderColor: BORDER, paddingVertical: 30, paddingHorizontal: 20, alignItems: "center" },
   emptyIcon: { width: 58, height: 58, borderRadius: 19, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center" },
   emptyTitle: { color: TEXT, fontSize: 15, fontWeight: "800", marginTop: 11 },
   emptyText: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 4 },
-
   orderCard: { borderRadius: 20, borderWidth: 1.4, marginBottom: 16, overflow: "hidden", ...elevate(2) },
   statusAccent: { height: 4, width: "100%" },
   orderContent: { paddingHorizontal: 14 },
-
   headerBand: { marginHorizontal: -14, paddingHorizontal: 15, paddingTop: 14, paddingBottom: 13 },
   orderHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   orderHeaderText: { flex: 1, paddingRight: 9 },
@@ -620,9 +778,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
   statusBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.2 },
   sourceTextWhite: { color: "rgba(255,255,255,0.88)", fontSize: 9, fontWeight: "700", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.4 },
-
   cardBody: { paddingTop: 13 },
-
   medicinePanel: { backgroundColor: SURFACE, borderRadius: 15, borderWidth: 1, borderColor: "rgba(17,24,39,0.06)", flexDirection: "row", alignItems: "center", padding: 12, ...elevate(1) },
   medicineIcon: { width: 47, height: 47, borderRadius: 14, alignItems: "center", justifyContent: "center", marginRight: 11 },
   medicineDetails: { flex: 1 },
@@ -632,7 +788,6 @@ const styles = StyleSheet.create({
   quantityBadge: { borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 },
   quantityText: { fontSize: 8, fontWeight: "800" },
   extraItems: { color: MUTED, fontSize: 8, fontWeight: "700", marginLeft: 7 },
-
   infoRows: { marginTop: 10, borderRadius: 14, borderWidth: 1, borderColor: "rgba(17,24,39,0.07)", backgroundColor: SURFACE, overflow: "hidden" },
   infoRow: { minHeight: 47, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
   infoRowLast: { borderBottomWidth: 0 },
@@ -640,7 +795,6 @@ const styles = StyleSheet.create({
   infoText: { flex: 1 },
   infoLabel: { color: MUTED, fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
   infoValue: { color: TEXT, fontSize: 11, fontWeight: "700", marginTop: 2 },
-
   verificationCard: { borderRadius: 12, padding: 10, paddingLeft: 12, flexDirection: "row", alignItems: "center", marginTop: 10, borderLeftWidth: 3 },
   verificationNormal: { backgroundColor: PRIMARY_LIGHT, borderLeftColor: PRIMARY },
   verificationDanger: { backgroundColor: DANGER_LIGHT, borderLeftColor: DANGER },
@@ -651,17 +805,26 @@ const styles = StyleSheet.create({
   verificationTitle: { color: PRIMARY_DARK, fontSize: 10, fontWeight: "800" },
   verificationSubtitle: { color: PRIMARY_DARK, fontSize: 9, fontWeight: "500", marginTop: 2 },
   dangerText: { color: DANGER_DARK },
-
+  paymentCard: { borderRadius: 12, padding: 11, paddingLeft: 12, marginTop: 10, borderLeftWidth: 3 },
+  paymentTopRow: { flexDirection: "row", alignItems: "center" },
+  paymentIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", marginRight: 9 },
+  paymentText: { flex: 1, paddingRight: 8 },
+  paymentTitleRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
+  paymentTitle: { fontSize: 10, fontWeight: "800" },
+  paymentSubtitle: { color: TEXT, fontSize: 8.5, fontWeight: "500", lineHeight: 13, marginTop: 3 },
+  paymentValue: { maxWidth: 80, textAlign: "right", fontSize: 11, fontWeight: "800" },
+  testBadge: { borderRadius: 999, paddingHorizontal: 5, paddingVertical: 2 },
+  testBadgeText: { color: SURFACE, fontSize: 6.5, fontWeight: "900", letterSpacing: 0.4 },
+  payButton: { minHeight: 43, borderRadius: 11, marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  payButtonText: { color: SURFACE, fontSize: 11.5, fontWeight: "800" },
   reasonPanel: { backgroundColor: DANGER_LIGHT, borderRadius: 11, padding: 10, paddingLeft: 12, flexDirection: "row", alignItems: "center", marginTop: 9, borderLeftWidth: 3, borderLeftColor: DANGER },
   reasonText: { flex: 1, color: DANGER_DARK, fontSize: 9, fontWeight: "600", marginLeft: 7 },
-
   progressFooter: { backgroundColor: SURFACE, marginHorizontal: -14, marginTop: 13, paddingHorizontal: 15, paddingTop: 13, paddingBottom: 15, borderTopWidth: 2 },
   progressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   progressTitleRow: { flexDirection: "row", alignItems: "center" },
   progressDot: { width: 8, height: 8, borderRadius: 4, marginRight: 7 },
   progressLabel: { fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 },
   progressTime: { color: MUTED, fontSize: 8, fontWeight: "600" },
-
   timeline: { paddingTop: 1 },
   timelineItem: { flexDirection: "row", minHeight: 47 },
   timelineLeft: { width: 27, alignItems: "center" },
@@ -672,7 +835,6 @@ const styles = StyleSheet.create({
   timelineTitle: { color: TEXT, fontSize: 10, fontWeight: "700" },
   timelineDate: { color: MUTED, fontSize: 8, fontWeight: "500" },
   timelineNote: { color: MUTED, fontSize: 8, fontWeight: "500", marginTop: 2 },
-
   currentStatus: { backgroundColor: SURFACE, borderRadius: 11, borderWidth: 1, padding: 9, flexDirection: "row", alignItems: "center" },
   currentStatusIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 8 },
   currentStatusText: { fontSize: 10, fontWeight: "700" },

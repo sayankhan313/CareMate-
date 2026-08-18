@@ -1,8 +1,6 @@
 import { API_BASE_URL } from "../../constants/api";
 import { tokenStorage } from "../tokenStorage";
 
-export type PrescriptionChargePreference = "CHARGEABLE" | "EXEMPT" | "PPC";
-
 export type PatientPharmacy = {
   id: string;
   fullName: string;
@@ -21,7 +19,6 @@ export type PatientPharmacy = {
   isSaved: boolean;
   isPrimary: boolean;
   linkId: string | null;
-  chargePreference: PrescriptionChargePreference | null;
   savedAt: string | null;
   updatedAt: string | null;
 };
@@ -45,35 +42,16 @@ export type SavePharmacyData = {
     id: string;
     pharmacyId: string;
     isPrimary: boolean;
-    chargePreference: PrescriptionChargePreference;
     createdAt: string;
     updatedAt: string;
   };
 };
 
-export type SetPrimaryPharmacyData = {
-  primaryPharmacyId: string | null;
-  pharmacy: PatientPharmacy;
-  link: {
-    id: string;
-    pharmacyId: string;
-    isPrimary: boolean;
-    chargePreference: PrescriptionChargePreference;
-    createdAt: string;
-    updatedAt: string;
-  };
-};
-
-export type UpdateChargePreferenceData = {
-  primaryPharmacyId: string | null;
-  pharmacy: PatientPharmacy;
-  chargePreference: PrescriptionChargePreference;
-};
+export type SetPrimaryPharmacyData = SavePharmacyData;
 
 export type RemovePharmacyData = {
   removedPharmacyId: string;
   removedPrimaryPharmacy: boolean;
-  previousChargePreference: PrescriptionChargePreference;
   primaryPharmacyId: string | null;
 };
 
@@ -90,16 +68,11 @@ type ListPharmaciesOptions = {
   limit?: number;
 };
 
-const getErrorMessage = <T>(result: ApiResponse<T>) => {
-  return result.message || "Something went wrong. Please try again.";
-};
+const getErrorMessage = <T>(result: ApiResponse<T>) => result.message || "Something went wrong. Please try again.";
 
 const getAuthHeaders = async () => {
   const token = await tokenStorage.getToken();
-
-  if (!token) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
+  if (!token) throw new Error("Your session has expired. Please sign in again.");
 
   return {
     Authorization: `Bearer ${token}`,
@@ -116,20 +89,14 @@ const readResponse = async <T>(response: Response) => {
     throw new Error("The server returned an invalid response.");
   }
 
-  if (!response.ok || !result.success) {
-    throw new Error(getErrorMessage(result));
-  }
-
-  if (!result.data) {
-    throw new Error("The server response did not contain data.");
-  }
+  if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
+  if (!result.data) throw new Error("The server response did not contain data.");
 
   return result.data;
 };
 
 const buildPharmacyQuery = (options: ListPharmaciesOptions) => {
   const query: string[] = [];
-
   const search = options.search?.trim();
   const city = options.city?.trim();
   const postcode = options.postcode?.trim();
@@ -166,17 +133,13 @@ export const patientPharmacyApi = {
     return readResponse<SavedPharmaciesData>(response);
   },
 
-  async savePharmacy(pharmacyId: string, chargePreference: PrescriptionChargePreference) {
+  async savePharmacy(pharmacyId: string) {
     const headers = await getAuthHeaders();
 
-    const response = await fetch(
-      `${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}/save`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ chargePreference }),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}/save`, {
+      method: "POST",
+      headers,
+    });
 
     return readResponse<SavePharmacyData>(response);
   },
@@ -184,42 +147,21 @@ export const patientPharmacyApi = {
   async setPrimaryPharmacy(pharmacyId: string) {
     const headers = await getAuthHeaders();
 
-    const response = await fetch(
-      `${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}/primary`,
-      {
-        method: "PATCH",
-        headers,
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}/primary`, {
+      method: "PATCH",
+      headers,
+    });
 
     return readResponse<SetPrimaryPharmacyData>(response);
-  },
-
-  async updateChargePreference(pharmacyId: string, chargePreference: PrescriptionChargePreference) {
-    const headers = await getAuthHeaders();
-
-    const response = await fetch(
-      `${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}/charge-preference`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ chargePreference }),
-      }
-    );
-
-    return readResponse<UpdateChargePreferenceData>(response);
   },
 
   async removePharmacy(pharmacyId: string) {
     const headers = await getAuthHeaders();
 
-    const response = await fetch(
-      `${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}`,
-      {
-        method: "DELETE",
-        headers,
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/patient/pharmacies/${encodeURIComponent(pharmacyId)}`, {
+      method: "DELETE",
+      headers,
+    });
 
     return readResponse<RemovePharmacyData>(response);
   },

@@ -1,35 +1,13 @@
 import { API_BASE_URL } from "../constants/api";
 import { tokenStorage } from "./tokenStorage";
 
-export type PatientOrderStatus =
-  | "RECEIVED"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "PREPARING"
-  | "READY"
-  | "OUT_FOR_DELIVERY"
-  | "DELIVERED"
-  | "COLLECTED"
-  | "CANCELLED"
-  | "DELAYED"
-  | "OUT_OF_STOCK";
-
-export type PatientOrderSource =
-  | "DOCTOR_PRESCRIPTION"
-  | "PATIENT_SUBMISSION"
-  | "REFILL_REQUEST"
-  | "MANUAL_REQUEST";
-
-export type PatientOrderVerificationPath =
-  | "CAREMATE_PRESCRIPTION"
-  | "ASSIGNED_DOCTOR"
-  | "EXTERNAL_EVIDENCE";
-
-export type PatientOrderDoctorVerificationStatus =
-  | "NOT_REQUIRED"
-  | "PENDING"
-  | "CONFIRMED"
-  | "REJECTED";
+export type PatientOrderStatus = "RECEIVED" | "ACCEPTED" | "REJECTED" | "PREPARING" | "READY" | "OUT_FOR_DELIVERY" | "DELIVERED" | "COLLECTED" | "CANCELLED" | "DELAYED" | "OUT_OF_STOCK";
+export type PatientOrderSource = "DOCTOR_PRESCRIPTION" | "PATIENT_SUBMISSION" | "REFILL_REQUEST" | "MANUAL_REQUEST";
+export type PatientOrderVerificationPath = "CAREMATE_PRESCRIPTION" | "ASSIGNED_DOCTOR" | "EXTERNAL_EVIDENCE";
+export type PatientOrderDoctorVerificationStatus = "NOT_REQUIRED" | "PENDING" | "CONFIRMED" | "REJECTED";
+export type PatientOrderChargePreference = "CHARGEABLE" | "EXEMPT" | "PPC";
+export type PatientOrderPaymentStatus = "PENDING" | "PAID" | "FAILED" | "NOT_REQUIRED" | "REFUNDED";
+export type PatientOrderPaymentProvider = "STRIPE";
 
 export type PatientOrder = {
   id: string;
@@ -40,7 +18,7 @@ export type PatientOrder = {
 
   medicineName?: string | null;
   dose?: string | null;
-  quantity?: number | null;
+  quantity?: number | string | null;
   instructions?: string | null;
 
   requestedByRole?: string | null;
@@ -74,10 +52,7 @@ export type PatientOrder = {
     doctorVerificationNote?: string | null;
     doctorVerificationRequestedAt?: string | null;
     doctorVerifiedAt?: string | null;
-    verificationDoctor: {
-      id: string;
-      fullName: string;
-    } | null;
+    verificationDoctor: { id: string; fullName: string } | null;
     evidenceType?: string | null;
     hasEvidence: boolean;
     pharmacyReviewNote?: string | null;
@@ -89,7 +64,7 @@ export type PatientOrder = {
     medicineId?: string | null;
     name: string;
     dose?: string | null;
-    quantity: number;
+    quantity: number | string;
     quantityUnit?: string | null;
     instructions?: string | null;
     dispensedQuantity?: number | null;
@@ -97,12 +72,12 @@ export type PatientOrder = {
 
   payment: {
     id: string;
-    chargePreference?: string | null;
-    amountPence?: number | null;
-    currency?: string | null;
-    provider?: string | null;
-    testMode?: boolean | null;
-    status?: string | null;
+    chargePreference: PatientOrderChargePreference;
+    amountPence: number;
+    currency: string;
+    provider: PatientOrderPaymentProvider;
+    testMode: boolean;
+    status: PatientOrderPaymentStatus;
     paidAt?: string | null;
     failedAt?: string | null;
     refundedAt?: string | null;
@@ -141,39 +116,52 @@ export type PatientOrdersResponse = {
   orders: PatientOrder[];
 };
 
-const getErrorMessage = (result: any) => {
-  if (typeof result?.message === "string") return result.message;
-  return "Unable to load pharmacy orders.";
+type ApiResponse<T> = {
+  success: boolean;
+  message?: string;
+  data?: T;
+};
+
+const getToken = async () => {
+  const token = await tokenStorage.getToken();
+  if (!token) throw new Error("Please login again.");
+  return token;
+};
+
+const readResponse = async <T>(response: Response): Promise<T> => {
+  let result: ApiResponse<T>;
+
+  try {
+    result = await response.json() as ApiResponse<T>;
+  } catch {
+    throw new Error("The server returned an invalid response.");
+  }
+
+  if (!response.ok || !result.success) throw new Error(result.message || "Unable to load pharmacy orders.");
+  if (!result.data) throw new Error("The server response did not contain order data.");
+
+  return result.data;
 };
 
 export const patientOrdersApi = {
   async listOrders(): Promise<PatientOrdersResponse> {
-    const token = await tokenStorage.getToken();
-
-    if (!token) {
-      throw new Error("Please login again.");
-    }
+    const token = await getToken();
 
     const response = await fetch(`${API_BASE_URL}/patient/pharmacy-orders`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    const result = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(getErrorMessage(result));
-    }
+    const data = await readResponse<PatientOrdersResponse>(response);
 
     return {
       summary: {
-        total: Number(result?.data?.summary?.total || 0),
-        active: Number(result?.data?.summary?.active || 0),
-        completed: Number(result?.data?.summary?.completed || 0),
-        needsAttention: Number(result?.data?.summary?.needsAttention || 0),
+        total: Number(data.summary?.total || 0),
+        active: Number(data.summary?.active || 0),
+        completed: Number(data.summary?.completed || 0),
+        needsAttention: Number(data.summary?.needsAttention || 0),
       },
-      orders: Array.isArray(result?.data?.orders) ? result.data.orders : [],
+      orders: Array.isArray(data.orders) ? data.orders : [],
     };
   },
 };

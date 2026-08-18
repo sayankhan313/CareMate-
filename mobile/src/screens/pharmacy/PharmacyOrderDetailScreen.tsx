@@ -116,7 +116,9 @@ const inventoryLockedStatuses = new Set<PharmacyOrderStatus>([
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "Not available";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "Not available";
 
   return date.toLocaleString("en-GB", {
@@ -137,6 +139,7 @@ const formatStatus = (value: string) =>
 
 const normalizeUnit = (value?: string | null) => {
   if (!value) return "";
+
   const normalized = value.trim().toLowerCase();
 
   const aliases: Record<string, string> = {
@@ -184,18 +187,22 @@ const getStatusTone = (status: PharmacyOrderStatus) => {
     return { background: WARNING_LIGHT, color: WARNING_DARK };
   }
 
-  if (status === "REJECTED" || status === "CANCELLED" || status === "OUT_OF_STOCK") {
+  if (
+    status === "REJECTED" ||
+    status === "CANCELLED" ||
+    status === "OUT_OF_STOCK"
+  ) {
     return { background: DANGER_LIGHT, color: DANGER_DARK };
   }
 
   return { background: BLUE_LIGHT, color: BLUE_DARK };
 };
 
-const formatMoney = (amountPence: number, currency: string) => {
+const formatMoney = (amountPence: number, currency = "GBP") => {
   try {
     return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency: currency || "GBP",
+      currency,
     }).format(amountPence / 100);
   } catch {
     return `£${(amountPence / 100).toFixed(2)}`;
@@ -236,12 +243,15 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
 
   const [order, setOrder] = useState<PharmacyOrderDetail | null>(null);
-  const [allowedNextStatuses, setAllowedNextStatuses] = useState<PharmacyOrderStatus[]>([]);
+  const [allowedNextStatuses, setAllowedNextStatuses] =
+    useState<PharmacyOrderStatus[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isVerificationLoading, setIsVerificationLoading] = useState(false);
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
+
   const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [evidenceSource, setEvidenceSource] = useState<{
     uri: string;
@@ -252,7 +262,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   const [reasonModalVisible, setReasonModalVisible] = useState(false);
   const [selectedExceptionStatus, setSelectedExceptionStatus] =
     useState<PharmacyOrderStatus | null>(null);
+
   const [statusReason, setStatusReason] = useState("");
+
   const [inventoryMatchItem, setInventoryMatchItem] =
     useState<PharmacyMedicineItem | null>(null);
 
@@ -264,12 +276,21 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
         setErrorMessage("");
 
-        const result = await pharmacyOrdersApi.getOrderDetail(route.params.orderId);
+        const result =
+          await pharmacyOrdersApi.getOrderDetail(
+            route.params.orderId,
+          );
+
         setOrder(result.order);
-        setAllowedNextStatuses(result.allowedNextStatuses || []);
+
+        setAllowedNextStatuses(
+          result.allowedNextStatuses || [],
+        );
       } catch (error) {
         setErrorMessage(
-          error instanceof Error ? error.message : "Unable to load pharmacy order.",
+          error instanceof Error
+            ? error.message
+            : "Unable to load pharmacy order.",
         );
       } finally {
         setIsLoading(false);
@@ -286,12 +307,22 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
   );
 
   const refreshOrder = async () => {
-    const result = await pharmacyOrdersApi.getOrderDetail(route.params.orderId);
+    const result =
+      await pharmacyOrdersApi.getOrderDetail(
+        route.params.orderId,
+      );
+
     setOrder(result.order);
-    setAllowedNextStatuses(result.allowedNextStatuses || []);
+
+    setAllowedNextStatuses(
+      result.allowedNextStatuses || [],
+    );
   };
 
-  const updateStatus = async (status: PharmacyOrderStatus, reason?: string) => {
+  const updateStatus = async (
+    status: PharmacyOrderStatus,
+    reason?: string,
+  ) => {
     try {
       setIsActionLoading(true);
 
@@ -314,7 +345,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     } catch (error) {
       Alert.alert(
         "Unable to update order",
-        error instanceof Error ? error.message : "Unable to update order status.",
+        error instanceof Error
+          ? error.message
+          : "Unable to update order status.",
       );
     } finally {
       setIsActionLoading(false);
@@ -329,17 +362,26 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       return;
     }
 
-    Alert.alert("Update order status", getActionConfirmation(status), [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: getActionLabel(status),
-        onPress: () => void updateStatus(status),
-      },
-    ]);
+    Alert.alert(
+      "Update order status",
+      getActionConfirmation(status),
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: getActionLabel(status),
+          onPress: () =>
+            void updateStatus(status),
+        },
+      ],
+    );
   };
 
   const submitExceptionStatus = () => {
     const reason = statusReason.trim();
+
     if (!selectedExceptionStatus) return;
 
     if (reason.length < 5) {
@@ -350,19 +392,26 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       return;
     }
 
-    void updateStatus(selectedExceptionStatus, reason);
+    void updateStatus(
+      selectedExceptionStatus,
+      reason,
+    );
   };
 
   const verifyExternalEvidence = async () => {
     try {
       setIsVerificationLoading(true);
 
-      const result = await pharmacyOrdersApi.verifyPatientRefillRequest(
-        route.params.orderId,
-      );
+      const result =
+        await pharmacyOrdersApi.verifyPatientRefillRequest(
+          route.params.orderId,
+        );
 
       setOrder(result.order);
-      setAllowedNextStatuses(result.allowedNextStatuses || []);
+
+      setAllowedNextStatuses(
+        result.allowedNextStatuses || [],
+      );
 
       Alert.alert(
         "Evidence verified",
@@ -385,17 +434,26 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       "Verify supporting evidence",
       "Confirm that pharmacy staff have reviewed the patient's supporting evidence and allow this medicine request to continue? This does not represent doctor prescribing.",
       [
-        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
         {
           text: "Verify evidence",
-          onPress: () => void verifyExternalEvidence(),
+          onPress: () =>
+            void verifyExternalEvidence(),
         },
       ],
     );
   };
 
   const openPatientRefillEvidence = async () => {
-    if (!order?.patientSubmission?.imageUrl || isEvidenceLoading) return;
+    if (
+      !order?.patientSubmission?.imageUrl ||
+      isEvidenceLoading
+    ) {
+      return;
+    }
 
     try {
       setIsEvidenceLoading(true);
@@ -428,61 +486,76 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
         .join(", ")
     : "";
 
-  const statusTone = order ? getStatusTone(order.status) : null;
+  const statusTone =
+    order ? getStatusTone(order.status) : null;
 
-  const primaryActions = allowedNextStatuses.filter(status =>
-    primaryStatuses.has(status),
-  );
+  const primaryActions =
+    allowedNextStatuses.filter(status =>
+      primaryStatuses.has(status),
+    );
 
-  const exceptionActions = allowedNextStatuses.filter(status =>
-    exceptionStatuses.has(status),
-  );
+  const exceptionActions =
+    allowedNextStatuses.filter(status =>
+      exceptionStatuses.has(status),
+    );
 
   const refillSubmission =
-    order?.orderSource === "REFILL_REQUEST" ? order.patientSubmission : null;
+    order?.orderSource === "REFILL_REQUEST"
+      ? order.patientSubmission
+      : null;
 
   const isAssignedDoctorRefill =
-    refillSubmission?.verificationPath === "ASSIGNED_DOCTOR";
+    refillSubmission?.verificationPath ===
+    "ASSIGNED_DOCTOR";
 
   const isExternalEvidenceRefill =
-    refillSubmission?.verificationPath === "EXTERNAL_EVIDENCE";
+    refillSubmission?.verificationPath ===
+    "EXTERNAL_EVIDENCE";
 
   const isCareMatePrescriptionRefill =
-    refillSubmission?.verificationPath === "CAREMATE_PRESCRIPTION";
+    refillSubmission?.verificationPath ===
+    "CAREMATE_PRESCRIPTION";
 
   const awaitingDoctorConfirmation = Boolean(
     order &&
       isAssignedDoctorRefill &&
-      refillSubmission?.doctorVerificationStatus === "PENDING" &&
+      refillSubmission?.doctorVerificationStatus ===
+        "PENDING" &&
       !order.fulfilmentAllowed,
   );
 
   const doctorConfirmedRefill = Boolean(
     order &&
       isAssignedDoctorRefill &&
-      refillSubmission?.doctorVerificationStatus === "CONFIRMED" &&
+      refillSubmission?.doctorVerificationStatus ===
+        "CONFIRMED" &&
       order.fulfilmentAllowed,
   );
 
   const doctorRejectedRefill = Boolean(
     isAssignedDoctorRefill &&
-      refillSubmission?.doctorVerificationStatus === "REJECTED",
+      refillSubmission?.doctorVerificationStatus ===
+        "REJECTED",
   );
 
   const canVerifyExternalEvidence = Boolean(
     order &&
       isExternalEvidenceRefill &&
-      refillSubmission?.status === "VERIFICATION_REQUIRED" &&
+      refillSubmission?.status ===
+        "VERIFICATION_REQUIRED" &&
       refillSubmission.imageUrl &&
       !order.prescriptionConfirmed &&
       !order.fulfilmentAllowed &&
-      !verificationBlockedStatuses.has(order.status),
+      !verificationBlockedStatuses.has(
+        order.status,
+      ),
   );
 
   const pharmacistVerifiedExternalEvidence = Boolean(
     order &&
       isExternalEvidenceRefill &&
-      refillSubmission?.status === "VERIFIED" &&
+      refillSubmission?.status ===
+        "VERIFIED" &&
       order.fulfilmentAllowed,
   );
 
@@ -490,7 +563,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
     order &&
       order.fulfilmentAllowed &&
       order.status !== "RECEIVED" &&
-      !inventoryLockedStatuses.has(order.status),
+      !inventoryLockedStatuses.has(
+        order.status,
+      ),
   );
 
   const allInventoryReady = order
@@ -504,6 +579,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
             item.inventoryReservedAt &&
             !item.inventoryConsumedAt &&
             !item.inventoryReleasedAt &&
+            item.unitPricePence &&
+            item.unitPricePence > 0 &&
+            item.lineTotalPence &&
+            item.lineTotalPence > 0 &&
             item.dispensedQuantity &&
             item.dispensedQuantity > 0 &&
             item.dispensedUnit,
@@ -521,6 +600,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
             item.inventoryReservedAt &&
             !item.inventoryConsumedAt &&
             !item.inventoryReleasedAt &&
+            item.unitPricePence &&
+            item.unitPricePence > 0 &&
+            item.lineTotalPence &&
+            item.lineTotalPence > 0 &&
             item.dispensedQuantity &&
             item.dispensedQuantity > 0 &&
             item.dispensedUnit,
@@ -528,26 +611,100 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       ).length
     : 0;
 
-  const hasInventoryBlockedAction = primaryActions.some(status =>
-    inventoryReservationRequiredStatuses.has(status),
+  const pricingComplete = Boolean(
+    order &&
+      order.items.length > 0 &&
+      order.items.every(
+        item =>
+          item.unitPricePence !== null &&
+          item.unitPricePence > 0 &&
+          item.lineTotalPence !== null &&
+          item.lineTotalPence > 0,
+      ),
   );
 
+  const medicineReleaseTerminal = Boolean(
+    order &&
+      ["DELIVERED", "COLLECTED", "REJECTED", "CANCELLED"].includes(
+        order.status,
+      ),
+  );
+
+  const medicineReleaseAllowed = Boolean(
+    order?.payment &&
+      (order.payment.status === "PAID" ||
+        order.payment.status === "NOT_REQUIRED"),
+  );
+
+  const medicineReleaseLocked = Boolean(
+    order && !medicineReleaseTerminal && !medicineReleaseAllowed,
+  );
+
+  const medicineReleaseTitle = (() => {
+    if (!order?.payment) return "Medicine release locked";
+    if (order.payment.status === "FAILED") return "Payment failed — release locked";
+    if (order.payment.status === "REFUNDED") return "Payment refunded — release locked";
+    if (order.payment.chargePreference === "EXEMPT" || order.payment.chargePreference === "PPC") {
+      return "Exemption verification required";
+    }
+    return "Payment required before release";
+  })();
+
+  const medicineReleaseDescription = (() => {
+    if (!order?.payment) {
+      return "Payment information is unavailable. Medicine cannot leave the pharmacy until the payment requirement is resolved.";
+    }
+
+    if (order.payment.status === "FAILED") {
+      return "The patient's payment was unsuccessful. The order may remain prepared, but it cannot be collected or sent for delivery until a successful payment is confirmed.";
+    }
+
+    if (order.payment.status === "REFUNDED") {
+      return "This payment has been refunded. Medicine cannot be collected or sent for delivery.";
+    }
+
+    if (order.payment.chargePreference === "EXEMPT" || order.payment.chargePreference === "PPC") {
+      return "The patient's exemption is not yet verified. The order may be prepared, but medicine cannot leave the pharmacy until the exemption is approved.";
+    }
+
+  })();
+
+  const hasInventoryBlockedAction =
+    primaryActions.some(status =>
+      inventoryReservationRequiredStatuses.has(
+        status,
+      ),
+    );
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "bottom"]}
+    >
+      <StatusBar
+        backgroundColor={BACKGROUND}
+        barStyle="dark-content"
+      />
 
       <View style={styles.screen}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: Math.max(insets.bottom + 36, 50) },
+            {
+              paddingBottom: Math.max(
+                insets.bottom + 36,
+                50,
+              ),
+            },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() => void loadOrder("refresh")}
+              onRefresh={() =>
+                void loadOrder("refresh")
+              }
               tintColor={PHARMACY}
               colors={[PHARMACY]}
             />
@@ -556,27 +713,62 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
           <View style={styles.header}>
             <View style={styles.appBar}>
               <Pressable
-                android_ripple={{ color: RIPPLE }}
+                android_ripple={{
+                  color: RIPPLE,
+                }}
                 style={styles.backButton}
-                onPress={() => navigation.goBack()}
+                onPress={() =>
+                  navigation.goBack()
+                }
               >
-                <ArrowLeft size={23} color={TEXT} strokeWidth={2.5} />
+                <ArrowLeft
+                  size={23}
+                  color={TEXT}
+                  strokeWidth={2.5}
+                />
               </Pressable>
 
               <View style={styles.appBarText}>
-                <Text style={styles.appBarTitle}>Medicine order</Text>
-                <Text style={styles.appBarSubtitle}>Pharmacy fulfilment</Text>
+                <Text
+                  style={styles.appBarTitle}
+                >
+                  Medicine order
+                </Text>
+
+                <Text
+                  style={
+                    styles.appBarSubtitle
+                  }
+                >
+                  Pharmacy fulfilment
+                </Text>
               </View>
             </View>
 
-            {!isLoading && !errorMessage && order && statusTone ? (
-              <View style={styles.headerContent}>
-                <View style={styles.orderSourceRow}>
-                  <View style={styles.headerSourceIcon}>
-                    {order.orderSource === "DOCTOR_PRESCRIPTION" ? (
+            {!isLoading &&
+            !errorMessage &&
+            order &&
+            statusTone ? (
+              <View
+                style={styles.headerContent}
+              >
+                <View
+                  style={
+                    styles.orderSourceRow
+                  }
+                >
+                  <View
+                    style={
+                      styles.headerSourceIcon
+                    }
+                  >
+                    {order.orderSource ===
+                    "DOCTOR_PRESCRIPTION" ? (
                       <BadgeCheck
                         size={19}
-                        color={PHARMACY_DARK}
+                        color={
+                          PHARMACY_DARK
+                        }
                         strokeWidth={2.6}
                       />
                     ) : (
@@ -588,53 +780,98 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     )}
                   </View>
 
-                  <Text style={styles.headerSourceText}>
-                    {getSourceLabel(order.orderSource)}
+                  <Text
+                    style={
+                      styles.headerSourceText
+                    }
+                  >
+                    {getSourceLabel(
+                      order.orderSource,
+                    )}
                   </Text>
 
                   <View
                     style={[
                       styles.statusChip,
-                      { backgroundColor: statusTone.background },
+                      {
+                        backgroundColor:
+                          statusTone.background,
+                      },
                     ]}
                   >
                     <Text
                       style={[
                         styles.statusText,
-                        { color: statusTone.color },
+                        {
+                          color:
+                            statusTone.color,
+                        },
                       ]}
                     >
-                      {formatStatus(order.status)}
+                      {formatStatus(
+                        order.status,
+                      )}
                     </Text>
                   </View>
                 </View>
 
-                <Text style={styles.orderNumber} numberOfLines={1}>
-                  {order.orderNumber || `Order ${order.id.slice(0, 8)}`}
+                <Text
+                  style={
+                    styles.orderNumber
+                  }
+                  numberOfLines={1}
+                >
+                  {order.orderNumber ||
+                    `Order ${order.id.slice(
+                      0,
+                      8,
+                    )}`}
                 </Text>
 
-                <View style={styles.receivedRow}>
+                <View
+                  style={
+                    styles.receivedRow
+                  }
+                >
                   <Clock3
                     size={14}
                     color="#D9F5E2"
                     strokeWidth={2.3}
                   />
 
-                  <Text style={styles.receivedText}>
-                    {formatDateTime(order.createdAt)}
+                  <Text
+                    style={
+                      styles.receivedText
+                    }
+                  >
+                    {formatDateTime(
+                      order.createdAt,
+                    )}
                   </Text>
                 </View>
 
-                <View style={styles.verificationBar}>
+                <View
+                  style={
+                    styles.verificationBar
+                  }
+                >
                   <VerificationStatus
-                    active={order.prescriptionConfirmed}
+                    active={
+                      order.prescriptionConfirmed
+                    }
                     label="Doctor linked"
                   />
 
-                  <View style={styles.headerDivider} />
+                  <View
+                    style={
+                      styles.headerDivider
+                    }
+                  />
 
                   <VerificationStatus
-                    active={order.fulfilmentAllowed}
+                    active={
+                      order.fulfilmentAllowed
+                    }
                     label="Fulfilment allowed"
                   />
                 </View>
@@ -644,37 +881,80 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
           {isLoading ? (
             <View style={styles.stateArea}>
-              <ActivityIndicator color={PHARMACY} />
-              <Text style={styles.stateTitle}>Loading order</Text>
-              <Text style={styles.stateText}>
-                Retrieving medicine order information
+              <ActivityIndicator
+                color={PHARMACY}
+              />
+
+              <Text
+                style={styles.stateTitle}
+              >
+                Loading order
+              </Text>
+
+              <Text
+                style={styles.stateText}
+              >
+                Retrieving medicine order
+                information
               </Text>
             </View>
           ) : null}
 
           {!isLoading && errorMessage ? (
             <View style={styles.stateArea}>
-              <View style={styles.errorIcon}>
-                <AlertCircle size={24} color={DANGER} strokeWidth={2.5} />
+              <View
+                style={styles.errorIcon}
+              >
+                <AlertCircle
+                  size={24}
+                  color={DANGER}
+                  strokeWidth={2.5}
+                />
               </View>
 
-              <Text style={styles.errorTitle}>Order unavailable</Text>
-              <Text style={styles.stateText}>{errorMessage}</Text>
+              <Text
+                style={styles.errorTitle}
+              >
+                Order unavailable
+              </Text>
+
+              <Text
+                style={styles.stateText}
+              >
+                {errorMessage}
+              </Text>
 
               <Pressable
-                android_ripple={{ color: RIPPLE }}
+                android_ripple={{
+                  color: RIPPLE,
+                }}
                 style={styles.retryButton}
-                onPress={() => void loadOrder("initial")}
+                onPress={() =>
+                  void loadOrder("initial")
+                }
               >
-                <RefreshCw size={16} color={SURFACE} strokeWidth={2.5} />
-                <Text style={styles.retryText}>Try again</Text>
+                <RefreshCw
+                  size={16}
+                  color={SURFACE}
+                  strokeWidth={2.5}
+                />
+
+                <Text
+                  style={styles.retryText}
+                >
+                  Try again
+                </Text>
               </Pressable>
             </View>
           ) : null}
 
-          {!isLoading && !errorMessage && order ? (
+          {!isLoading &&
+          !errorMessage &&
+          order ? (
             <View style={styles.body}>
-              <View style={styles.quickInfoRow}>
+              <View
+                style={styles.quickInfoRow}
+              >
                 <QuickInfo
                   background={BLUE_LIGHT}
                   icon={
@@ -698,7 +978,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     />
                   }
                   label="Medicines"
-                  value={String(order.items.length)}
+                  value={String(
+                    order.items.length,
+                  )}
                 />
 
                 <QuickInfo
@@ -713,7 +995,9 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                   label="Payment"
                   value={
                     order.payment
-                      ? formatStatus(order.payment.status)
+                      ? formatStatus(
+                          order.payment.status,
+                        )
                       : "None"
                   }
                 />
@@ -730,11 +1014,64 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 }
               />
 
-              <View style={styles.actionsPanel}>
+              <View
+                style={styles.actionsPanel}
+              >
+                {medicineReleaseLocked ? (
+                  <View style={styles.paymentReleaseLockedPanel}>
+                    <View style={styles.paymentReleaseLockIcon}>
+                      <LockKeyhole size={21} color={WARNING_DARK} strokeWidth={2.6} />
+                    </View>
+
+                    <View style={styles.paymentReleaseLockContent}>
+                      <Text style={styles.paymentReleaseLockTitle}>
+                        {medicineReleaseTitle}
+                      </Text>
+                      <Text style={styles.paymentReleaseLockDescription}>
+                        {medicineReleaseDescription}
+                      </Text>
+
+                      <View style={styles.paymentReleaseRule}>
+                        <CreditCard size={14} color={WARNING_DARK} strokeWidth={2.5} />
+                        <Text style={styles.paymentReleaseRuleText}>
+                          Release allowed only when payment is Paid or exemption is Not Required.
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : order?.payment && medicineReleaseAllowed && !medicineReleaseTerminal ? (
+                  <View style={styles.paymentReleaseUnlockedPanel}>
+                    <CheckCircle2 size={19} color={PHARMACY_DARK} strokeWidth={2.6} />
+
+                    <View style={styles.paymentReleaseUnlockedContent}>
+                      <Text style={styles.paymentReleaseUnlockedTitle}>
+                        Medicine release unlocked
+                      </Text>
+                      <Text style={styles.paymentReleaseUnlockedDescription}>
+                        {order.payment.status === "PAID"
+                          ? "Customer payment has been confirmed. Collection or delivery can continue when the order is ready."
+                          : "No prescription payment is required. Collection or delivery can continue when the order is ready."}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
                 {awaitingDoctorConfirmation ? (
-                  <View style={styles.doctorLockedPanel}>
-                    <View style={styles.verificationHeader}>
-                      <View style={styles.lockIcon}>
+                  <View
+                    style={
+                      styles.doctorLockedPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.verificationHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.lockIcon
+                        }
+                      >
                         <LockKeyhole
                           size={21}
                           color={WARNING_DARK}
@@ -742,18 +1079,37 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         />
                       </View>
 
-                      <View style={styles.verificationContent}>
-                        <Text style={styles.warningTitle}>
-                          Waiting for doctor confirmation
+                      <View
+                        style={
+                          styles.verificationContent
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.warningTitle
+                          }
+                        >
+                          Waiting for doctor
+                          confirmation
                         </Text>
 
-                        <Text style={styles.warningDescription}>
-                          The patient states that{" "}
-                          {refillSubmission?.verificationDoctor?.fullName ||
+                        <Text
+                          style={
+                            styles.warningDescription
+                          }
+                        >
+                          The patient states
+                          that{" "}
+                          {refillSubmission
+                            ?.verificationDoctor
+                            ?.fullName ||
                             "their selected CareMate+ doctor"}{" "}
-                          prescribed or recommended this medicine. Pharmacy
-                          cannot fulfil this request until that doctor confirms
-                          it.
+                          prescribed or
+                          recommended this
+                          medicine. Pharmacy
+                          cannot fulfil this
+                          request until that
+                          doctor confirms it.
                         </Text>
                       </View>
                     </View>
@@ -761,53 +1117,105 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 ) : null}
 
                 {doctorConfirmedRefill ? (
-                  <View style={styles.successPanel}>
+                  <View
+                    style={
+                      styles.successPanel
+                    }
+                  >
                     <CheckCircle2
                       size={19}
                       color={PHARMACY_DARK}
                       strokeWidth={2.6}
                     />
 
-                    <View style={styles.successContent}>
-                      <Text style={styles.successTitle}>
-                        Doctor confirmation completed
+                    <View
+                      style={
+                        styles.successContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.successTitle
+                        }
+                      >
+                        Doctor confirmation
+                        completed
                       </Text>
 
-                      <Text style={styles.successDescription}>
-                        {refillSubmission?.verificationDoctor?.fullName ||
+                      <Text
+                        style={
+                          styles.successDescription
+                        }
+                      >
+                        {refillSubmission
+                          ?.verificationDoctor
+                          ?.fullName ||
                           "The selected doctor"}{" "}
-                        confirmed the medicine request. Pharmacy fulfilment is
-                        unlocked.
+                        confirmed the medicine
+                        request. Pharmacy
+                        fulfilment is unlocked.
                       </Text>
                     </View>
                   </View>
                 ) : null}
 
                 {doctorRejectedRefill ? (
-                  <View style={styles.rejectedPanel}>
+                  <View
+                    style={
+                      styles.rejectedPanel
+                    }
+                  >
                     <XCircle
                       size={19}
                       color={DANGER_DARK}
                       strokeWidth={2.6}
                     />
 
-                    <View style={styles.rejectedContent}>
-                      <Text style={styles.rejectedTitle}>
-                        Doctor did not confirm this request
+                    <View
+                      style={
+                        styles.rejectedContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.rejectedTitle
+                        }
+                      >
+                        Doctor did not confirm
+                        this request
                       </Text>
 
-                      <Text style={styles.rejectedDescription}>
-                        The selected doctor rejected the patient's claim. This
-                        request cannot continue to pharmacy fulfilment.
+                      <Text
+                        style={
+                          styles.rejectedDescription
+                        }
+                      >
+                        The selected doctor
+                        rejected the patient's
+                        claim. This request
+                        cannot continue to
+                        pharmacy fulfilment.
                       </Text>
                     </View>
                   </View>
                 ) : null}
 
                 {canVerifyExternalEvidence ? (
-                  <View style={styles.evidenceReviewPanel}>
-                    <View style={styles.verificationHeader}>
-                      <View style={styles.evidenceIcon}>
+                  <View
+                    style={
+                      styles.evidenceReviewPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.verificationHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.evidenceIcon
+                        }
+                      >
                         <FileCheck2
                           size={21}
                           color={WARNING_DARK}
@@ -815,29 +1223,54 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         />
                       </View>
 
-                      <View style={styles.verificationContent}>
-                        <Text style={styles.warningTitle}>
-                          External evidence review required
+                      <View
+                        style={
+                          styles.verificationContent
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.warningTitle
+                          }
+                        >
+                          External evidence review
+                          required
                         </Text>
 
-                        <Text style={styles.warningDescription}>
-                          Review the patient's protected supporting evidence
-                          before allowing pharmacy fulfilment.
+                        <Text
+                          style={
+                            styles.warningDescription
+                          }
+                        >
+                          Review the patient's
+                          protected supporting
+                          evidence before allowing
+                          pharmacy fulfilment.
                         </Text>
                       </View>
                     </View>
 
                     <Pressable
-                      android_ripple={{ color: RIPPLE }}
+                      android_ripple={{
+                        color: RIPPLE,
+                      }}
                       style={[
                         styles.viewEvidenceButton,
-                        isEvidenceLoading && styles.disabledAction,
+                        isEvidenceLoading &&
+                          styles.disabledAction,
                       ]}
-                      disabled={isEvidenceLoading || isActionLoading}
-                      onPress={() => void openPatientRefillEvidence()}
+                      disabled={
+                        isEvidenceLoading ||
+                        isActionLoading
+                      }
+                      onPress={() =>
+                        void openPatientRefillEvidence()
+                      }
                     >
                       {isEvidenceLoading ? (
-                        <ActivityIndicator color={BLUE_DARK} />
+                        <ActivityIndicator
+                          color={BLUE_DARK}
+                        />
                       ) : (
                         <>
                           <Eye
@@ -845,7 +1278,12 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                             color={BLUE_DARK}
                             strokeWidth={2.6}
                           />
-                          <Text style={styles.viewEvidenceButtonText}>
+
+                          <Text
+                            style={
+                              styles.viewEvidenceButtonText
+                            }
+                          >
                             View evidence
                           </Text>
                         </>
@@ -853,16 +1291,26 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     </Pressable>
 
                     <Pressable
-                      android_ripple={{ color: RIPPLE }}
+                      android_ripple={{
+                        color: RIPPLE,
+                      }}
                       style={[
                         styles.verifyEvidenceButton,
-                        isVerificationLoading && styles.disabledAction,
+                        isVerificationLoading &&
+                          styles.disabledAction,
                       ]}
-                      disabled={isVerificationLoading || isActionLoading}
-                      onPress={handleVerifyExternalEvidence}
+                      disabled={
+                        isVerificationLoading ||
+                        isActionLoading
+                      }
+                      onPress={
+                        handleVerifyExternalEvidence
+                      }
                     >
                       {isVerificationLoading ? (
-                        <ActivityIndicator color={SURFACE} />
+                        <ActivityIndicator
+                          color={SURFACE}
+                        />
                       ) : (
                         <>
                           <ShieldCheck
@@ -870,7 +1318,12 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                             color={SURFACE}
                             strokeWidth={2.6}
                           />
-                          <Text style={styles.verifyEvidenceButtonText}>
+
+                          <Text
+                            style={
+                              styles.verifyEvidenceButtonText
+                            }
+                          >
                             Verify evidence
                           </Text>
                         </>
@@ -880,29 +1333,53 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 ) : null}
 
                 {pharmacistVerifiedExternalEvidence ? (
-                  <View style={styles.successPanel}>
+                  <View
+                    style={
+                      styles.successPanel
+                    }
+                  >
                     <CheckCircle2
                       size={19}
                       color={PHARMACY_DARK}
                       strokeWidth={2.6}
                     />
 
-                    <View style={styles.successContent}>
-                      <Text style={styles.successTitle}>
+                    <View
+                      style={
+                        styles.successContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.successTitle
+                        }
+                      >
                         External evidence verified
                       </Text>
 
-                      <Text style={styles.successDescription}>
-                        Pharmacy review is complete and fulfilment is allowed.
-                        This does not represent doctor prescribing.
+                      <Text
+                        style={
+                          styles.successDescription
+                        }
+                      >
+                        Pharmacy review is complete
+                        and fulfilment is allowed.
+                        This does not represent
+                        doctor prescribing.
                       </Text>
                     </View>
 
                     {refillSubmission?.imageUrl ? (
                       <Pressable
-                        android_ripple={{ color: RIPPLE }}
-                        style={styles.smallEvidenceButton}
-                        onPress={() => void openPatientRefillEvidence()}
+                        android_ripple={{
+                          color: RIPPLE,
+                        }}
+                        style={
+                          styles.smallEvidenceButton
+                        }
+                        onPress={() =>
+                          void openPatientRefillEvidence()
+                        }
                       >
                         <Eye
                           size={16}
@@ -915,36 +1392,63 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 ) : null}
 
                 {isCareMatePrescriptionRefill ? (
-                  <View style={styles.successPanel}>
+                  <View
+                    style={
+                      styles.successPanel
+                    }
+                  >
                     <BadgeCheck
                       size={19}
                       color={PHARMACY_DARK}
                       strokeWidth={2.6}
                     />
 
-                    <View style={styles.successContent}>
-                      <Text style={styles.successTitle}>
+                    <View
+                      style={
+                        styles.successContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.successTitle
+                        }
+                      >
                         CareMate+ prescription
                       </Text>
 
-                      <Text style={styles.successDescription}>
-                        This refill is linked to an existing CareMate+ doctor
+                      <Text
+                        style={
+                          styles.successDescription
+                        }
+                      >
+                        This refill is linked to an
+                        existing CareMate+ doctor
                         prescription.
                       </Text>
                     </View>
                   </View>
                 ) : null}
 
-                {!order.fulfilmentAllowed && primaryActions.length > 0 ? (
-                  <View style={styles.fulfilmentWarning}>
+                {!order.fulfilmentAllowed &&
+                primaryActions.length > 0 ? (
+                  <View
+                    style={
+                      styles.fulfilmentWarning
+                    }
+                  >
                     <AlertCircle
                       size={18}
                       color={WARNING_DARK}
                       strokeWidth={2.5}
                     />
 
-                    <Text style={styles.fulfilmentWarningText}>
-                      Fulfilment actions remain locked until this request is
+                    <Text
+                      style={
+                        styles.fulfilmentWarningText
+                      }
+                    >
+                      Fulfilment actions remain
+                      locked until this request is
                       authorised.
                     </Text>
                   </View>
@@ -953,21 +1457,31 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 {order.status === "RECEIVED" &&
                 order.fulfilmentAllowed &&
                 order.items.length > 0 ? (
-                  <View style={styles.inventoryInfoPanel}>
+                  <View
+                    style={
+                      styles.inventoryInfoPanel
+                    }
+                  >
                     <PackageSearch
                       size={18}
                       color={BLUE_DARK}
                       strokeWidth={2.5}
                     />
 
-                    <Text style={styles.inventoryInfoText}>
-                      Accept this order first. Stock matching will then unlock
-                      for each medicine.
+                    <Text
+                      style={
+                        styles.inventoryInfoText
+                      }
+                    >
+                      Accept this order first.
+                      Stock matching will then
+                      unlock for each medicine.
                     </Text>
                   </View>
                 ) : null}
 
-                {order.status !== "RECEIVED" && order.items.length > 0 ? (
+                {order.status !== "RECEIVED" &&
+                order.items.length > 0 ? (
                   <View
                     style={[
                       styles.inventorySummary,
@@ -990,14 +1504,19 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       />
                     )}
 
-                    <View style={styles.inventorySummaryText}>
+                    <View
+                      style={
+                        styles.inventorySummaryText
+                      }
+                    >
                       <Text
                         style={[
                           styles.inventorySummaryTitle,
                           {
-                            color: allInventoryReady
-                              ? PHARMACY_DARK
-                              : WARNING_DARK,
+                            color:
+                              allInventoryReady
+                                ? PHARMACY_DARK
+                                : WARNING_DARK,
                           },
                         ]}
                       >
@@ -1006,32 +1525,50 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                           : "Inventory matching required"}
                       </Text>
 
-                      <Text style={styles.inventorySummaryMeta}>
-                        {inventoryReadyCount}/{order.items.length} medicines
-                        matched and reserved
+                      <Text
+                        style={
+                          styles.inventorySummaryMeta
+                        }
+                      >
+                        {inventoryReadyCount}/
+                        {order.items.length} medicines
+                        matched with stock and price
                       </Text>
                     </View>
                   </View>
                 ) : null}
 
-                {!allInventoryReady && hasInventoryBlockedAction ? (
-                  <View style={styles.inventoryActionWarning}>
+                {!allInventoryReady &&
+                hasInventoryBlockedAction ? (
+                  <View
+                    style={
+                      styles.inventoryActionWarning
+                    }
+                  >
                     <PackageSearch
                       size={18}
                       color={WARNING_DARK}
                       strokeWidth={2.5}
                     />
 
-                    <Text style={styles.fulfilmentWarningText}>
-                      Match and reserve pharmacy stock for every medicine before
-                      preparation can continue.
+                    <Text
+                      style={
+                        styles.fulfilmentWarningText
+                      }
+                    >
+                      Match pharmacy stock and
+                      confirm pricing for every
+                      medicine before preparation
+                      can continue.
                     </Text>
                   </View>
                 ) : null}
 
                 {primaryActions.map(status => {
                   const inventoryBlocked =
-                    inventoryReservationRequiredStatuses.has(status) &&
+                    inventoryReservationRequiredStatuses.has(
+                      status,
+                    ) &&
                     !allInventoryReady;
 
                   const actionDisabled =
@@ -1041,16 +1578,22 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
 
                   return (
                     <Pressable
-                      android_ripple={{ color: RIPPLE }}
+                      android_ripple={{
+                        color: RIPPLE,
+                      }}
                       key={status}
                       style={[
                         styles.primaryActionButton,
-                        actionDisabled && styles.disabledAction,
+                        actionDisabled &&
+                          styles.disabledAction,
                       ]}
                       disabled={actionDisabled}
-                      onPress={() => handleAction(status)}
+                      onPress={() =>
+                        handleAction(status)
+                      }
                     >
-                      {status === "OUT_FOR_DELIVERY" ? (
+                      {status ===
+                      "OUT_FOR_DELIVERY" ? (
                         <Truck
                           size={19}
                           color={SURFACE}
@@ -1064,7 +1607,11 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         />
                       )}
 
-                      <Text style={styles.primaryActionText}>
+                      <Text
+                        style={
+                          styles.primaryActionText
+                        }
+                      >
                         {getActionLabel(status)}
                       </Text>
                     </Pressable>
@@ -1072,54 +1619,105 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 })}
 
                 {exceptionActions.length > 0 ? (
-                  <View style={styles.exceptionActions}>
-                    {exceptionActions.map(status => (
-                      <Pressable
-                        android_ripple={{ color: RIPPLE }}
-                        key={status}
-                        style={styles.exceptionButton}
-                        disabled={isActionLoading}
-                        onPress={() => handleAction(status)}
-                      >
-                        <XCircle
-                          size={16}
-                          color={DANGER_DARK}
-                          strokeWidth={2.5}
-                        />
+                  <View
+                    style={
+                      styles.exceptionActions
+                    }
+                  >
+                    {exceptionActions.map(
+                      status => (
+                        <Pressable
+                          android_ripple={{
+                            color: RIPPLE,
+                          }}
+                          key={status}
+                          style={
+                            styles.exceptionButton
+                          }
+                          disabled={
+                            isActionLoading
+                          }
+                          onPress={() =>
+                            handleAction(status)
+                          }
+                        >
+                          <XCircle
+                            size={16}
+                            color={DANGER_DARK}
+                            strokeWidth={2.5}
+                          />
 
-                        <Text style={styles.exceptionButtonText}>
-                          {getActionLabel(status)}
-                        </Text>
-                      </Pressable>
-                    ))}
+                          <Text
+                            style={
+                              styles.exceptionButtonText
+                            }
+                          >
+                            {getActionLabel(
+                              status,
+                            )}
+                          </Text>
+                        </Pressable>
+                      ),
+                    )}
                   </View>
                 ) : null}
 
-                {allowedNextStatuses.length === 0 ? (
-                  <View style={styles.terminalStatus}>
+                {allowedNextStatuses.length ===
+                0 ? (
+                  <View
+                    style={
+                      styles.terminalStatus
+                    }
+                  >
                     <CheckCircle2
                       size={20}
                       color={PHARMACY}
                       strokeWidth={2.6}
                     />
 
-                    <View style={styles.terminalText}>
-                      <Text style={styles.terminalTitle}>
+                    <View
+                      style={
+                        styles.terminalText
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.terminalTitle
+                        }
+                      >
                         No further pharmacy action
                       </Text>
 
-                      <Text style={styles.terminalSubtitle}>
+                      <Text
+                        style={
+                          styles.terminalSubtitle
+                        }
+                      >
                         This order is currently{" "}
-                        {formatStatus(order.status).toLowerCase()}.
+                        {formatStatus(
+                          order.status,
+                        ).toLowerCase()}
+                        .
                       </Text>
                     </View>
                   </View>
                 ) : null}
 
                 {isActionLoading ? (
-                  <View style={styles.actionLoading}>
-                    <ActivityIndicator color={PHARMACY} />
-                    <Text style={styles.actionLoadingText}>
+                  <View
+                    style={
+                      styles.actionLoading
+                    }
+                  >
+                    <ActivityIndicator
+                      color={PHARMACY}
+                    />
+
+                    <Text
+                      style={
+                        styles.actionLoadingText
+                      }
+                    >
                       Updating order...
                     </Text>
                   </View>
@@ -1137,9 +1735,17 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 }
               />
 
-              <View style={styles.patientPanel}>
-                <View style={styles.profileRow}>
-                  <View style={styles.patientAvatar}>
+              <View
+                style={styles.patientPanel}
+              >
+                <View
+                  style={styles.profileRow}
+                >
+                  <View
+                    style={
+                      styles.patientAvatar
+                    }
+                  >
                     <UserRound
                       size={25}
                       color={BLUE_DARK}
@@ -1147,18 +1753,34 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     />
                   </View>
 
-                  <View style={styles.profileText}>
-                    <Text style={styles.profileName}>
+                  <View
+                    style={
+                      styles.profileText
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.profileName
+                      }
+                    >
                       {order.patient.fullName}
                     </Text>
 
-                    <Text style={styles.profileEmail}>
+                    <Text
+                      style={
+                        styles.profileEmail
+                      }
+                    >
                       {order.patient.email}
                     </Text>
                   </View>
                 </View>
 
-                <View style={styles.contactGrid}>
+                <View
+                  style={
+                    styles.contactGrid
+                  }
+                >
                   <ContactItem
                     icon={
                       <Phone
@@ -1168,7 +1790,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       />
                     }
                     text={
-                      order.patient.patientProfile?.phoneNumber || "No phone"
+                      order.patient
+                        .patientProfile
+                        ?.phoneNumber ||
+                      "No phone"
                     }
                   />
 
@@ -1180,7 +1805,10 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         strokeWidth={2.3}
                       />
                     }
-                    text={address || "No address"}
+                    text={
+                      address ||
+                      "No address"
+                    }
                   />
                 </View>
               </View>
@@ -1198,8 +1826,16 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     }
                   />
 
-                  <View style={styles.prescriberPanel}>
-                    <View style={styles.prescriberIcon}>
+                  <View
+                    style={
+                      styles.prescriberPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.prescriberIcon
+                      }
+                    >
                       <Stethoscope
                         size={22}
                         color={PHARMACY_DARK}
@@ -1207,19 +1843,42 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       />
                     </View>
 
-                    <View style={styles.prescriberText}>
-                      <Text style={styles.prescriberName}>
+                    <View
+                      style={
+                        styles.prescriberText
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.prescriberName
+                        }
+                      >
                         {order.doctor.fullName}
                       </Text>
 
-                      <Text style={styles.prescriberSpeciality}>
-                        {order.doctor.doctorProfile?.specialization || "Doctor"}
+                      <Text
+                        style={
+                          styles.prescriberSpeciality
+                        }
+                      >
+                        {order.doctor
+                          .doctorProfile
+                          ?.specialization ||
+                          "Doctor"}
                       </Text>
 
                       {order.prescription ? (
-                        <Text style={styles.prescribedDate}>
+                        <Text
+                          style={
+                            styles.prescribedDate
+                          }
+                        >
                           Prescribed{" "}
-                          {formatDateTime(order.prescription.prescribedAt)}
+                          {formatDateTime(
+                            order
+                              .prescription
+                              .prescribedAt,
+                          )}
                         </Text>
                       ) : null}
                     </View>
@@ -1245,29 +1904,58 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 }
               />
 
-              <View style={styles.medicineContainer}>
+              <View
+                style={
+                  styles.medicineContainer
+                }
+              >
                 {order.items.length > 0 ? (
-                  order.items.map((item, index) => (
-                    <MedicineItem
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      last={index === order.items.length - 1}
-                      inventoryEditable={inventoryEditable}
-                      orderStatus={order.status}
-                      onManageStock={() => setInventoryMatchItem(item)}
-                    />
-                  ))
+                  order.items.map(
+                    (item, index) => (
+                      <MedicineItem
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        last={
+                          index ===
+                          order.items.length - 1
+                        }
+                        inventoryEditable={
+                          inventoryEditable
+                        }
+                        orderStatus={
+                          order.status
+                        }
+                        currency={
+                          order.payment
+                            ?.currency ||
+                          "GBP"
+                        }
+                        onManageStock={() =>
+                          setInventoryMatchItem(
+                            item,
+                          )
+                        }
+                      />
+                    ),
+                  )
                 ) : (
-                  <View style={styles.medicineEmpty}>
+                  <View
+                    style={
+                      styles.medicineEmpty
+                    }
+                  >
                     <Pill
                       size={23}
                       color={MUTED}
                       strokeWidth={2.3}
                     />
 
-                    <Text style={styles.emptyText}>
-                      No medicines attached to this order.
+                    <Text
+                      style={styles.emptyText}
+                    >
+                      No medicines attached to
+                      this order.
                     </Text>
                   </View>
                 )}
@@ -1288,25 +1976,37 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     }
                   />
 
-                  <View style={styles.notesPanel}>
-                    {order.prescription?.notes ? (
+                  <View
+                    style={
+                      styles.notesPanel
+                    }
+                  >
+                    {order.prescription
+                      ?.notes ? (
                       <NoteItem
                         title="Doctor note"
-                        text={order.prescription.notes}
+                        text={
+                          order.prescription
+                            .notes
+                        }
                       />
                     ) : null}
 
                     {order.requestNote ? (
                       <NoteItem
                         title="Request"
-                        text={order.requestNote}
+                        text={
+                          order.requestNote
+                        }
                       />
                     ) : null}
 
                     {order.statusReason ? (
                       <NoteItem
                         title="Status"
-                        text={order.statusReason}
+                        text={
+                          order.statusReason
+                        }
                       />
                     ) : null}
                   </View>
@@ -1324,45 +2024,248 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 }
               />
 
-              <View style={styles.paymentPanel}>
+              <View
+                style={styles.paymentPanel}
+              >
                 {order.payment ? (
-                  <View style={styles.paymentTop}>
-                    <View style={styles.paymentIcon}>
-                      <CreditCard
-                        size={21}
-                        color={WARNING_DARK}
-                        strokeWidth={2.5}
-                      />
+                  <>
+                    <View
+                      style={
+                        styles.paymentTop
+                      }
+                    >
+                      <View
+                        style={
+                          styles.paymentIcon
+                        }
+                      >
+                        <CreditCard
+                          size={21}
+                          color={WARNING_DARK}
+                          strokeWidth={2.5}
+                        />
+                      </View>
+
+                      <View
+                        style={
+                          styles.paymentText
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.paymentPreference
+                          }
+                        >
+                          {formatStatus(
+                            order.payment
+                              .chargePreference,
+                          )}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.paymentMode
+                          }
+                        >
+                          {order.payment
+                            .testMode
+                            ? "CareMate+ test payment"
+                            : "Prescription payment"}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.paymentAmount
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.paymentAmountText
+                          }
+                        >
+                          {pricingComplete
+                            ? formatMoney(
+                                order.payment
+                                  .amountPence,
+                                order.payment
+                                  .currency,
+                              )
+                            : "Pending"}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.paymentStatus
+                          }
+                        >
+                          {formatStatus(
+                            order.payment
+                              .status,
+                          )}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View style={styles.paymentText}>
-                      <Text style={styles.paymentPreference}>
-                        {formatStatus(order.payment.chargePreference)}
-                      </Text>
+                    <View
+                      style={
+                        pricingComplete
+                          ? styles.pricingReady
+                          : styles.pricingPending
+                      }
+                    >
+                      {pricingComplete ? (
+                        <CheckCircle2
+                          size={16}
+                          color={
+                            PHARMACY_DARK
+                          }
+                          strokeWidth={2.5}
+                        />
+                      ) : (
+                        <PackageSearch
+                          size={16}
+                          color={
+                            WARNING_DARK
+                          }
+                          strokeWidth={2.5}
+                        />
+                      )}
 
-                      <Text style={styles.paymentMode}>
-                        {order.payment.testMode
-                          ? "CareMate+ test payment"
-                          : "Prescription payment"}
+                      <Text
+                        style={[
+                          styles.pricingStatusText,
+                          {
+                            color:
+                              pricingComplete
+                                ? PHARMACY_DARK
+                                : WARNING_DARK,
+                          },
+                        ]}
+                      >
+                        {pricingComplete
+                          ? "Medicine pricing complete"
+                          : "Match all medicines to calculate the final order total"}
                       </Text>
                     </View>
 
-                    <View style={styles.paymentAmount}>
-                      <Text style={styles.paymentAmountText}>
-                        {formatMoney(
-                          order.payment.amountPence,
-                          order.payment.currency,
-                        )}
-                      </Text>
+                    {order.items.some(
+                      item =>
+                        item.lineTotalPence !==
+                        null,
+                    ) ? (
+                      <View
+                        style={
+                          styles.paymentBreakdown
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.paymentBreakdownTitle
+                          }
+                        >
+                          ORDER BREAKDOWN
+                        </Text>
 
-                      <Text style={styles.paymentStatus}>
-                        {formatStatus(order.payment.status)}
-                      </Text>
-                    </View>
-                  </View>
+                        {order.items.map(item => (
+                          <View
+                            key={item.id}
+                            style={
+                              styles.paymentLine
+                            }
+                          >
+                            <View
+                              style={
+                                styles.paymentLineText
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.paymentLineName
+                                }
+                                numberOfLines={1}
+                              >
+                                {item.name}
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.paymentLineMeta
+                                }
+                              >
+                                {item.unitPricePence !==
+                                  null
+                                  ? `${formatMoney(
+                                      item.unitPricePence,
+                                      order.payment
+                                        ?.currency ||
+                                        "GBP",
+                                    )} per ${
+                                      item
+                                        .inventoryItem
+                                        ?.stockUnit ||
+                                      item.quantityUnit ||
+                                      "unit"
+                                    }`
+                                  : "Price pending"}
+                              </Text>
+                            </View>
+
+                            <Text
+                              style={
+                                styles.paymentLineTotal
+                              }
+                            >
+                              {item.lineTotalPence !==
+                              null
+                                ? formatMoney(
+                                    item.lineTotalPence,
+                                    order.payment
+                                      ?.currency ||
+                                      "GBP",
+                                  )
+                                : "—"}
+                            </Text>
+                          </View>
+                        ))}
+
+                        <View
+                          style={
+                            styles.paymentTotalRow
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.paymentTotalLabel
+                            }
+                          >
+                            Order total
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.paymentTotalValue
+                            }
+                          >
+                            {pricingComplete
+                              ? formatMoney(
+                                  order.payment
+                                    .amountPence,
+                                  order.payment
+                                    .currency,
+                                )
+                              : "Pending"}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+                  </>
                 ) : (
-                  <Text style={styles.emptyText}>
-                    No payment information required.
+                  <Text
+                    style={styles.emptyText}
+                  >
+                    No payment information
+                    required.
                   </Text>
                 )}
               </View>
@@ -1380,33 +2283,72 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     }
                   />
 
-                  <View style={styles.exemptionPanel}>
-                    <View style={styles.exemptionTop}>
+                  <View
+                    style={
+                      styles.exemptionPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.exemptionTop
+                      }
+                    >
                       <ShieldCheck
                         size={23}
                         color={BLUE_DARK}
                         strokeWidth={2.5}
                       />
 
-                      <View style={styles.exemptionText}>
-                        <Text style={styles.exemptionType}>
-                          {formatStatus(order.exemptionClaim.exemptionType)}
+                      <View
+                        style={
+                          styles.exemptionText
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.exemptionType
+                          }
+                        >
+                          {formatStatus(
+                            order.exemptionClaim
+                              .exemptionType,
+                          )}
                         </Text>
 
-                        <Text style={styles.exemptionMeta}>
-                          {order.exemptionClaim.referenceNumber ||
+                        <Text
+                          style={
+                            styles.exemptionMeta
+                          }
+                        >
+                          {order.exemptionClaim
+                            .referenceNumber ||
                             "No reference"}
                         </Text>
                       </View>
 
-                      <Text style={styles.exemptionStatus}>
-                        {formatStatus(order.exemptionClaim.status)}
+                      <Text
+                        style={
+                          styles.exemptionStatus
+                        }
+                      >
+                        {formatStatus(
+                          order.exemptionClaim
+                            .status,
+                        )}
                       </Text>
                     </View>
 
-                    {order.exemptionClaim.rejectionReason ? (
-                      <Text style={styles.exemptionReason}>
-                        {order.exemptionClaim.rejectionReason}
+                    {order.exemptionClaim
+                      .rejectionReason ? (
+                      <Text
+                        style={
+                          styles.exemptionReason
+                        }
+                      >
+                        {
+                          order.exemptionClaim
+                            .rejectionReason
+                        }
                       </Text>
                     ) : null}
                   </View>
@@ -1426,8 +2368,16 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                     }
                   />
 
-                  <View style={styles.submissionPanel}>
-                    <View style={styles.submissionIcon}>
+                  <View
+                    style={
+                      styles.submissionPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.submissionIcon
+                      }
+                    >
                       <FileText
                         size={22}
                         color={BLUE_DARK}
@@ -1435,53 +2385,106 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                       />
                     </View>
 
-                    <View style={styles.submissionText}>
-                      <Text style={styles.submissionTitle}>
-                        {formatStatus(order.patientSubmission.requestType)}
+                    <View
+                      style={
+                        styles.submissionText
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.submissionTitle
+                        }
+                      >
+                        {formatStatus(
+                          order.patientSubmission
+                            .requestType,
+                        )}
                       </Text>
 
-                      <Text style={styles.submissionMeta}>
-                        {formatStatus(order.patientSubmission.status)}
+                      <Text
+                        style={
+                          styles.submissionMeta
+                        }
+                      >
+                        {formatStatus(
+                          order.patientSubmission
+                            .status,
+                        )}
                         {"  •  "}
-                        {order.patientSubmission.imageUrl
+                        {order.patientSubmission
+                          .imageUrl
                           ? "Evidence attached"
                           : "No evidence file"}
                       </Text>
 
-                      {order.patientSubmission.verificationPath ? (
-                        <View style={styles.verificationDetails}>
-                          <Text style={styles.verificationLabel}>
+                      {order.patientSubmission
+                        .verificationPath ? (
+                        <View
+                          style={
+                            styles.verificationDetails
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.verificationLabel
+                            }
+                          >
                             VERIFICATION PATH
                           </Text>
 
-                          <Text style={styles.verificationValue}>
+                          <Text
+                            style={
+                              styles.verificationValue
+                            }
+                          >
                             {formatStatus(
-                              order.patientSubmission.verificationPath,
+                              order
+                                .patientSubmission
+                                .verificationPath,
                             )}
                           </Text>
 
-                          {order.patientSubmission.verificationPath ===
+                          {order.patientSubmission
+                            .verificationPath ===
                           "ASSIGNED_DOCTOR" ? (
                             <>
-                              <Text style={styles.verificationDetail}>
+                              <Text
+                                style={
+                                  styles.verificationDetail
+                                }
+                              >
                                 Doctor:{" "}
-                                {order.patientSubmission.verificationDoctor
-                                  ?.fullName || "Not available"}
+                                {order
+                                  .patientSubmission
+                                  .verificationDoctor
+                                  ?.fullName ||
+                                  "Not available"}
                               </Text>
 
-                              <Text style={styles.verificationDetail}>
+                              <Text
+                                style={
+                                  styles.verificationDetail
+                                }
+                              >
                                 Status:{" "}
                                 {formatStatus(
-                                  order.patientSubmission
+                                  order
+                                    .patientSubmission
                                     .doctorVerificationStatus,
                                 )}
                               </Text>
 
-                              {order.patientSubmission
+                              {order
+                                .patientSubmission
                                 .doctorVerificationNote ? (
-                                <Text style={styles.verificationNote}>
+                                <Text
+                                  style={
+                                    styles.verificationNote
+                                  }
+                                >
                                   {
-                                    order.patientSubmission
+                                    order
+                                      .patientSubmission
                                       .doctorVerificationNote
                                   }
                                 </Text>
@@ -1489,30 +2492,50 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                             </>
                           ) : null}
 
-                          {order.patientSubmission.verificationPath ===
+                          {order.patientSubmission
+                            .verificationPath ===
                           "EXTERNAL_EVIDENCE" ? (
                             <>
-                              <Text style={styles.verificationDetail}>
+                              <Text
+                                style={
+                                  styles.verificationDetail
+                                }
+                              >
                                 Evidence:{" "}
-                                {order.patientSubmission.evidenceType
+                                {order
+                                  .patientSubmission
+                                  .evidenceType
                                   ? formatStatus(
-                                      order.patientSubmission.evidenceType,
+                                      order
+                                        .patientSubmission
+                                        .evidenceType,
                                     )
                                   : "Not recorded"}
                               </Text>
 
-                              {order.patientSubmission.imageUrl ? (
+                              {order
+                                .patientSubmission
+                                .imageUrl ? (
                                 <Pressable
-                                  android_ripple={{ color: RIPPLE }}
-                                  style={styles.submissionEvidenceButton}
+                                  android_ripple={{
+                                    color:
+                                      RIPPLE,
+                                  }}
+                                  style={
+                                    styles.submissionEvidenceButton
+                                  }
                                   onPress={() =>
                                     void openPatientRefillEvidence()
                                   }
                                 >
                                   <Eye
                                     size={16}
-                                    color={BLUE_DARK}
-                                    strokeWidth={2.5}
+                                    color={
+                                      BLUE_DARK
+                                    }
+                                    strokeWidth={
+                                      2.5
+                                    }
                                   />
 
                                   <Text
@@ -1520,7 +2543,8 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                                       styles.submissionEvidenceButtonText
                                     }
                                   >
-                                    View protected evidence
+                                    View protected
+                                    evidence
                                   </Text>
                                 </Pressable>
                               ) : null}
@@ -1529,16 +2553,34 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                         </View>
                       ) : null}
 
-                      {order.patientSubmission.reviewedAt ? (
-                        <Text style={styles.submissionReviewMeta}>
+                      {order.patientSubmission
+                        .reviewedAt ? (
+                        <Text
+                          style={
+                            styles.submissionReviewMeta
+                          }
+                        >
                           Reviewed{" "}
-                          {formatDateTime(order.patientSubmission.reviewedAt)}
+                          {formatDateTime(
+                            order
+                              .patientSubmission
+                              .reviewedAt,
+                          )}
                         </Text>
                       ) : null}
 
-                      {order.patientSubmission.reviewNote ? (
-                        <Text style={styles.submissionReviewNote}>
-                          {order.patientSubmission.reviewNote}
+                      {order.patientSubmission
+                        .reviewNote ? (
+                        <Text
+                          style={
+                            styles.submissionReviewNote
+                          }
+                        >
+                          {
+                            order
+                              .patientSubmission
+                              .reviewNote
+                          }
                         </Text>
                       ) : null}
                     </View>
@@ -1557,22 +2599,47 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 }
               />
 
-              <View style={styles.historyPanel}>
-                {order.statusHistory.length > 0 ? (
-                  order.statusHistory.map((historyItem, index) => (
-                    <HistoryItem
-                      key={historyItem.id}
-                      status={formatStatus(historyItem.toStatus)}
-                      date={formatDateTime(historyItem.createdAt)}
-                      note={historyItem.note}
-                      current={index === order.statusHistory.length - 1}
-                      last={index === order.statusHistory.length - 1}
-                    />
-                  ))
+              <View
+                style={styles.historyPanel}
+              >
+                {order.statusHistory.length >
+                0 ? (
+                  order.statusHistory.map(
+                    (historyItem, index) => (
+                      <HistoryItem
+                        key={historyItem.id}
+                        status={formatStatus(
+                          historyItem.toStatus,
+                        )}
+                        date={formatDateTime(
+                          historyItem.createdAt,
+                        )}
+                        note={
+                          historyItem.note
+                        }
+                        current={
+                          index ===
+                          order.statusHistory
+                            .length -
+                            1
+                        }
+                        last={
+                          index ===
+                          order.statusHistory
+                            .length -
+                            1
+                        }
+                      />
+                    ),
+                  )
                 ) : (
                   <HistoryItem
-                    status={formatStatus(order.status)}
-                    date={formatDateTime(order.createdAt)}
+                    status={formatStatus(
+                      order.status,
+                    )}
+                    date={formatDateTime(
+                      order.createdAt,
+                    )}
                     note="Order received"
                     current
                     last
@@ -1580,14 +2647,20 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
                 )}
               </View>
 
-              <View style={styles.refreshHint}>
+              <View
+                style={styles.refreshHint}
+              >
                 <PackageCheck
                   size={17}
                   color={PHARMACY}
                   strokeWidth={2.4}
                 />
 
-                <Text style={styles.refreshHintText}>
+                <Text
+                  style={
+                    styles.refreshHintText
+                  }
+                >
                   Pull down to refresh
                 </Text>
               </View>
@@ -1597,15 +2670,21 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       </View>
 
       <PharmacyInventoryMatchModal
-        visible={Boolean(inventoryMatchItem)}
+        visible={Boolean(
+          inventoryMatchItem,
+        )}
         orderId={route.params.orderId}
         item={inventoryMatchItem}
         canEdit={inventoryEditable}
-        onClose={() => setInventoryMatchItem(null)}
+        onClose={() =>
+          setInventoryMatchItem(null)
+        }
         onChanged={refreshOrder}
         onOpenInventory={() => {
           setInventoryMatchItem(null);
-          navigation.navigate("PharmacyInventory");
+          navigation.navigate(
+            "PharmacyInventory",
+          );
         }}
       />
 
@@ -1613,30 +2692,57 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
         visible={reasonModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setReasonModalVisible(false)}
+        onRequestClose={() =>
+          setReasonModalVisible(false)
+        }
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.reasonModal}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderText}>
-                <Text style={styles.modalTitle}>
+          <View
+            style={styles.reasonModal}
+          >
+            <View
+              style={styles.modalHeader}
+            >
+              <View
+                style={
+                  styles.modalHeaderText
+                }
+              >
+                <Text
+                  style={styles.modalTitle}
+                >
                   {selectedExceptionStatus
-                    ? getActionLabel(selectedExceptionStatus)
+                    ? getActionLabel(
+                        selectedExceptionStatus,
+                      )
                     : "Update order"}
                 </Text>
 
-                <Text style={styles.modalSubtitle}>
-                  Add a clear reason so this decision is recorded in order
+                <Text
+                  style={
+                    styles.modalSubtitle
+                  }
+                >
+                  Add a clear reason so this
+                  decision is recorded in order
                   history.
                 </Text>
               </View>
 
               <Pressable
-                android_ripple={{ color: RIPPLE }}
+                android_ripple={{
+                  color: RIPPLE,
+                }}
                 style={styles.modalClose}
-                onPress={() => setReasonModalVisible(false)}
+                onPress={() =>
+                  setReasonModalVisible(false)
+                }
               >
-                <X size={20} color={TEXT} strokeWidth={2.5} />
+                <X
+                  size={20}
+                  color={TEXT}
+                  strokeWidth={2.5}
+                />
               </Pressable>
             </View>
 
@@ -1651,25 +2757,42 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               textAlignVertical="top"
             />
 
-            <Text style={styles.characterCount}>
+            <Text
+              style={
+                styles.characterCount
+              }
+            >
               {statusReason.length}/500
             </Text>
 
             <Pressable
-              android_ripple={{ color: RIPPLE }}
+              android_ripple={{
+                color: RIPPLE,
+              }}
               style={[
                 styles.confirmExceptionButton,
-                isActionLoading && styles.disabledAction,
+                isActionLoading &&
+                  styles.disabledAction,
               ]}
               disabled={isActionLoading}
-              onPress={submitExceptionStatus}
+              onPress={
+                submitExceptionStatus
+              }
             >
               {isActionLoading ? (
-                <ActivityIndicator color={SURFACE} />
+                <ActivityIndicator
+                  color={SURFACE}
+                />
               ) : (
-                <Text style={styles.confirmExceptionText}>
+                <Text
+                  style={
+                    styles.confirmExceptionText
+                  }
+                >
                   {selectedExceptionStatus
-                    ? getActionLabel(selectedExceptionStatus)
+                    ? getActionLabel(
+                        selectedExceptionStatus,
+                      )
                     : "Confirm"}
                 </Text>
               )}
@@ -1681,30 +2804,60 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       <Modal
         visible={evidenceVisible}
         animationType="slide"
-        onRequestClose={() => setEvidenceVisible(false)}
+        onRequestClose={() =>
+          setEvidenceVisible(false)
+        }
       >
         <SafeAreaView
-          style={styles.viewerSafeArea}
+          style={
+            styles.viewerSafeArea
+          }
           edges={["top", "bottom"]}
         >
-          <View style={styles.viewerHeader}>
+          <View
+            style={
+              styles.viewerHeader
+            }
+          >
             <Pressable
-              android_ripple={{ color: RIPPLE }}
-              style={styles.viewerClose}
-              onPress={() => setEvidenceVisible(false)}
+              android_ripple={{
+                color: RIPPLE,
+              }}
+              style={
+                styles.viewerClose
+              }
+              onPress={() =>
+                setEvidenceVisible(false)
+              }
             >
-              <X size={21} color={TEXT} strokeWidth={2.6} />
+              <X
+                size={21}
+                color={TEXT}
+                strokeWidth={2.6}
+              />
             </Pressable>
 
-            <View style={styles.viewerTitleBlock}>
-              <Text style={styles.viewerTitle}>Medicine evidence</Text>
+            <View
+              style={
+                styles.viewerTitleBlock
+              }
+            >
+              <Text
+                style={styles.viewerTitle}
+              >
+                Medicine evidence
+              </Text>
 
               <Text
-                style={styles.viewerSubtitle}
+                style={
+                  styles.viewerSubtitle
+                }
                 numberOfLines={1}
               >
                 {refillSubmission?.evidenceType
-                  ? formatStatus(refillSubmission.evidenceType)
+                  ? formatStatus(
+                      refillSubmission.evidenceType,
+                    )
                   : "Protected patient evidence"}
               </Text>
             </View>
@@ -1726,10 +2879,22 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
               cacheEnabled={false}
               style={styles.webView}
               renderLoading={() => (
-                <View style={styles.webViewLoading}>
-                  <ActivityIndicator color={PHARMACY} />
-                  <Text style={styles.webViewLoadingText}>
-                    Opening protected evidence...
+                <View
+                  style={
+                    styles.webViewLoading
+                  }
+                >
+                  <ActivityIndicator
+                    color={PHARMACY}
+                  />
+
+                  <Text
+                    style={
+                      styles.webViewLoadingText
+                    }
+                  >
+                    Opening protected
+                    evidence...
                   </Text>
                 </View>
               )}
@@ -1748,7 +2913,9 @@ const VerificationStatus = ({
   active: boolean;
   label: string;
 }) => (
-  <View style={styles.verificationItem}>
+  <View
+    style={styles.verificationItem}
+  >
     {active ? (
       <CheckCircle2
         size={15}
@@ -1763,7 +2930,11 @@ const VerificationStatus = ({
       />
     )}
 
-    <Text style={styles.verificationText}>{label}</Text>
+    <Text
+      style={styles.verificationText}
+    >
+      {label}
+    </Text>
   </View>
 );
 
@@ -1778,14 +2949,29 @@ const QuickInfo = ({
   label: string;
   value: string;
 }) => (
-  <View style={[styles.quickInfo, { backgroundColor: background }]}>
+  <View
+    style={[
+      styles.quickInfo,
+      {
+        backgroundColor:
+          background,
+      },
+    ]}
+  >
     {icon}
 
-    <Text style={styles.quickInfoValue} numberOfLines={1}>
+    <Text
+      style={styles.quickInfoValue}
+      numberOfLines={1}
+    >
       {value}
     </Text>
 
-    <Text style={styles.quickInfoLabel}>{label}</Text>
+    <Text
+      style={styles.quickInfoLabel}
+    >
+      {label}
+    </Text>
   </View>
 );
 
@@ -1798,11 +2984,23 @@ const SectionHeading = ({
   subtitle?: string;
   icon: ReactNode;
 }) => (
-  <View style={styles.sectionHeading}>
+  <View
+    style={styles.sectionHeading}
+  >
     {icon}
-    <Text style={styles.sectionTitle}>{title}</Text>
+
+    <Text style={styles.sectionTitle}>
+      {title}
+    </Text>
+
     {subtitle ? (
-      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+      <Text
+        style={
+          styles.sectionSubtitle
+        }
+      >
+        {subtitle}
+      </Text>
     ) : null}
   </View>
 );
@@ -1816,7 +3014,11 @@ const ContactItem = ({
 }) => (
   <View style={styles.contactItem}>
     {icon}
-    <Text style={styles.contactText} numberOfLines={2}>
+
+    <Text
+      style={styles.contactText}
+      numberOfLines={2}
+    >
       {text}
     </Text>
   </View>
@@ -1828,6 +3030,7 @@ const MedicineItem = ({
   last,
   inventoryEditable,
   orderStatus,
+  currency,
   onManageStock,
 }: {
   item: PharmacyMedicineItem;
@@ -1835,72 +3038,126 @@ const MedicineItem = ({
   last: boolean;
   inventoryEditable: boolean;
   orderStatus: PharmacyOrderStatus;
+  currency: string;
   onManageStock: () => void;
 }) => {
-  const rawQuantity = item.quantity?.trim() || "";
-  const requiredMatch = rawQuantity.match(/^(\d+(?:\.\d+)?)/);
-  const required = requiredMatch ? Number(requiredMatch[1]) : null;
-  const dispensed = item.dispensedQuantity || 0;
+  const rawQuantity =
+    item.quantity?.trim() || "";
 
-  const requiredUnit = normalizeUnit(item.quantityUnit);
-  const dispensedUnit = normalizeUnit(item.dispensedUnit);
+  const requiredMatch =
+    rawQuantity.match(
+      /^(\d+(?:\.\d+)?)/,
+    );
+
+  const required = requiredMatch
+    ? Number(requiredMatch[1])
+    : null;
+
+  const dispensed =
+    item.dispensedQuantity || 0;
+
+  const requiredUnit =
+    normalizeUnit(item.quantityUnit);
+
+  const dispensedUnit =
+    normalizeUnit(item.dispensedUnit);
+
   const unitsComparable =
-    Boolean(requiredUnit && dispensedUnit) && requiredUnit === dispensedUnit;
+    Boolean(
+      requiredUnit &&
+        dispensedUnit,
+    ) &&
+    requiredUnit ===
+      dispensedUnit;
 
   const progress =
-    required && required > 0 && unitsComparable
-      ? Math.min(100, Math.max(0, (dispensed / required) * 100))
+    required &&
+    required > 0 &&
+    unitsComparable
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            (dispensed / required) *
+              100,
+          ),
+        )
       : 0;
 
-  const unitAlreadyIncluded = item.quantityUnit
-    ? rawQuantity.toLowerCase().includes(item.quantityUnit.toLowerCase())
-    : true;
+  const unitAlreadyIncluded =
+    item.quantityUnit
+      ? rawQuantity
+          .toLowerCase()
+          .includes(
+            item.quantityUnit.toLowerCase(),
+          )
+      : true;
 
-  const quantityText = rawQuantity
-    ? `${rawQuantity}${
-        item.quantityUnit && !unitAlreadyIncluded
-          ? ` ${item.quantityUnit}`
-          : ""
-      }`
-    : "Not specified";
+  const quantityText =
+    rawQuantity
+      ? `${rawQuantity}${
+          item.quantityUnit &&
+          !unitAlreadyIncluded
+            ? ` ${item.quantityUnit}`
+            : ""
+        }`
+      : "Not specified";
 
   const dispensedText =
     dispensed > 0
       ? `${dispensed}${
           item.dispensedUnit
-            ? ` ${pluralize(item.dispensedUnit, dispensed)}`
+            ? ` ${pluralize(
+                item.dispensedUnit,
+                dispensed,
+              )}`
             : ""
         }`
-      : "Not reserved";
+      : "Not allocated";
 
-  const reservationActive = Boolean(
+  const allocationActive = Boolean(
     item.inventoryItemId &&
-      item.inventoryReservedQuantity > 0 &&
+      item.inventoryReservedQuantity >
+        0 &&
       item.inventoryReservedAt &&
       !item.inventoryReleasedAt &&
       !item.inventoryConsumedAt,
   );
 
-  const stockConsumed = Boolean(item.inventoryConsumedAt);
+  const stockConsumed =
+    Boolean(item.inventoryConsumedAt);
 
   const inventoryName =
-    item.inventoryItem?.medicineName || "Matched inventory item";
+    item.inventoryItem
+      ?.medicineName ||
+    "Matched inventory item";
 
-  const inventoryDetail = item.inventoryItem
-    ? [item.inventoryItem.strength, item.inventoryItem.form]
-        .filter(Boolean)
-        .join(" • ")
-    : "";
+  const inventoryDetail =
+    item.inventoryItem
+      ? [
+          item.inventoryItem
+            .strength,
+          item.inventoryItem.form,
+        ]
+          .filter(Boolean)
+          .join(" • ")
+      : "";
 
   return (
     <View
       style={[
         styles.medicineItem,
-        last ? styles.medicineItemLast : undefined,
+        last
+          ? styles.medicineItemLast
+          : undefined,
       ]}
     >
-      <View style={styles.medicineTopRow}>
-        <View style={styles.medicineIcon}>
+      <View
+        style={styles.medicineTopRow}
+      >
+        <View
+          style={styles.medicineIcon}
+        >
           <Pill
             size={20}
             color={PHARMACY}
@@ -1908,7 +3165,9 @@ const MedicineItem = ({
           />
         </View>
 
-        <View style={styles.medicineMain}>
+        <View
+          style={styles.medicineMain}
+        >
           <Text
             style={styles.medicineName}
             numberOfLines={2}
@@ -1916,40 +3175,92 @@ const MedicineItem = ({
             {item.name}
           </Text>
 
-          <Text style={styles.medicineSubline}>
-            {item.dose || "Dose not specified"}
+          <Text
+            style={
+              styles.medicineSubline
+            }
+          >
+            {item.dose ||
+              "Dose not specified"}
             {"  •  "}
             {quantityText}
           </Text>
         </View>
 
-        <View style={styles.itemNumber}>
-          <Text style={styles.itemNumberText}>{index + 1}</Text>
+        <View
+          style={styles.itemNumber}
+        >
+          <Text
+            style={
+              styles.itemNumberText
+            }
+          >
+            {index + 1}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.medicineInstructionBox}>
-        <Text style={styles.instructionLabel}>DIRECTIONS</Text>
-        <Text style={styles.instructionText}>
-          {item.instructions || "No instructions provided"}
+      <View
+        style={
+          styles.medicineInstructionBox
+        }
+      >
+        <Text
+          style={
+            styles.instructionLabel
+          }
+        >
+          DIRECTIONS
+        </Text>
+
+        <Text
+          style={
+            styles.instructionText
+          }
+        >
+          {item.instructions ||
+            "No instructions provided"}
         </Text>
       </View>
 
-      <View style={styles.medicineStockRow}>
-        <View style={styles.quantityBlock}>
-          <Text style={styles.quantityLabel}>Requested</Text>
-          <Text style={styles.quantityValue}>{quantityText}</Text>
+      <View
+        style={styles.medicineStockRow}
+      >
+        <View
+          style={styles.quantityBlock}
+        >
+          <Text
+            style={styles.quantityLabel}
+          >
+            Requested
+          </Text>
+
+          <Text
+            style={styles.quantityValue}
+          >
+            {quantityText}
+          </Text>
         </View>
 
-        <View style={styles.quantityDivider} />
+        <View
+          style={styles.quantityDivider}
+        />
 
-        <View style={styles.quantityBlock}>
-          <Text style={styles.quantityLabel}>Prepared supply</Text>
+        <View
+          style={styles.quantityBlock}
+        >
+          <Text
+            style={styles.quantityLabel}
+          >
+            Prepared supply
+          </Text>
 
           <Text
             style={[
               styles.quantityValue,
-              dispensed > 0 ? styles.dispensedValue : undefined,
+              dispensed > 0
+                ? styles.dispensedValue
+                : undefined,
             ]}
           >
             {dispensedText}
@@ -1957,100 +3268,264 @@ const MedicineItem = ({
         </View>
       </View>
 
-      {required !== null && required > 0 && unitsComparable ? (
-        <View style={styles.progressArea}>
-          <View style={styles.progressTrack}>
+      {item.unitPricePence !== null &&
+      item.lineTotalPence !== null ? (
+        <View
+          style={styles.medicinePriceBox}
+        >
+          <View>
+            <Text
+              style={
+                styles.medicinePriceLabel
+              }
+            >
+              PRICE
+            </Text>
+
+            <Text
+              style={
+                styles.medicineUnitPrice
+              }
+            >
+              {formatMoney(
+                item.unitPricePence,
+                currency,
+              )}{" "}
+              per{" "}
+              {item.inventoryItem
+                ?.stockUnit ||
+                item.quantityUnit ||
+                "unit"}
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.medicineLineTotal
+            }
+          >
+            <Text
+              style={
+                styles.medicineLineTotalLabel
+              }
+            >
+              Medicine total
+            </Text>
+
+            <Text
+              style={
+                styles.medicineLineTotalValue
+              }
+            >
+              {formatMoney(
+                item.lineTotalPence,
+                currency,
+              )}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View
+          style={styles.pricePendingBox}
+        >
+          <Text
+            style={
+              styles.pricePendingText
+            }
+          >
+            Price will be calculated after
+            pharmacy stock is matched.
+          </Text>
+        </View>
+      )}
+
+      {required !== null &&
+      required > 0 &&
+      unitsComparable ? (
+        <View
+          style={styles.progressArea}
+        >
+          <View
+            style={styles.progressTrack}
+          >
             <View
               style={[
                 styles.progressFill,
-                { width: `${progress}%` },
+                {
+                  width: `${progress}%`,
+                },
               ]}
             />
           </View>
 
-          <Text style={styles.progressText}>
+          <Text
+            style={styles.progressText}
+          >
             {dispensed >= required
               ? "Complete"
-              : `${Math.max(required - dispensed, 0)} remaining`}
+              : `${Math.max(
+                  required - dispensed,
+                  0,
+                )} remaining`}
           </Text>
         </View>
       ) : null}
 
       {stockConsumed ? (
-        <View style={styles.inventoryMatchedCard}>
-          <View style={styles.inventoryStatusRow}>
+        <View
+          style={
+            styles.inventoryMatchedCard
+          }
+        >
+          <View
+            style={
+              styles.inventoryStatusRow
+            }
+          >
             <PackageCheck
               size={18}
               color={PHARMACY_DARK}
               strokeWidth={2.5}
             />
 
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryMatchedTitle}>
+            <View
+              style={
+                styles.inventoryStatusText
+              }
+            >
+              <Text
+                style={
+                  styles.inventoryMatchedTitle
+                }
+              >
                 Stock completed
               </Text>
 
-              <Text style={styles.inventoryMatchedName}>
+              <Text
+                style={
+                  styles.inventoryMatchedName
+                }
+              >
                 {inventoryName}
               </Text>
 
               {inventoryDetail ? (
-                <Text style={styles.inventoryMatchedMeta}>
+                <Text
+                  style={
+                    styles.inventoryMatchedMeta
+                  }
+                >
                   {inventoryDetail}
                 </Text>
               ) : null}
 
-              <Text style={styles.inventoryReservedText}>
-                Inventory deducted after fulfilment
+              <Text
+                style={
+                  styles.inventoryAllocatedText
+                }
+              >
+                Inventory deducted after
+                fulfilment
               </Text>
             </View>
           </View>
         </View>
-      ) : reservationActive ? (
-        <View style={styles.inventoryMatchedCard}>
-          <View style={styles.inventoryStatusRow}>
+      ) : allocationActive ? (
+        <View
+          style={
+            styles.inventoryMatchedCard
+          }
+        >
+          <View
+            style={
+              styles.inventoryStatusRow
+            }
+          >
             <PackageCheck
               size={18}
               color={PHARMACY_DARK}
               strokeWidth={2.5}
             />
 
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryMatchedTitle}>
-                Stock reserved
+            <View
+              style={
+                styles.inventoryStatusText
+              }
+            >
+              <Text
+                style={
+                  styles.inventoryMatchedTitle
+                }
+              >
+                Stock allocated
               </Text>
 
-              <Text style={styles.inventoryMatchedName}>
+              <Text
+                style={
+                  styles.inventoryMatchedName
+                }
+              >
                 {inventoryName}
               </Text>
 
               {inventoryDetail ? (
-                <Text style={styles.inventoryMatchedMeta}>
+                <Text
+                  style={
+                    styles.inventoryMatchedMeta
+                  }
+                >
                   {inventoryDetail}
                 </Text>
               ) : null}
 
-              <Text style={styles.inventoryReservedText}>
-                {item.inventoryReservedQuantity}{" "}
-                {item.inventoryItem?.stockUnit || "unit"}
-                {item.inventoryReservedQuantity === 1 ? "" : "s"} reserved
+              <Text
+                style={
+                  styles.inventoryAllocatedText
+                }
+              >
+                {
+                  item.inventoryReservedQuantity
+                }{" "}
+                {pluralize(
+                  item.inventoryItem
+                    ?.stockUnit ||
+                    "unit",
+                  item.inventoryReservedQuantity,
+                )}{" "}
+                allocated to this order
               </Text>
 
-              {dispensed > 0 && item.dispensedUnit ? (
-                <Text style={styles.inventoryDispensedText}>
+              {dispensed > 0 &&
+              item.dispensedUnit ? (
+                <Text
+                  style={
+                    styles.inventoryDispensedText
+                  }
+                >
                   Supplies {dispensed}{" "}
-                  {pluralize(item.dispensedUnit, dispensed)}
+                  {pluralize(
+                    item.dispensedUnit,
+                    dispensed,
+                  )}
                 </Text>
               ) : null}
             </View>
           </View>
 
           <Pressable
-            android_ripple={{ color: RIPPLE }}
-            style={styles.manageStockButton}
+            android_ripple={{
+              color: RIPPLE,
+            }}
+            style={
+              styles.manageStockButton
+            }
             onPress={onManageStock}
           >
-            <Text style={styles.manageStockButtonText}>
+            <Text
+              style={
+                styles.manageStockButtonText
+              }
+            >
               {inventoryEditable
                 ? "Review / change stock"
                 : "Review stock"}
@@ -2058,34 +3533,60 @@ const MedicineItem = ({
           </Pressable>
         </View>
       ) : (
-        <View style={styles.inventoryUnmatchedCard}>
-          <View style={styles.inventoryStatusRow}>
+        <View
+          style={
+            styles.inventoryUnmatchedCard
+          }
+        >
+          <View
+            style={
+              styles.inventoryStatusRow
+            }
+          >
             <PackageSearch
               size={18}
               color={WARNING_DARK}
               strokeWidth={2.5}
             />
 
-            <View style={styles.inventoryStatusText}>
-              <Text style={styles.inventoryUnmatchedTitle}>
+            <View
+              style={
+                styles.inventoryStatusText
+              }
+            >
+              <Text
+                style={
+                  styles.inventoryUnmatchedTitle
+                }
+              >
                 Stock not matched
               </Text>
 
-              <Text style={styles.inventoryUnmatchedText}>
-                {orderStatus === "RECEIVED"
-                  ? "Accept the order before selecting and reserving pharmacy stock."
+              <Text
+                style={
+                  styles.inventoryUnmatchedText
+                }
+              >
+                {orderStatus ===
+                "RECEIVED"
+                  ? "Accept the order before selecting pharmacy stock."
                   : "A pharmacist must confirm suitable inventory before preparation."}
               </Text>
             </View>
           </View>
 
           <Pressable
-            android_ripple={{ color: RIPPLE }}
+            android_ripple={{
+              color: RIPPLE,
+            }}
             style={[
               styles.matchStockButton,
-              !inventoryEditable && styles.disabledStockButton,
+              !inventoryEditable &&
+                styles.disabledStockButton,
             ]}
-            disabled={!inventoryEditable}
+            disabled={
+              !inventoryEditable
+            }
             onPress={onManageStock}
           >
             <PackageSearch
@@ -2094,11 +3595,16 @@ const MedicineItem = ({
               strokeWidth={2.5}
             />
 
-            <Text style={styles.matchStockButtonText}>
-              {orderStatus === "RECEIVED"
+            <Text
+              style={
+                styles.matchStockButtonText
+              }
+            >
+              {orderStatus ===
+              "RECEIVED"
                 ? "Accept order first"
                 : inventoryEditable
-                  ? "Match & reserve stock"
+                  ? "Match stock & price"
                   : "Stock matching locked"}
             </Text>
           </Pressable>
@@ -2116,8 +3622,13 @@ const NoteItem = ({
   text: string;
 }) => (
   <View style={styles.noteItem}>
-    <Text style={styles.noteTitle}>{title}</Text>
-    <Text style={styles.noteText}>{text}</Text>
+    <Text style={styles.noteTitle}>
+      {title}
+    </Text>
+
+    <Text style={styles.noteText}>
+      {text}
+    </Text>
   </View>
 );
 
@@ -2139,28 +3650,60 @@ const HistoryItem = ({
       <View
         style={[
           styles.timelineDot,
-          current ? styles.timelineDotCurrent : undefined,
+          current
+            ? styles.timelineDotCurrent
+            : undefined,
         ]}
       />
 
-      {!last ? <View style={styles.timelineLine} /> : null}
+      {!last ? (
+        <View
+          style={styles.timelineLine}
+        />
+      ) : null}
     </View>
 
-    <View style={styles.historyContent}>
-      <View style={styles.historyTitleRow}>
-        <Text style={styles.historyStatus}>{status}</Text>
+    <View
+      style={styles.historyContent}
+    >
+      <View
+        style={
+          styles.historyTitleRow
+        }
+      >
+        <Text
+          style={styles.historyStatus}
+        >
+          {status}
+        </Text>
 
         {current ? (
-          <View style={styles.currentChip}>
-            <Text style={styles.currentChipText}>Current</Text>
+          <View
+            style={
+              styles.currentChip
+            }
+          >
+            <Text
+              style={
+                styles.currentChipText
+              }
+            >
+              Current
+            </Text>
           </View>
         ) : null}
       </View>
 
-      <Text style={styles.historyDate}>{date}</Text>
+      <Text style={styles.historyDate}>
+        {date}
+      </Text>
 
       {note ? (
-        <Text style={styles.historyNote}>{note}</Text>
+        <Text
+          style={styles.historyNote}
+        >
+          {note}
+        </Text>
       ) : null}
     </View>
   </View>
@@ -2194,6 +3737,7 @@ const styles = StyleSheet.create({
 
   appBarText: { flex: 1 },
   appBarTitle: { color: TEXT, fontSize: 20, fontWeight: "700" },
+
   appBarSubtitle: {
     color: MUTED,
     fontSize: 10,
@@ -2398,6 +3942,85 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
+  paymentReleaseLockedPanel: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  paymentReleaseLockIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor: "#FFE5BE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+  },
+
+  paymentReleaseLockContent: { flex: 1 },
+
+  paymentReleaseLockTitle: {
+    color: WARNING_DARK,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  paymentReleaseLockDescription: {
+    color: TEXT,
+    fontSize: 9,
+    fontWeight: "500",
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  paymentReleaseRule: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SURFACE,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    marginTop: 9,
+  },
+
+  paymentReleaseRuleText: {
+    flex: 1,
+    color: WARNING_DARK,
+    fontSize: 8,
+    fontWeight: "700",
+    lineHeight: 12,
+    marginLeft: 6,
+  },
+
+  paymentReleaseUnlockedPanel: {
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+
+  paymentReleaseUnlockedContent: { flex: 1, marginLeft: 8 },
+
+  paymentReleaseUnlockedTitle: {
+    color: PHARMACY_DARK,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  paymentReleaseUnlockedDescription: {
+    color: PHARMACY_DARK,
+    fontSize: 9,
+    fontWeight: "600",
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
   doctorLockedPanel: {
     backgroundColor: WARNING_LIGHT,
     borderRadius: 13,
@@ -2438,6 +4061,7 @@ const styles = StyleSheet.create({
   },
 
   verificationContent: { flex: 1 },
+
   warningTitle: {
     color: WARNING_DARK,
     fontSize: 12,
@@ -2702,7 +4326,10 @@ const styles = StyleSheet.create({
     padding: 14,
   },
 
-  profileRow: { flexDirection: "row", alignItems: "center" },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
 
   patientAvatar: {
     width: 48,
@@ -2715,6 +4342,7 @@ const styles = StyleSheet.create({
   },
 
   profileText: { flex: 1 },
+
   profileName: {
     color: TEXT,
     fontSize: 15,
@@ -2728,7 +4356,10 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  contactGrid: { marginTop: 12, gap: 7 },
+  contactGrid: {
+    marginTop: 12,
+    gap: 7,
+  },
 
   contactItem: {
     flexDirection: "row",
@@ -2819,7 +4450,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
 
-  medicineMain: { flex: 1, minWidth: 0 },
+  medicineMain: {
+    flex: 1,
+    minWidth: 0,
+  },
 
   medicineName: {
     color: TEXT,
@@ -2880,7 +4514,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  quantityBlock: { flex: 1 },
+  quantityBlock: {
+    flex: 1,
+  },
 
   quantityDivider: {
     width: StyleSheet.hairlineWidth,
@@ -2902,7 +4538,64 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  dispensedValue: { color: PHARMACY_DARK },
+  dispensedValue: {
+    color: PHARMACY_DARK,
+  },
+
+  medicinePriceBox: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 11,
+    padding: 10,
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  medicinePriceLabel: {
+    color: WARNING_DARK,
+    fontSize: 7,
+    fontWeight: "700",
+  },
+
+  medicineUnitPrice: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  medicineLineTotal: {
+    flex: 1,
+    alignItems: "flex-end",
+    marginLeft: 10,
+  },
+
+  medicineLineTotalLabel: {
+    color: MUTED,
+    fontSize: 7,
+    fontWeight: "600",
+  },
+
+  medicineLineTotalValue: {
+    color: WARNING_DARK,
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+
+  pricePendingBox: {
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 10,
+  },
+
+  pricePendingText: {
+    color: WARNING_DARK,
+    fontSize: 8,
+    lineHeight: 13,
+    fontWeight: "600",
+  },
 
   progressArea: {
     flexDirection: "row",
@@ -2975,7 +4668,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  inventoryReservedText: {
+  inventoryAllocatedText: {
     color: PHARMACY_DARK,
     fontSize: 8,
     fontWeight: "700",
@@ -3028,7 +4721,9 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
 
-  disabledStockButton: { opacity: 0.45 },
+  disabledStockButton: {
+    opacity: 0.45,
+  },
 
   matchStockButtonText: {
     color: SURFACE,
@@ -3049,7 +4744,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
 
-  noteItem: { paddingVertical: 10 },
+  noteItem: {
+    paddingVertical: 10,
+  },
 
   noteTitle: {
     color: WARNING_DARK,
@@ -3086,7 +4783,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
 
-  paymentText: { flex: 1 },
+  paymentText: {
+    flex: 1,
+  },
 
   paymentPreference: {
     color: TEXT,
@@ -3117,6 +4816,98 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: "700",
     marginTop: 3,
+  },
+
+  pricingReady: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: PHARMACY_LIGHT,
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 11,
+  },
+
+  pricingPending: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: SURFACE,
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 11,
+  },
+
+  pricingStatusText: {
+    flex: 1,
+    fontSize: 8,
+    lineHeight: 13,
+    fontWeight: "700",
+    marginLeft: 7,
+  },
+
+  paymentBreakdown: {
+    backgroundColor: SURFACE,
+    borderRadius: 11,
+    padding: 11,
+    marginTop: 10,
+  },
+
+  paymentBreakdownTitle: {
+    color: MUTED,
+    fontSize: 7,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    marginBottom: 5,
+  },
+
+  paymentLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+
+  paymentLineText: {
+    flex: 1,
+    paddingRight: 8,
+  },
+
+  paymentLineName: {
+    color: TEXT,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  paymentLineMeta: {
+    color: MUTED,
+    fontSize: 8,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  paymentLineTotal: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  paymentTotalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 11,
+  },
+
+  paymentTotalLabel: {
+    color: TEXT,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  paymentTotalValue: {
+    color: PHARMACY_DARK,
+    fontSize: 17,
+    fontWeight: "800",
   },
 
   exemptionPanel: {
@@ -3180,7 +4971,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
 
-  submissionText: { flex: 1 },
+  submissionText: {
+    flex: 1,
+  },
 
   submissionTitle: {
     color: TEXT,
@@ -3271,8 +5064,14 @@ const styles = StyleSheet.create({
     paddingTop: 13,
   },
 
-  historyItem: { flexDirection: "row" },
-  timeline: { width: 25, alignItems: "center" },
+  historyItem: {
+    flexDirection: "row",
+  },
+
+  timeline: {
+    width: 25,
+    alignItems: "center",
+  },
 
   timelineDot: {
     width: 10,
