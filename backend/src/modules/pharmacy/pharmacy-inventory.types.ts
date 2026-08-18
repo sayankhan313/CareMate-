@@ -4,6 +4,7 @@ export type PharmacyInventoryItem = {
   strength: string | null;
   form: string | null;
   stockUnit: string;
+  unitPricePence: number;
   quantityInStock: number;
   reservedQuantity: number;
   availableQuantity: number;
@@ -20,11 +21,24 @@ export type PharmacyInventoryListResponse = {
   items: PharmacyInventoryItem[];
 };
 
+export type PharmacyInventoryReferencePrice = {
+  found: boolean;
+  reference: {
+    id: string;
+    medicineName: string;
+    strength: string;
+    form: string;
+    stockUnit: string;
+    defaultUnitPricePence: number;
+  } | null;
+};
+
 export type CreatePharmacyInventoryItemInput = {
   medicineName: string;
   strength?: string;
   form?: string;
   stockUnit?: string;
+  unitPricePence?: number;
   quantityInStock?: number;
   lowStockThreshold?: number;
 };
@@ -34,6 +48,7 @@ export type UpdatePharmacyInventoryItemInput = {
   strength?: string | null;
   form?: string | null;
   stockUnit?: string;
+  unitPricePence?: number;
   quantityInStock?: number;
   lowStockThreshold?: number;
 };

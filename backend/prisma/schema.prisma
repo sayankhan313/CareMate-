@@ -401,15 +401,16 @@ model User {
   passwordResetToken          String?
   passwordResetTokenExpiresAt DateTime?
 
-  patientProfile           PatientProfile?
-  notificationPreferences  PatientNotificationPreference?
-  reminderPreferences      PatientReminderPreference?
-  safetyPreferences        PatientSafetyPreference?
-  accessibilityPreferences PatientAccessibilityPreference?
-  privacyPreferences       PatientPrivacyPreference?
-  doctorProfile            DoctorProfile?
-  pharmacyProfile          PharmacyProfile?
-  doctorAvailabilities     DoctorAvailability[]            @relation("DoctorAvailabilities")
+  patientProfile            PatientProfile?
+  prescriptionChargeProfile PatientPrescriptionChargeProfile?
+  notificationPreferences   PatientNotificationPreference?
+  reminderPreferences       PatientReminderPreference?
+  safetyPreferences         PatientSafetyPreference?
+  accessibilityPreferences  PatientAccessibilityPreference?
+  privacyPreferences        PatientPrivacyPreference?
+  doctorProfile             DoctorProfile?
+  pharmacyProfile           PharmacyProfile?
+  doctorAvailabilities      DoctorAvailability[]              @relation("DoctorAvailabilities")
 
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
@@ -492,6 +493,18 @@ model PatientProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([healthRecordNumber])
+}
+
+model PatientPrescriptionChargeProfile {
+  id               String                       @id @default(uuid())
+  patientId        String                       @unique
+  chargePreference PrescriptionChargePreference @default(CHARGEABLE)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([chargePreference])
 }
 
 model PatientNotificationPreference {
@@ -706,23 +719,19 @@ model PatientPharmacyExemptionEvidence {
 }
 
 model PharmacyInventoryItem {
-  id           String  @id @default(uuid())
-  pharmacyId   String
-  medicineName String
-  strength     String?
-  form         String?
-
-  stockUnit         String @default("pack")
-  quantityInStock   Int    @default(0)
-  reservedQuantity  Int    @default(0)
-  lowStockThreshold Int    @default(5)
-
-  packSize Int?
-  packUnit String?
-
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(uuid())
+  pharmacyId        String
+  medicineName      String
+  strength          String?
+  form              String?
+  stockUnit         String   @default("pack")
+  unitPricePence    Int      @default(0)
+  quantityInStock   Int      @default(0)
+  reservedQuantity  Int      @default(0)
+  lowStockThreshold Int      @default(5)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   pharmacy   User                @relation("PharmacyInventoryItems", fields: [pharmacyId], references: [id], onDelete: Cascade)
   orderItems MedicineOrderItem[] @relation("MedicineOrderItemInventory")
@@ -1212,6 +1221,8 @@ model MedicineOrderItem {
   inventoryReservedAt       DateTime?
   inventoryConsumedAt       DateTime?
   inventoryReleasedAt       DateTime?
+  unitPricePence            Int?
+  lineTotalPence            Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1241,7 +1252,8 @@ model MedicinePackReference {
   packSize    Int
   contentUnit String
 
-  isActive Boolean @default(true)
+  isActive              Boolean @default(true)
+  defaultUnitPricePence Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

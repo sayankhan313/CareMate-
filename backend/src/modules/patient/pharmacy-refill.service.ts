@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 import { notificationService } from "../notification/notification.service.js";
+import { patientPrescriptionChargeService } from "./patient-prescription-charge.service.js";
 
 import type {
   CreatePharmacyRefillInput,
@@ -95,7 +96,6 @@ const getPrimaryPharmacy = async (
         select: {
           id: true,
           pharmacyId: true,
-          chargePreference: true,
 
           pharmacy: {
             select: {
@@ -781,6 +781,12 @@ export const pharmacyRefillService = {
                 ? "Patient requested medicine and selected an assigned doctor to confirm whether the medicine was prescribed or recommended by them."
                 : "Patient requested medicine using external supporting evidence. Pharmacist review is required before fulfilment.";
 
+          const orderPayment =
+            await patientPrescriptionChargeService.resolveOrderPayment(
+              tx,
+              patientId,
+            );
+
           const order =
             await tx.medicineOrder
               .create({
@@ -866,11 +872,15 @@ export const pharmacyRefillService = {
                   payment: {
                     create: {
                       chargePreference:
-                        primaryPharmacy
+                        orderPayment
                           .chargePreference,
 
                       chargeableItemCount:
-                        1,
+                        orderPayment
+                          .status ===
+                        "NOT_REQUIRED"
+                          ? 0
+                          : 1,
 
                       unitChargePence:
                         0,
@@ -888,7 +898,8 @@ export const pharmacyRefillService = {
                         true,
 
                       status:
-                        "PENDING",
+                        orderPayment
+                          .status,
                     },
                   },
 

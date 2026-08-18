@@ -1,71 +1,43 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 
-const ACTIVE_STATUSES = new Set([
-  "RECEIVED",
-  "ACCEPTED",
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-]);
-
-const COMPLETED_STATUSES = new Set([
-  "DELIVERED",
-  "COLLECTED",
-]);
-
-const ATTENTION_STATUSES = new Set([
-  "REJECTED",
-  "DELAYED",
-  "OUT_OF_STOCK",
-  "CANCELLED",
-]);
+const ACTIVE_STATUSES = new Set(["RECEIVED", "ACCEPTED", "PREPARING", "READY", "OUT_FOR_DELIVERY"]);
+const COMPLETED_STATUSES = new Set(["DELIVERED", "COLLECTED"]);
+const ATTENTION_STATUSES = new Set(["REJECTED", "DELAYED", "OUT_OF_STOCK", "CANCELLED"]);
 
 const ensurePatient = async (patientId: string) => {
   const patient = await prisma.user.findFirst({
-    where: {
-      id: patientId,
-      role: "PATIENT",
-    },
-    select: {
-      id: true,
-    },
+    where: { id: patientId, role: "PATIENT" },
+    select: { id: true },
   });
 
-  if (!patient) {
-    throw new AppError("Patient account not found", 404);
-  }
+  if (!patient) throw new AppError("Patient account not found", 404);
 };
+
+const evidenceKey = (pharmacyId: string, chargePreference: string) => `${pharmacyId}:${chargePreference}`;
 
 export const patientOrdersService = {
   async listOrders(patientId: string) {
     await ensurePatient(patientId);
 
     const orders = await prisma.medicineOrder.findMany({
-      where: {
-        patientId,
-      },
-
+      where: { patientId },
       select: {
         id: true,
         orderNumber: true,
         orderSource: true,
         status: true,
         statusReason: true,
-
         medicineName: true,
         dose: true,
         quantity: true,
         instructions: true,
-
         requestedByRole: true,
         requestedByName: true,
         requestNote: true,
-
         prescriptionConfirmed: true,
         prescriptionConfirmedAt: true,
         fulfilmentAllowed: true,
-
         acceptedAt: true,
         rejectedAt: true,
         preparingAt: true,
@@ -76,7 +48,6 @@ export const patientOrdersService = {
         cancelledAt: true,
         delayedAt: true,
         outOfStockAt: true,
-
         createdAt: true,
         updatedAt: true,
 
@@ -84,7 +55,6 @@ export const patientOrdersService = {
           select: {
             id: true,
             fullName: true,
-
             pharmacyProfile: {
               select: {
                 pharmacyName: true,
@@ -100,12 +70,7 @@ export const patientOrdersService = {
           select: {
             id: true,
             fullName: true,
-
-            doctorProfile: {
-              select: {
-                specialization: true,
-              },
-            },
+            doctorProfile: { select: { specialization: true } },
           },
         },
 
@@ -114,25 +79,16 @@ export const patientOrdersService = {
             id: true,
             requestType: true,
             status: true,
-
             verificationPath: true,
             doctorVerificationStatus: true,
             doctorVerificationNote: true,
             doctorVerificationRequestedAt: true,
             doctorVerifiedAt: true,
-
             evidenceType: true,
             imageUrl: true,
-
             reviewNote: true,
             reviewedAt: true,
-
-            verificationDoctor: {
-              select: {
-                id: true,
-                fullName: true,
-              },
-            },
+            verificationDoctor: { select: { id: true, fullName: true } },
           },
         },
 
@@ -147,10 +103,7 @@ export const patientOrdersService = {
             instructions: true,
             dispensedQuantity: true,
           },
-
-          orderBy: {
-            createdAt: "asc",
-          },
+          orderBy: { createdAt: "asc" },
         },
 
         payment: {
@@ -176,193 +129,191 @@ export const patientOrdersService = {
             note: true,
             createdAt: true,
           },
-
-          orderBy: {
-            createdAt: "asc",
-          },
+          orderBy: { createdAt: "asc" },
         },
       },
-
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
-    const formattedOrders = orders.map(order => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      source: order.orderSource,
-      status: order.status,
-      statusReason: order.statusReason,
+    const pharmacyIds = [...new Set(orders.map(order => order.pharmacy?.id).filter((id): id is string => Boolean(id)))];
 
-      medicineName: order.medicineName,
-      dose: order.dose,
-      quantity: order.quantity,
-      instructions: order.instructions,
+    const exemptionEvidence =
+      pharmacyIds.length > 0
+        ? await prisma.patientPharmacyExemptionEvidence.findMany({
+            where: {
+              patientId,
+              pharmacyId: { in: pharmacyIds },
+              chargePreference: { in: ["EXEMPT", "PPC"] },
+            },
+            select: {
+              id: true,
+              pharmacyId: true,
+              chargePreference: true,
+              exemptionType: true,
+              referenceNumber: true,
+              evidenceDocumentUrls: true,
+              expiresAt: true,
+              status: true,
+              verifiedAt: true,
+              rejectedAt: true,
+              rejectionReason: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+          })
+        : [];
 
-      requestedByRole: order.requestedByRole,
-      requestedByName: order.requestedByName,
-      requestNote: order.requestNote,
+    const latestEvidence = new Map<string, (typeof exemptionEvidence)[number]>();
 
-      prescriptionConfirmed: order.prescriptionConfirmed,
-      prescriptionConfirmedAt: order.prescriptionConfirmedAt,
-      fulfilmentAllowed: order.fulfilmentAllowed,
+    for (const evidence of exemptionEvidence) {
+      const key = evidenceKey(evidence.pharmacyId, evidence.chargePreference);
+      if (!latestEvidence.has(key)) latestEvidence.set(key, evidence);
+    }
 
-      pharmacy: order.pharmacy
-        ? {
-            id: order.pharmacy.id,
-            pharmacyName:
-              order.pharmacy.pharmacyProfile?.pharmacyName ||
-              order.pharmacy.fullName,
-            address:
-              order.pharmacy.pharmacyProfile?.address ||
-              null,
-            city:
-              order.pharmacy.pharmacyProfile?.city ||
-              null,
-            postcode:
-              order.pharmacy.pharmacyProfile?.postcode ||
-              null,
-          }
-        : null,
+    const formattedOrders = orders.map(order => {
+      const chargePreference = order.payment?.chargePreference ?? null;
 
-      doctor: order.doctor
-        ? {
-            id: order.doctor.id,
-            fullName: order.doctor.fullName,
-            specialization:
-              order.doctor.doctorProfile?.specialization ||
-              null,
-          }
-        : null,
+      const exemption =
+        order.pharmacy && (chargePreference === "EXEMPT" || chargePreference === "PPC")
+          ? latestEvidence.get(evidenceKey(order.pharmacy.id, chargePreference)) ?? null
+          : null;
 
-      verification: order.patientSubmission
-        ? {
-            submissionId:
-              order.patientSubmission.id,
+      return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        source: order.orderSource,
+        status: order.status,
+        statusReason: order.statusReason,
 
-            requestType:
-              order.patientSubmission.requestType,
+        medicineName: order.medicineName,
+        dose: order.dose,
+        quantity: order.quantity,
+        instructions: order.instructions,
 
-            submissionStatus:
-              order.patientSubmission.status,
+        requestedByRole: order.requestedByRole,
+        requestedByName: order.requestedByName,
+        requestNote: order.requestNote,
 
-            verificationPath:
-              order.patientSubmission.verificationPath,
+        prescriptionConfirmed: order.prescriptionConfirmed,
+        prescriptionConfirmedAt: order.prescriptionConfirmedAt,
+        fulfilmentAllowed: order.fulfilmentAllowed,
 
-            doctorVerificationStatus:
-              order.patientSubmission.doctorVerificationStatus,
+        pharmacy: order.pharmacy
+          ? {
+              id: order.pharmacy.id,
+              pharmacyName: order.pharmacy.pharmacyProfile?.pharmacyName || order.pharmacy.fullName,
+              address: order.pharmacy.pharmacyProfile?.address || null,
+              city: order.pharmacy.pharmacyProfile?.city || null,
+              postcode: order.pharmacy.pharmacyProfile?.postcode || null,
+            }
+          : null,
 
-            doctorVerificationNote:
-              order.patientSubmission.doctorVerificationNote,
+        doctor: order.doctor
+          ? {
+              id: order.doctor.id,
+              fullName: order.doctor.fullName,
+              specialization: order.doctor.doctorProfile?.specialization || null,
+            }
+          : null,
 
-            doctorVerificationRequestedAt:
-              order.patientSubmission.doctorVerificationRequestedAt,
-
-            doctorVerifiedAt:
-              order.patientSubmission.doctorVerifiedAt,
-
-            verificationDoctor:
-              order.patientSubmission.verificationDoctor
+        verification: order.patientSubmission
+          ? {
+              submissionId: order.patientSubmission.id,
+              requestType: order.patientSubmission.requestType,
+              submissionStatus: order.patientSubmission.status,
+              verificationPath: order.patientSubmission.verificationPath,
+              doctorVerificationStatus: order.patientSubmission.doctorVerificationStatus,
+              doctorVerificationNote: order.patientSubmission.doctorVerificationNote,
+              doctorVerificationRequestedAt: order.patientSubmission.doctorVerificationRequestedAt,
+              doctorVerifiedAt: order.patientSubmission.doctorVerifiedAt,
+              verificationDoctor: order.patientSubmission.verificationDoctor
                 ? {
-                    id:
-                      order.patientSubmission.verificationDoctor.id,
-                    fullName:
-                      order.patientSubmission.verificationDoctor.fullName,
+                    id: order.patientSubmission.verificationDoctor.id,
+                    fullName: order.patientSubmission.verificationDoctor.fullName,
                   }
                 : null,
+              evidenceType: order.patientSubmission.evidenceType,
+              hasEvidence: Boolean(order.patientSubmission.imageUrl),
+              pharmacyReviewNote: order.patientSubmission.reviewNote,
+              pharmacyReviewedAt: order.patientSubmission.reviewedAt,
+            }
+          : null,
 
-            evidenceType:
-              order.patientSubmission.evidenceType,
+        items: order.items.map(item => ({
+          id: item.id,
+          medicineId: item.medicineId,
+          name: item.name,
+          dose: item.dose,
+          quantity: item.quantity,
+          quantityUnit: item.quantityUnit,
+          instructions: item.instructions,
+          dispensedQuantity: item.dispensedQuantity,
+        })),
 
-            hasEvidence:
-              Boolean(order.patientSubmission.imageUrl),
+        payment: order.payment
+          ? {
+              id: order.payment.id,
+              chargePreference: order.payment.chargePreference,
+              amountPence: order.payment.amountPence,
+              currency: order.payment.currency,
+              provider: order.payment.provider,
+              testMode: order.payment.testMode,
+              status: order.payment.status,
+              paidAt: order.payment.paidAt,
+              failedAt: order.payment.failedAt,
+              refundedAt: order.payment.refundedAt,
+            }
+          : null,
 
-            pharmacyReviewNote:
-              order.patientSubmission.reviewNote,
+        exemption: exemption
+          ? {
+              id: exemption.id,
+              chargePreference: exemption.chargePreference,
+              exemptionType: exemption.exemptionType,
+              referenceNumber: exemption.referenceNumber,
+              hasEvidence: exemption.evidenceDocumentUrls.length > 0,
+              documentCount: exemption.evidenceDocumentUrls.length,
+              expiresAt: exemption.expiresAt,
+              status: exemption.status,
+              verifiedAt: exemption.verifiedAt,
+              rejectedAt: exemption.rejectedAt,
+              rejectionReason: exemption.rejectionReason,
+              submittedAt: exemption.createdAt,
+              updatedAt: exemption.updatedAt,
+            }
+          : null,
 
-            pharmacyReviewedAt:
-              order.patientSubmission.reviewedAt,
-          }
-        : null,
+        timeline: order.statusHistory.map(history => ({
+          id: history.id,
+          fromStatus: history.fromStatus,
+          toStatus: history.toStatus,
+          note: history.note,
+          createdAt: history.createdAt,
+        })),
 
-      items: order.items.map(item => ({
-        id: item.id,
-        medicineId: item.medicineId,
-        name: item.name,
-        dose: item.dose,
-        quantity: item.quantity,
-        quantityUnit: item.quantityUnit,
-        instructions: item.instructions,
-        dispensedQuantity:
-          item.dispensedQuantity,
-      })),
-
-      payment: order.payment
-        ? {
-            id: order.payment.id,
-            chargePreference:
-              order.payment.chargePreference,
-            amountPence:
-              order.payment.amountPence,
-            currency:
-              order.payment.currency,
-            provider:
-              order.payment.provider,
-            testMode:
-              order.payment.testMode,
-            status:
-              order.payment.status,
-            paidAt:
-              order.payment.paidAt,
-            failedAt:
-              order.payment.failedAt,
-            refundedAt:
-              order.payment.refundedAt,
-          }
-        : null,
-
-      timeline: order.statusHistory.map(history => ({
-        id: history.id,
-        fromStatus: history.fromStatus,
-        toStatus: history.toStatus,
-        note: history.note,
-        createdAt: history.createdAt,
-      })),
-
-      acceptedAt: order.acceptedAt,
-      rejectedAt: order.rejectedAt,
-      preparingAt: order.preparingAt,
-      readyAt: order.readyAt,
-      outForDeliveryAt:
-        order.outForDeliveryAt,
-      deliveredAt: order.deliveredAt,
-      collectedAt: order.collectedAt,
-      cancelledAt: order.cancelledAt,
-      delayedAt: order.delayedAt,
-      outOfStockAt: order.outOfStockAt,
-
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-    }));
+        acceptedAt: order.acceptedAt,
+        rejectedAt: order.rejectedAt,
+        preparingAt: order.preparingAt,
+        readyAt: order.readyAt,
+        outForDeliveryAt: order.outForDeliveryAt,
+        deliveredAt: order.deliveredAt,
+        collectedAt: order.collectedAt,
+        cancelledAt: order.cancelledAt,
+        delayedAt: order.delayedAt,
+        outOfStockAt: order.outOfStockAt,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      };
+    });
 
     return {
       summary: {
         total: formattedOrders.length,
-
-        active: formattedOrders.filter(order =>
-          ACTIVE_STATUSES.has(order.status),
-        ).length,
-
-        completed: formattedOrders.filter(order =>
-          COMPLETED_STATUSES.has(order.status),
-        ).length,
-
-        needsAttention: formattedOrders.filter(order =>
-          ATTENTION_STATUSES.has(order.status),
-        ).length,
+        active: formattedOrders.filter(order => ACTIVE_STATUSES.has(order.status)).length,
+        completed: formattedOrders.filter(order => COMPLETED_STATUSES.has(order.status)).length,
+        needsAttention: formattedOrders.filter(order => ATTENTION_STATUSES.has(order.status)).length,
       },
-
       orders: formattedOrders,
     };
   },

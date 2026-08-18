@@ -1,7 +1,8 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
-import { medicineReferenceService } from "../patient/medicine-reference.service.js";
 import { notificationService } from "../notification/notification.service.js";
+import { medicineReferenceService } from "../patient/medicine-reference.service.js";
+import { patientPrescriptionChargeService } from "../patient/patient-prescription-charge.service.js";
 
 import type {
   CreateDoctorPrescriptionInput,
@@ -179,8 +180,7 @@ const formatPrescription = (prescription: any): DoctorPrescriptionResponse => ({
     id: prescription.prescribedByDoctor.id,
     fullName: prescription.prescribedByDoctor.fullName,
     email: prescription.prescribedByDoctor.email,
-    specialization:
-      prescription.prescribedByDoctor.doctorProfile?.specialization || null,
+    specialization: prescription.prescribedByDoctor.doctorProfile?.specialization || null,
   },
 
   items: prescription.items.map((item: any) => ({
@@ -232,10 +232,7 @@ const notifyPatientAboutPrescription = async (prescription: any) => {
       return;
     }
 
-    const doctorName = getDoctorDisplayName(
-      prescription.prescribedByDoctor.fullName,
-    );
-
+    const doctorName = getDoctorDisplayName(prescription.prescribedByDoctor.fullName);
     const medicineNames = prescription.items.map((item: any) => item.name);
     const medicineCount = medicineNames.length;
 
@@ -323,9 +320,7 @@ const notifyPharmacyAboutPrescriptionOrder = async ({
         patientId: prescription.patientId,
         patientName: prescription.patient.fullName,
         doctorId: prescription.prescribedByDoctorId,
-        doctorName: getDoctorDisplayName(
-          prescription.prescribedByDoctor.fullName,
-        ),
+        doctorName: getDoctorDisplayName(prescription.prescribedByDoctor.fullName),
         medicineCount,
         medicineNames,
         orderSource: "DOCTOR_PRESCRIPTION",
@@ -376,10 +371,7 @@ export const doctorPrescriptionsService = {
       const endDate = item.endDate ? parseDateInput(item.endDate) : null;
 
       if (endDate && endDate < startDate) {
-        throw new AppError(
-          `End date cannot be before start date for ${item.name}`,
-          400,
-        );
+        throw new AppError(`End date cannot be before start date for ${item.name}`, 400);
       }
 
       return {
@@ -468,7 +460,6 @@ export const doctorPrescriptionsService = {
         },
         select: {
           pharmacyId: true,
-          chargePreference: true,
         },
       });
 
@@ -545,6 +536,12 @@ export const doctorPrescriptionsService = {
                 ? firstItem.name
                 : `${prescriptionItems.length} prescribed medicines`;
 
+            const orderPayment =
+              await patientPrescriptionChargeService.resolveOrderPayment(
+                tx,
+                patientId,
+              );
+
             const createdOrder = await tx.medicineOrder.create({
               data: {
                 orderNumber: `CMRX-${prescription.id}`,
@@ -554,10 +551,7 @@ export const doctorPrescriptionsService = {
                 prescriptionId: prescription.id,
                 orderSource: "DOCTOR_PRESCRIPTION",
                 medicineName,
-                dose:
-                  prescriptionItems.length === 1
-                    ? firstItem.dose
-                    : null,
+                dose: prescriptionItems.length === 1 ? firstItem.dose : null,
                 quantity:
                   prescriptionItems.length === 1
                     ? `${firstItem.quantity} ${
@@ -590,14 +584,17 @@ export const doctorPrescriptionsService = {
 
                 payment: {
                   create: {
-                    chargePreference: primaryPharmacyLink.chargePreference,
-                    chargeableItemCount: prescriptionItems.length,
+                    chargePreference: orderPayment.chargePreference,
+                    chargeableItemCount:
+                      orderPayment.status === "NOT_REQUIRED"
+                        ? 0
+                        : prescriptionItems.length,
                     unitChargePence: 0,
                     amountPence: 0,
                     currency: "GBP",
                     provider: "STRIPE",
                     testMode: true,
-                    status: "PENDING",
+                    status: orderPayment.status,
                   },
                 },
 
@@ -606,7 +603,8 @@ export const doctorPrescriptionsService = {
                     changedById: doctorId,
                     fromStatus: null,
                     toStatus: "RECEIVED",
-                    note: "Doctor prescription automatically routed to the patient's primary pharmacy.",
+                    note:
+                      "Doctor prescription automatically routed to the patient's primary pharmacy.",
                   },
                 },
               },
