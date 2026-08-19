@@ -5,7 +5,7 @@ import { PaymentSheetError, StripeProvider, useStripe } from "@stripe/stripe-rea
 
 import { LocalizedText as Text } from "../common/LocalizedText";
 import { STRIPE_PUBLISHABLE_KEY } from "../../constants/stripe";
-import { patientPaymentApi, type PatientPaymentStatus } from "../../services/patientPaymentApi";
+import { patientPaymentApi, type StripePaymentStatus as PatientPaymentStatus } from "../../services/patientPaymentApi";
 
 type Props = {
   orderId: string;
