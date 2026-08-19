@@ -48,6 +48,8 @@ export type MedicineFlowMode = "CREATE" | "EDIT_DRAFT" | "RESUBMIT_REVIEW";
 export type MedicineDraft = {
   name: string;
   dose: string;
+  doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   frequency: MedicineFrequency;
   customFrequency?: string;
@@ -61,6 +63,9 @@ export type MedicineDraft = {
   currentStock?: number;
   stockUnit?: string;
   lowStockThreshold?: number;
+  packageQuantity?: number;
+  packSize?: number;
+  packageUnit?: string;
 };
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
@@ -221,7 +226,7 @@ export type RootStackParamList = {
 
   MedicineUpdates: undefined;
 
-  MedicineStock: undefined;
+  MedicineStock: { initialRequest?: { medicineId: string } } | undefined;
 
   PatientReports: undefined;
 
@@ -254,6 +259,7 @@ export type RootStackParamList = {
     detectedText: string;
     ocrConfidence?: number;
     source?: ScanMedicineSource;
+    scannedImageUri?: string;
   };
 
   ConnectedDevice: undefined;
