@@ -364,7 +364,7 @@ export const pharmacyOrdersApi = {
     return {
       uri: `${API_BASE_URL}/pharmacy/orders/${encodeURIComponent(
         orderId,
-      )}/patient-refill-evidence`,
+      )}/refill-evidence`,
       headers,
     };
   },
