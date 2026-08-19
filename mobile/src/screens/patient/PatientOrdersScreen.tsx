@@ -111,6 +111,54 @@ const formatMoney = (amountPence: number, currency = "GBP") => {
   return `${currency.toUpperCase()} ${amount.toFixed(2)}`;
 };
 
+const singularUnit = (unit?: string | null) => {
+  const value = unit?.trim().toLowerCase() || "";
+  const aliases: Record<string, string> = { tablets: "tablet", capsules: "capsule", puffs: "puff", doses: "dose", sprays: "spray", sachets: "sachet", inhalers: "inhaler", bottles: "bottle", packs: "pack", boxes: "box", tubes: "tube" };
+  return aliases[value] || value;
+};
+
+const displayUnit = (unit: string, quantity: number) => {
+  const value = singularUnit(unit);
+  if (!value) return "";
+  if (quantity === 1 || ["ml", "g", "mg", "mcg"].includes(value)) return value;
+  if (value === "box") return "boxes";
+  return value.endsWith("s") ? value : `${value}s`;
+};
+
+const formatRequestedQuantity = (quantity?: string | number | null, quantityUnit?: string | null) => {
+  const value = quantity === null || quantity === undefined ? "" : String(quantity).trim();
+  const unit = singularUnit(quantityUnit);
+  if (!value) return unit ? `1 ${unit}` : null;
+  if (!unit) return value;
+  const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const unitExpression = unit === "box" ? "box(?:es)?" : `${escapedUnit}s?`;
+  if (new RegExp(`\\b${unitExpression}\\b`, "i").test(value)) return value;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? `${value} ${displayUnit(unit, numeric)}` : value;
+};
+
+const REQUEST_PACKAGE_UNITS = new Set(["pack", "box", "bottle", "inhaler", "tube", "sachet"]);
+
+const inferRefillPackageUnit = (medicineName: string, quantityUnit?: string | null) => {
+  const unit = singularUnit(quantityUnit);
+  if (REQUEST_PACKAGE_UNITS.has(unit)) return unit;
+  const text = medicineName.toLowerCase();
+  if (/\b(syrup|suspension|solution|liquid)\b/.test(text)) return "bottle";
+  if (/\b(gel|cream|ointment)\b/.test(text)) return "tube";
+  if (/\binhaler\b/.test(text)) return "inhaler";
+  if (/\bsachet\b/.test(text)) return "sachet";
+  return "pack";
+};
+
+const formatRefillRequestedQuantity = (medicineName: string, quantity?: string | number | null, quantityUnit?: string | null) => {
+  const raw = quantity === null || quantity === undefined ? "1" : String(quantity).trim() || "1";
+  const match = raw.match(/\d+(?:\.\d+)?/);
+  const amount = match ? Number(match[0]) : 1;
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 1;
+  const unit = inferRefillPackageUnit(medicineName, quantityUnit);
+  return `${safeAmount} ${displayUnit(unit, safeAmount)}`;
+};
+
 const getStatusTone = (status: PatientOrderStatus): StatusTone => {
   if (status === "DELIVERED" || status === "COLLECTED") return { background: SUCCESS, soft: SUCCESS_LIGHT, text: SUCCESS_DARK };
   if (status === "REJECTED" || status === "CANCELLED" || status === "OUT_OF_STOCK") return { background: DANGER, soft: DANGER_LIGHT, text: DANGER_DARK };
@@ -225,20 +273,9 @@ const canPayOrder = (order: PatientOrder) => {
 const getMainMedicine = (order: PatientOrder) => {
   if (order.items.length > 0) {
     const first = order.items[0];
-    return {
-      name: first.name,
-      dose: first.dose,
-      quantity: `${first.quantity} ${first.quantityUnit || "unit"}`,
-      extraItems: Math.max(0, order.items.length - 1),
-    };
+    return { name: first.name, dose: first.dose, quantity: order.source === "REFILL_REQUEST" ? formatRefillRequestedQuantity(first.name, first.quantity, first.quantityUnit) : formatRequestedQuantity(first.quantity, first.quantityUnit), extraItems: Math.max(0, order.items.length - 1) };
   }
-
-  return {
-    name: order.medicineName || "Medicine",
-    dose: order.dose || null,
-    quantity: order.quantity ? String(order.quantity) : null,
-    extraItems: 0,
-  };
+  return { name: order.medicineName || "Medicine", dose: order.dose || null, quantity: order.quantity ? String(order.quantity) : null, extraItems: 0 };
 };
 
 const getFilterCount = (filter: OrderFilter, summary: PatientOrdersResponse["summary"]) => {

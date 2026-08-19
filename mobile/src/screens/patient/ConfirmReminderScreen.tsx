@@ -377,34 +377,46 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
             ) : null}
           </View>
 
-          {!noStock ? (
-            <View style={styles.reviewCard}>
-              <View style={styles.reviewIcon}>
-                <Stethoscope size={22} color={PRIMARY} strokeWidth={2.6} />
-              </View>
-
-              <View style={styles.reviewText}>
-                <Text style={styles.reviewTitle}>{isResubmit ? "Send back to doctor" : "Send to doctor for review"}</Text>
-                <Text style={styles.reviewSub}>{doctorReview || isResubmit ? "Medicine remains inactive while awaiting review." : "Medicine will be added directly."}</Text>
-              </View>
-
-              <Switch
-                value={isResubmit ? true : doctorReview}
-                onValueChange={setDoctorReview}
-                disabled={saving || isResubmit}
-                trackColor={{ false: "#DDE3EF", true: PRIMARY_LIGHT }}
-                thumbColor={isResubmit || doctorReview ? PRIMARY : SURFACE}
-              />
+          <View style={styles.reviewCard}>
+            <View style={styles.reviewIcon}>
+              <Stethoscope size={22} color={PRIMARY} strokeWidth={2.6} />
             </View>
-          ) : (
+
+            <View style={styles.reviewText}>
+              <Text style={styles.reviewTitle}>{isResubmit ? "Send back to doctor" : "Send to doctor for review"}</Text>
+              <Text style={styles.reviewSub}>
+                {isResubmit
+                  ? "The corrected medicine will be sent back for review."
+                  : noStock
+                    ? doctorReview
+                      ? "Doctor review will be sent now. You can continue to the pharmacy request separately."
+                      : "Doctor review is optional here. Pharmacy verification remains a separate workflow."
+                    : doctorReview
+                      ? "Medicine remains inactive while awaiting review."
+                      : "Medicine will be added directly."}
+              </Text>
+            </View>
+
+            <Switch
+              value={isResubmit ? true : doctorReview}
+              onValueChange={setDoctorReview}
+              disabled={saving || isResubmit}
+              trackColor={{ false: "#DDE3EF", true: PRIMARY_LIGHT }}
+              thumbColor={isResubmit || doctorReview ? PRIMARY : SURFACE}
+            />
+          </View>
+
+          {noStock ? (
             <View style={styles.pharmacyPanel}>
               <Package size={20} color={WARNING_DARK} strokeWidth={2.6} />
               <View style={{ flex: 1, marginLeft: 9 }}>
-                <Text style={styles.pharmacyTitle}>Request medicine</Text>
-                <Text style={styles.pharmacyText}>Continue to your pharmacy request after saving this medicine.</Text>
+                <Text style={styles.pharmacyTitle}>Request medicine from pharmacy</Text>
+                <Text style={styles.pharmacyText}>
+                  Saving this medicine does not automatically send a pharmacy order. Continue to Medicine Stock and confirm Request from Pharmacy.
+                </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           {doctorReview || isResubmit ? (
             <View style={styles.reviewInfo}>
@@ -427,7 +439,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
               <>
                 {noStock ? <Package size={19} color={SURFACE} strokeWidth={2.6} /> : <Send size={19} color={SURFACE} strokeWidth={2.6} />}
                 <Text style={styles.primaryText}>
-                  {isResubmit ? "Resubmit to Doctor" : noStock ? "Request from Pharmacy" : doctorReview ? "Send for Review" : "Save Medicine & Reminder"}
+                  {isResubmit ? "Resubmit to Doctor" : noStock ? doctorReview ? "Save & Continue to Pharmacy" : "Continue to Pharmacy" : doctorReview ? "Send for Review" : "Save Medicine & Reminder"}
                 </Text>
               </>
             )}

@@ -317,7 +317,6 @@ export const AddMedicineScreen = ({ navigation, route }: Props) => {
     }
 
     setValue("packageQuantity", "", { shouldValidate: true, shouldDirty: true });
-    setValue("sendToDoctorForReview", false, { shouldValidate: true, shouldDirty: true });
   };
 
   const onSubmit = (form: FormValues) => {
@@ -414,7 +413,7 @@ export const AddMedicineScreen = ({ navigation, route }: Props) => {
       endDate: endDate || undefined,
       instructions: instructions || undefined,
       prescriptionPattern: draft?.prescriptionPattern ?? null,
-      sendToDoctorForReview: isResubmit ? true : form.hasMedicineOnHand === false ? false : form.sendToDoctorForReview,
+      sendToDoctorForReview: isResubmit ? true : form.sendToDoctorForReview,
       hasMedicineOnHand: isResubmit ? draft?.hasMedicineOnHand : form.hasMedicineOnHand,
       currentStock: isResubmit ? draft?.currentStock : form.hasMedicineOnHand ? calculatedStock : 0,
       stockUnit: isResubmit ? draft?.stockUnit || effectiveDoseUnit : effectiveDoseUnit,
@@ -848,32 +847,36 @@ export const AddMedicineScreen = ({ navigation, route }: Props) => {
             />
           </View>
 
-          {isResubmit || hasMedicine !== false ? (
-            <View style={styles.reviewCard}>
-              <View style={styles.reviewIcon}>
-                <Stethoscope size={22} color={PRIMARY} strokeWidth={2.6} />
-              </View>
-
-              <View style={styles.reviewText}>
-                <Text style={styles.reviewTitle}>Doctor review</Text>
-                <Text style={styles.reviewSub}>{isResubmit ? "Send the corrected medicine back for review." : "Send this medicine to your primary doctor before activation."}</Text>
-              </View>
-
-              <Controller
-                control={control}
-                name="sendToDoctorForReview"
-                render={({ field }) => (
-                  <Switch
-                    value={isResubmit ? true : field.value}
-                    onValueChange={field.onChange}
-                    disabled={isResubmit}
-                    trackColor={{ false: "#DDE3EF", true: PRIMARY_LIGHT }}
-                    thumbColor={isResubmit || field.value ? PRIMARY : SURFACE}
-                  />
-                )}
-              />
+          <View style={styles.reviewCard}>
+            <View style={styles.reviewIcon}>
+              <Stethoscope size={22} color={PRIMARY} strokeWidth={2.6} />
             </View>
-          ) : null}
+
+            <View style={styles.reviewText}>
+              <Text style={styles.reviewTitle}>Doctor review</Text>
+              <Text style={styles.reviewSub}>
+                {isResubmit
+                  ? "Send the corrected medicine back for review."
+                  : hasMedicine === false
+                    ? "Send this medicine for doctor review as well. A pharmacy request is still sent only when you explicitly request it."
+                    : "Send this medicine to your primary doctor before activation."}
+              </Text>
+            </View>
+
+            <Controller
+              control={control}
+              name="sendToDoctorForReview"
+              render={({ field }) => (
+                <Switch
+                  value={isResubmit ? true : field.value}
+                  onValueChange={field.onChange}
+                  disabled={isResubmit}
+                  trackColor={{ false: "#DDE3EF", true: PRIMARY_LIGHT }}
+                  thumbColor={isResubmit || field.value ? PRIMARY : SURFACE}
+                />
+              )}
+            />
+          </View>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>

@@ -64,6 +64,7 @@ import { AdminAuditLogsScreen } from "../screens/admin/AdminAuditLogsScreen";
 import { AdminAuditLogDetailScreen } from "../screens/admin/AdminAuditLogDetailScreen";
 import { AdminRegisterWebViewScreen } from "../screens/admin/AdminRegisterWebViewScreen";
 import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
+import AdminMedicineReviewRequestsScreen from "../screens/admin/AdminMedicineReviewRequestsScreen";
 
 import PharmacyOrdersScreen from "../screens/pharmacy/PharmacyOrdersScreen";
 import PharmacyOrderDetailScreen from "../screens/pharmacy/PharmacyOrderDetailScreen";
@@ -130,6 +131,7 @@ const PharmacyInventoryStackScreen = PharmacyInventoryScreen as ComponentType<an
 const PharmacyProfileStackScreen = PharmacyProfileScreen as ComponentType<any>;
 
 const AdminProfileStackScreen = AdminProfileScreen as ComponentType<any>;
+const AdminMedicineReviewRequestsStackScreen = AdminMedicineReviewRequestsScreen as ComponentType<any>;
 const ReminderSettingsStackScreen = ReminderSettingsScreen as ComponentType<any>;
 const SafetyResponseSettingsStackScreen = SafetyResponseSettingsScreen as ComponentType<any>;
 const LanguageAccessibilityStackScreen = LanguageAccessibilityScreen as ComponentType<any>;
@@ -192,6 +194,7 @@ const NON_PATIENT_SESSION_ROUTES = new Set([
   "AdminTabs",
   "AdminDashboard",
   "AdminProfile",
+  "AdminMedicineReviewRequests",
   "AdminDoctorVerificationDetail",
   "AdminPharmacyVerificationDetail",
   "AdminAuditLogs",
@@ -416,6 +419,7 @@ export const AppNavigator = () => {
 
                 <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
                 <Stack.Screen name="AdminProfile" component={AdminProfileStackScreen} />
+                <Stack.Screen name="AdminMedicineReviewRequests" component={AdminMedicineReviewRequestsStackScreen} />
 
                 <Stack.Screen name="PharmacyTabs" component={PharmacyTabsStackScreen} />
                 <Stack.Screen name="PharmacyProfile" component={PharmacyProfileStackScreen} />
