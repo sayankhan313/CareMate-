@@ -92,7 +92,6 @@ const getOrCreateChargeProfile = async (tx: TransactionClient, patientId: string
     select: { id: true, chargePreference: true },
   });
 };
-
 const getEligibleOutstandingOrders = async (tx: TransactionClient, patientId: string) => {
   return tx.medicineOrder.findMany({
     where: {

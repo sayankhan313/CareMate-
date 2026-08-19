@@ -1,5 +1,8 @@
 import { prisma } from "../../config/prisma.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../utils/AppError.js";
+import { notificationService } from "../notification/notification.service.js";
+import type { SendNotificationInput } from "../notification/notification.types.js";
 import { ensureApprovedPharmacy } from "./pharmacy-access.service.js";
 import type {
   PharmacyOrderListItem,
@@ -98,6 +101,46 @@ const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
   "COLLECTED",
 ]);
 
+const addDispensedMedicineToPatientStock = async (
+  tx: Prisma.TransactionClient,
+  patientId: string,
+  orderId: string,
+) => {
+  const items = await tx.medicineOrderItem.findMany({
+    where: { orderId, medicineId: { not: null }, dispensedQuantity: { gt: 0 } },
+    select: { medicineId: true, dispensedQuantity: true, dispensedUnit: true },
+  });
+
+  for (const item of items) {
+    if (!item.medicineId || !item.dispensedQuantity || item.dispensedQuantity <= 0) continue;
+
+    const medicine = await tx.medicine.findFirst({
+      where: { id: item.medicineId, patientId },
+      select: { id: true, isActive: true, currentStock: true, stockUnit: true },
+    });
+
+    if (!medicine) continue;
+
+    await tx.medicine.update({
+      where: { id: medicine.id },
+      data: {
+        hasMedicineOnHand: true,
+        currentStock: (medicine.currentStock ?? 0) + item.dispensedQuantity,
+        stockUnit: medicine.stockUnit || item.dispensedUnit || null,
+      },
+    });
+
+    if (medicine.isActive) {
+      await tx.medicineReminder.updateMany({
+        where: { medicineId: medicine.id },
+        data: { isActive: true },
+      });
+    }
+  }
+};
+
+const verificationBlockedStatuses = new Set<PharmacyOrderStatus>(["REJECTED", "CANCELLED", "DELIVERED", "COLLECTED"]);
+
 type OrderPaymentReleaseState = {
   chargePreference: string;
   status: string;
@@ -178,6 +221,65 @@ const getTimestampUpdate = (
       return { delayedAt: now };
     case "OUT_OF_STOCK":
       return { outOfStockAt: now };
+  }
+};
+
+const getOrderNotificationContent = (
+  status: PharmacyOrderStatusUpdateTarget,
+): Pick<SendNotificationInput, "type" | "title" | "body" | "priority"> => {
+  switch (status) {
+    case "ACCEPTED":
+      return { type: "ORDER_ACCEPTED", title: "Pharmacy order accepted", body: "Your pharmacy has accepted your medicine order.", priority: "NORMAL" };
+    case "REJECTED":
+      return { type: "ORDER_REJECTED", title: "Pharmacy order declined", body: "Your pharmacy could not accept your medicine order. Open CareMate+ for details.", priority: "HIGH" };
+    case "PREPARING":
+      return { type: "ORDER_PREPARING", title: "Medicine being prepared", body: "Your pharmacy has started preparing your medicine order.", priority: "NORMAL" };
+    case "READY":
+      return { type: "ORDER_READY", title: "Medicine ready", body: "Your medicine order is ready for collection or the next fulfilment step.", priority: "HIGH" };
+    case "OUT_FOR_DELIVERY":
+      return { type: "ORDER_OUT_FOR_DELIVERY", title: "Medicine out for delivery", body: "Your medicine order has left the pharmacy for delivery.", priority: "NORMAL" };
+    case "DELIVERED":
+      return { type: "ORDER_DELIVERED", title: "Medicine delivered", body: "Your pharmacy has marked your medicine order as delivered.", priority: "NORMAL" };
+    case "COLLECTED":
+      return { type: "ORDER_COLLECTED", title: "Medicine collected", body: "Your pharmacy has marked your medicine order as collected.", priority: "NORMAL" };
+    case "DELAYED":
+      return { type: "ORDER_DELAYED", title: "Pharmacy order delayed", body: "Your pharmacy has reported a delay with your medicine order. Open CareMate+ for details.", priority: "HIGH" };
+    case "OUT_OF_STOCK":
+      return { type: "ORDER_OUT_OF_STOCK", title: "Medicine currently unavailable", body: "Your pharmacy has reported that stock required for your order is currently unavailable.", priority: "HIGH" };
+    case "CANCELLED":
+      return { type: "ORDER_CANCELLED", title: "Pharmacy order cancelled", body: "Your pharmacy order has been cancelled. Open CareMate+ for details.", priority: "HIGH" };
+  }
+};
+
+const sendOrderStatusNotification = async ({
+  patientId,
+  orderId,
+  orderNumber,
+  medicineName,
+  status,
+  reason,
+}: {
+  patientId: string;
+  orderId: string;
+  orderNumber: string | null;
+  medicineName: string;
+  status: PharmacyOrderStatusUpdateTarget;
+  reason: string | null;
+}) => {
+  try {
+    const content = getOrderNotificationContent(status);
+
+    await notificationService.createAndSend({
+      userId: patientId,
+      ...content,
+      entityType: "MEDICINE_ORDER",
+      entityId: orderId,
+      targetScreen: "PatientOrders",
+      patientPreferenceKey: "careTeamUpdates",
+      data: { source: "PHARMACY_ORDER_STATUS", orderId, orderNumber, medicineName, status, reason },
+    });
+  } catch (error) {
+    console.warn(`Unable to notify patient about pharmacy order ${orderId}:`, error instanceof Error ? error.message : error);
   }
 };
 
@@ -272,8 +374,17 @@ export const pharmacyOrdersService = {
             id: true,
             requestType: true,
             status: true,
+            verificationPath: true,
+            doctorVerificationStatus: true,
+            doctorVerificationRequestedAt: true,
+            doctorVerificationNote: true,
+            doctorVerifiedAt: true,
+            evidenceType: true,
             imageUrl: true,
             notes: true,
+            reviewedByPharmacyId: true,
+            reviewNote: true,
+            reviewedAt: true,
             createdAt: true,
           },
         },
@@ -288,7 +399,10 @@ export const pharmacyOrdersService = {
             dose: true,
             quantity: true,
             instructions: true,
+            unitPricePence: true,
+            lineTotalPence: true,
             dispensedQuantity: true,
+            dispensedUnit: true,
             quantityUnit: true,
             inventoryItemId: true,
             inventoryReservedQuantity: true,
@@ -302,6 +416,7 @@ export const pharmacyOrdersService = {
                 strength: true,
                 form: true,
                 stockUnit: true,
+                unitPricePence: true,
                 quantityInStock: true,
                 reservedQuantity: true,
                 lowStockThreshold: true,
@@ -369,6 +484,123 @@ export const pharmacyOrdersService = {
     };
   },
 
+  async getPatientRefillEvidence(pharmacyId: string, orderId: string) {
+    await ensureApprovedPharmacy(pharmacyId);
+
+    const order = await prisma.medicineOrder.findFirst({
+      where: { id: orderId, pharmacyId },
+      select: {
+        id: true,
+        orderSource: true,
+        patientSubmission: {
+          select: {
+            id: true,
+            requestType: true,
+            verificationPath: true,
+            imageUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!order) throw new AppError("Order not found for this pharmacy", 404);
+
+    if (order.orderSource !== "REFILL_REQUEST" || !order.patientSubmission || order.patientSubmission.requestType !== "REFILL_REQUEST") {
+      throw new AppError("Only patient refill requests can have supporting evidence", 400);
+    }
+
+    if (order.patientSubmission.verificationPath !== "EXTERNAL_EVIDENCE") {
+      throw new AppError("This refill request does not use external supporting evidence", 409);
+    }
+
+    if (!order.patientSubmission.imageUrl) throw new AppError("Supporting evidence was not found for this refill request", 404);
+
+    return { storedPath: order.patientSubmission.imageUrl };
+  },
+
+  async verifyPatientRefillRequest(pharmacyId: string, orderId: string, note?: string) {
+    await ensureApprovedPharmacy(pharmacyId);
+
+    const order = await prisma.medicineOrder.findFirst({
+      where: { id: orderId, pharmacyId },
+      select: {
+        id: true,
+        orderSource: true,
+        status: true,
+        prescriptionConfirmed: true,
+        fulfilmentAllowed: true,
+        patientSubmissionId: true,
+        patientSubmission: {
+          select: {
+            id: true,
+            pharmacyId: true,
+            requestType: true,
+            verificationPath: true,
+            status: true,
+            imageUrl: true,
+            reviewedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!order) throw new AppError("Order not found for this pharmacy", 404);
+
+    if (order.orderSource !== "REFILL_REQUEST" || !order.patientSubmission) {
+      throw new AppError("Only patient refill requests can use pharmacist verification", 400);
+    }
+
+    if (order.patientSubmission.requestType !== "REFILL_REQUEST") {
+      throw new AppError("This patient submission is not a refill request", 400);
+    }
+
+    if (order.patientSubmission.verificationPath !== "EXTERNAL_EVIDENCE") {
+      throw new AppError("This request cannot be verified by the pharmacy because it uses a different verification path", 409);
+    }
+
+    if (!order.patientSubmission.imageUrl) {
+      throw new AppError("Supporting evidence is required before this refill request can be verified", 409);
+    }
+
+    if (order.prescriptionConfirmed || order.fulfilmentAllowed) {
+      throw new AppError("This medicine request is already authorised for fulfilment", 409);
+    }
+
+    if (order.patientSubmission.status !== "VERIFICATION_REQUIRED") {
+      throw new AppError(`This request cannot be verified while its submission status is ${order.patientSubmission.status}.`, 409);
+    }
+
+    if (verificationBlockedStatuses.has(order.status)) {
+      throw new AppError(`A ${order.status.toLowerCase().replace(/_/g, " ")} order cannot be verified.`, 409);
+    }
+
+    const reviewedAt = new Date();
+    const reviewNote = note?.trim() || "Medicine request reviewed by pharmacy staff for prototype fulfilment.";
+
+    await prisma.$transaction(async tx => {
+      const changed = await tx.medicineOrder.updateMany({
+        where: { id: orderId, pharmacyId, fulfilmentAllowed: false, status: order.status },
+        data: { fulfilmentAllowed: true },
+      });
+
+      if (changed.count === 0) {
+        throw new AppError("Order verification changed elsewhere. Please refresh and try again.", 409);
+      }
+
+      await tx.patientPrescriptionSubmission.update({
+        where: { id: order.patientSubmission!.id },
+        data: {
+          status: "VERIFIED",
+          reviewedByPharmacyId: pharmacyId,
+          reviewNote,
+          reviewedAt,
+        },
+      });
+    });
+
+    return this.getOrderDetail(pharmacyId, orderId);
+  },
+
   async updateOrderStatus(pharmacyId: string, orderId: string, input: PharmacyOrderStatusUpdateInput) {
     await ensureApprovedPharmacy(pharmacyId);
 
@@ -376,6 +608,10 @@ export const pharmacyOrdersService = {
       where: { id: orderId, pharmacyId },
       select: {
         id: true,
+        patientId: true,
+        patientSubmissionId: true,
+        orderNumber: true,
+        medicineName: true,
         status: true,
         fulfilmentAllowed: true,
         acceptedAt: true,
@@ -469,6 +705,21 @@ export const pharmacyOrdersService = {
 
       if (inventoryConsumeStatuses.has(input.status)) {
         await consumeOrderInventoryReservations(tx, pharmacyId, orderId, now);
+        await addDispensedMedicineToPatientStock(tx, order.patientId, orderId);
+      }
+
+      if (order.patientSubmissionId && input.status === "ACCEPTED") {
+        await tx.patientPrescriptionSubmission.update({
+          where: { id: order.patientSubmissionId },
+          data: { status: "ACCEPTED", reviewedByPharmacyId: pharmacyId, reviewedAt: now },
+        });
+      }
+
+      if (order.patientSubmissionId && input.status === "REJECTED") {
+        await tx.patientPrescriptionSubmission.update({
+          where: { id: order.patientSubmissionId },
+          data: { status: "REJECTED", reviewedByPharmacyId: pharmacyId, reviewedAt: now, reviewNote: reason },
+        });
       }
 
       await tx.medicineOrderStatusHistory.create({
@@ -518,6 +769,15 @@ export const pharmacyOrdersService = {
           },
         },
       });
+    });
+
+    await sendOrderStatusNotification({
+      patientId: order.patientId,
+      orderId,
+      orderNumber: order.orderNumber,
+      medicineName: order.medicineName,
+      status: input.status,
+      reason,
     });
 
     return {

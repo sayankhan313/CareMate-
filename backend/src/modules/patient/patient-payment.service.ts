@@ -2,6 +2,7 @@ import Stripe from "stripe";
 
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
+import { notificationService } from "../notification/notification.service.js";
 
 const PAYMENT_BLOCKED_ORDER_STATUSES = new Set(["REJECTED", "CANCELLED", "DELIVERED", "COLLECTED"]);
 const EDITABLE_STRIPE_STATUSES = new Set<Stripe.PaymentIntent.Status>(["requires_payment_method", "requires_confirmation"]);
@@ -152,6 +153,68 @@ const cancelStripeIntentSafely = async (stripe: Stripe, intent: Stripe.PaymentIn
   }
 };
 
+const formatPaymentAmount = (amountPence: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: currency.toUpperCase() }).format(amountPence / 100);
+  } catch {
+    return `£${(amountPence / 100).toFixed(2)}`;
+  }
+};
+
+const notifyPharmacyPaymentReceived = async ({
+  pharmacyId,
+  orderId,
+  orderNumber,
+  paymentId,
+  amountPence,
+  currency,
+}: {
+  pharmacyId: string | null;
+  orderId: string;
+  orderNumber: string | null;
+  paymentId: string;
+  amountPence: number;
+  currency: string;
+}) => {
+  if (!pharmacyId) return;
+
+  try {
+    const existing = await prisma.userNotification.findFirst({
+      where: {
+        userId: pharmacyId,
+        type: "PHARMACY_PAYMENT_RECEIVED",
+        entityType: "PRESCRIPTION_PAYMENT",
+        entityId: paymentId,
+      },
+      select: { id: true },
+    });
+
+    if (existing) return;
+
+    await notificationService.createAndSend({
+      userId: pharmacyId,
+      type: "PHARMACY_PAYMENT_RECEIVED",
+      title: "Payment received",
+      body: `${formatPaymentAmount(amountPence, currency)} received for ${orderNumber ? `order ${orderNumber}` : "a pharmacy order"}.`,
+      priority: "HIGH",
+      entityType: "PRESCRIPTION_PAYMENT",
+      entityId: paymentId,
+      targetScreen: "PharmacyOrderDetail",
+      data: {
+        source: "STRIPE_PAYMENT",
+        orderId,
+        orderNumber,
+        paymentId,
+        amountPence,
+        currency,
+        paymentStatus: "PAID",
+      },
+    });
+  } catch (error) {
+    console.warn(`Unable to notify pharmacy about payment ${paymentId}:`, error instanceof Error ? error.message : error);
+  }
+};
+
 const ensurePaymentStillPayable = async (
   patientId: string,
   orderId: string,
@@ -196,6 +259,15 @@ export const patientPaymentService = {
           where: { id: currentPayment.id },
           data: { status: "PAID", paidAt, failedAt: null },
           select: { id: true, amountPence: true, currency: true, status: true, paidAt: true },
+        });
+
+        await notifyPharmacyPaymentReceived({
+          pharmacyId: order.pharmacyId,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          paymentId: updatedPayment.id,
+          amountPence: updatedPayment.amountPence,
+          currency: updatedPayment.currency,
         });
 
         return {
@@ -312,6 +384,15 @@ export const patientPaymentService = {
     if (!order.payment) throw new AppError("Payment information is not available for this order.", 404);
 
     if (order.payment.status === "PAID") {
+      await notifyPharmacyPaymentReceived({
+        pharmacyId: order.pharmacyId,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentId: order.payment.id,
+        amountPence: order.payment.amountPence,
+        currency: order.payment.currency,
+      });
+
       return {
         paid: true,
         stripeStatus: "succeeded",
@@ -358,6 +439,15 @@ export const patientPaymentService = {
       const updatedPayment = await prisma.prescriptionPayment.findUniqueOrThrow({
         where: { id: currentPayment.id },
         select: { id: true, amountPence: true, currency: true, status: true, paidAt: true },
+      });
+
+      await notifyPharmacyPaymentReceived({
+        pharmacyId: order.pharmacyId,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentId: updatedPayment.id,
+        amountPence: updatedPayment.amountPence,
+        currency: updatedPayment.currency,
       });
 
       return { paid: true, stripeStatus: intent.status, payment: updatedPayment };

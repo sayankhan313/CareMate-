@@ -909,7 +909,9 @@ const formatReviewRequest = (
       request.requestType ===
         "ADD" &&
       request.status ===
-        "APPROVED",
+        "APPROVED" &&
+      request.medicine?.hasMedicineOnHand !== false &&
+      request.medicine?.currentStock !== 0,
 
     canResubmit:
       request.requestType ===
@@ -2560,6 +2562,19 @@ export const medicineService =
         throw new AppError(
           "Only approved medicine reviews can be applied.",
           400,
+        );
+      }
+
+      if (
+        request.medicine
+          .hasMedicineOnHand ===
+          false ||
+        request.medicine
+          .currentStock === 0
+      ) {
+        throw new AppError(
+          "This medicine has been clinically approved, but it has not yet been supplied by your pharmacy. Wait until the pharmacy order is delivered or collected before adding it to your active medicines.",
+          409,
         );
       }
 
