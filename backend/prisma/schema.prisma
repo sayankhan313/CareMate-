@@ -113,10 +113,113 @@ enum VitalSource {
 
 enum MedicineOrderStatus {
   RECEIVED
+  ACCEPTED
+  REJECTED
   PREPARING
   READY
+  OUT_FOR_DELIVERY
   DELIVERED
+  COLLECTED
+  DELAYED
+  OUT_OF_STOCK
   CANCELLED
+}
+
+enum MedicineOrderRequestSource {
+  PATIENT
+  CAREGIVER
+  DOCTOR
+}
+
+enum PharmacyOrderNoteVisibility {
+  PATIENT_VISIBLE
+  CAREGIVER_VISIBLE
+  INTERNAL_ONLY
+}
+
+enum PharmacyOrderNoteType {
+  GENERAL
+  DELAY
+  OUT_OF_STOCK
+  COLLECTION
+  DELIVERY
+}
+
+enum PrescriptionChargePreference {
+  CHARGEABLE
+  EXEMPT
+  PPC
+}
+
+enum PrescriptionPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  NOT_REQUIRED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PrescriptionExemptionType {
+  AGE_BASED
+  MEDICAL_EXEMPTION
+  MATERNITY_EXEMPTION
+  LOW_INCOME_HC2
+  UNIVERSAL_CREDIT
+  PPC
+  OTHER
+}
+
+enum ExemptionVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PatientPharmacyRequestType {
+  PRESCRIPTION_UPLOAD
+  REFILL_REQUEST
+}
+
+enum PatientPrescriptionSubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFICATION_REQUIRED
+  VERIFIED
+  ACCEPTED
+  REJECTED
+}
+
+enum PatientRefillVerificationPath {
+  CAREMATE_PRESCRIPTION
+  ASSIGNED_DOCTOR
+  EXTERNAL_EVIDENCE
+}
+
+enum PatientRefillDoctorVerificationStatus {
+  NOT_REQUIRED
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum PatientMedicineEvidenceType {
+  NHS_APP_SCREENSHOT
+  EPS_TOKEN
+  GP_REPEAT_MEDICATION_RECORD
+  HOSPITAL_OR_CLINIC_LETTER
+  PHARMACY_LABELLED_MEDICINE
+  OTHER
+}
+
+enum MedicineOrderSource {
+  DOCTOR_PRESCRIPTION
+  PATIENT_SUBMISSION
+  REFILL_REQUEST
+  MANUAL_REQUEST
 }
 
 enum SafetyAlertStatus {
@@ -266,10 +369,22 @@ enum NotificationType {
   REPEATED_MISSED_DOSE
   NEW_MEDICINE_ORDER
   ORDER_RECEIVED
+  ORDER_ACCEPTED
+  ORDER_REJECTED
   ORDER_PREPARING
   ORDER_READY
+  ORDER_OUT_FOR_DELIVERY
   ORDER_DELIVERED
+  ORDER_COLLECTED
+  ORDER_DELAYED
+  ORDER_OUT_OF_STOCK
   ORDER_CANCELLED
+  PHARMACY_EXEMPTION_VERIFIED
+  PHARMACY_EXEMPTION_REJECTED
+  PHARMACY_PAYMENT_RECEIVED
+  REFILL_DOCTOR_VERIFICATION_REQUESTED
+  REFILL_DOCTOR_VERIFICATION_CONFIRMED
+  REFILL_DOCTOR_VERIFICATION_REJECTED
 }
 
 model User {
@@ -287,20 +402,42 @@ model User {
   passwordResetToken          String?
   passwordResetTokenExpiresAt DateTime?
 
-  patientProfile           PatientProfile?
-  notificationPreferences  PatientNotificationPreference?
-  reminderPreferences      PatientReminderPreference?
-  safetyPreferences        PatientSafetyPreference?
-  accessibilityPreferences PatientAccessibilityPreference?
-  privacyPreferences       PatientPrivacyPreference?
-  doctorProfile            DoctorProfile?
-  doctorAvailabilities     DoctorAvailability[]            @relation("DoctorAvailabilities")
+  patientProfile            PatientProfile?
+  prescriptionChargeProfile PatientPrescriptionChargeProfile?
+  notificationPreferences   PatientNotificationPreference?
+  reminderPreferences       PatientReminderPreference?
+  safetyPreferences         PatientSafetyPreference?
+  accessibilityPreferences  PatientAccessibilityPreference?
+  privacyPreferences        PatientPrivacyPreference?
+  doctorProfile             DoctorProfile?
+  pharmacyProfile           PharmacyProfile?
+  doctorAvailabilities      DoctorAvailability[]              @relation("DoctorAvailabilities")
 
   medicines        Medicine[]
   medicineDoseLogs MedicineDoseLog[]
   vitalReadings    PatientVitalReading[]
   doctorNotes      PatientDoctorNote[]
-  medicineOrders   MedicineOrder[]
+
+  medicineOrders             MedicineOrder[]                 @relation("PatientMedicineOrders")
+  pharmacyMedicineOrders     MedicineOrder[]                 @relation("PharmacyMedicineOrders")
+  doctorMedicineOrders       MedicineOrder[]                 @relation("DoctorMedicineOrders")
+  caregiverMedicineOrders    MedicineOrder[]                 @relation("CaregiverMedicineOrders")
+  refillVerificationRequests PatientPrescriptionSubmission[] @relation("PatientRefillVerificationDoctor")
+
+  medicineOrderStatusChanges MedicineOrderStatusHistory[] @relation("MedicineOrderStatusChanges")
+  pharmacyOrderNotes         PharmacyOrderNote[]          @relation("PharmacyOrderNotes")
+
+  savedPharmacies                          PatientPharmacyLink[]              @relation("PatientSavedPharmacies")
+  pharmacySavedByPatients                  PatientPharmacyLink[]              @relation("PharmacySavedByPatients")
+  patientPharmacyExemptionEvidence         PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidencePatient")
+  pharmacyPatientExemptionEvidence         PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidencePharmacy")
+  pharmacyVerifiedPatientExemptionEvidence PatientPharmacyExemptionEvidence[] @relation("PatientPharmacyExemptionEvidenceVerifier")
+  pharmacyInventoryItems                   PharmacyInventoryItem[]            @relation("PharmacyInventoryItems")
+  patientPrescriptionSubmissions           PatientPrescriptionSubmission[]    @relation("PatientPrescriptionSubmissions")
+  pharmacyPrescriptionSubmissions          PatientPrescriptionSubmission[]    @relation("PharmacyPrescriptionSubmissions")
+  pharmacyReviewedSubmissions              PatientPrescriptionSubmission[]    @relation("PharmacyReviewedPrescriptionSubmissions")
+  pharmacyExemptionClaims                  PrescriptionExemptionClaim[]       @relation("PharmacyExemptionClaims")
+  pharmacyVerifiedExemptionClaims          PrescriptionExemptionClaim[]       @relation("PharmacyVerifiedExemptionClaims")
 
   patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
   doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
@@ -357,6 +494,18 @@ model PatientProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([healthRecordNumber])
+}
+
+model PatientPrescriptionChargeProfile {
+  id               String                       @id @default(uuid())
+  patientId        String                       @unique
+  chargePreference PrescriptionChargePreference @default(CHARGEABLE)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([chargePreference])
 }
 
 model PatientNotificationPreference {
@@ -480,6 +629,119 @@ model DoctorProfile {
   @@index([operationalStatus])
 }
 
+model PharmacyProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  pharmacyName String
+  staffName    String
+  phoneNumber  String
+  email        String?
+
+  registrationNumber String @unique
+  licenseNumber      String @unique
+
+  address      String
+  city         String
+  postcode     String
+  openingHours String?
+  serviceType  String?
+
+  licenseDocumentUrl      String
+  addressProofDocumentUrl String?
+
+  notifyNewOrders       Boolean @default(true)
+  notifyStatusReminders Boolean @default(true)
+  notifyDelayedOrders   Boolean @default(false)
+
+  verificationCheckedAt DateTime?
+  verificationNotes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([registrationNumber])
+  @@index([licenseNumber])
+  @@index([city])
+  @@index([postcode])
+}
+
+model PatientPharmacyLink {
+  id               String                       @id @default(uuid())
+  patientId        String
+  pharmacyId       String
+  isPrimary        Boolean                      @default(false)
+  chargePreference PrescriptionChargePreference
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  patient           User                               @relation("PatientSavedPharmacies", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy          User                               @relation("PharmacySavedByPatients", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  exemptionEvidence PatientPharmacyExemptionEvidence[]
+
+  @@unique([patientId, pharmacyId])
+  @@index([patientId, isPrimary])
+  @@index([pharmacyId])
+  @@index([chargePreference])
+}
+
+model PatientPharmacyExemptionEvidence {
+  id                   String                       @id @default(uuid())
+  linkId               String?
+  patientId            String
+  pharmacyId           String
+  verifiedByPharmacyId String?
+  chargePreference     PrescriptionChargePreference
+  exemptionType        PrescriptionExemptionType
+  referenceNumber      String?
+  evidenceDocumentUrls String[]
+  expiresAt            DateTime?
+  status               ExemptionVerificationStatus  @default(PENDING)
+  verifiedAt           DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  link               PatientPharmacyLink? @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  patient            User                 @relation("PatientPharmacyExemptionEvidencePatient", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy           User                 @relation("PatientPharmacyExemptionEvidencePharmacy", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  verifiedByPharmacy User?                @relation("PatientPharmacyExemptionEvidenceVerifier", fields: [verifiedByPharmacyId], references: [id], onDelete: SetNull)
+
+  @@index([linkId, createdAt])
+  @@index([patientId, pharmacyId, status])
+  @@index([pharmacyId, status])
+  @@index([verifiedByPharmacyId])
+  @@index([chargePreference])
+  @@index([exemptionType])
+  @@index([expiresAt])
+}
+
+model PharmacyInventoryItem {
+  id                String   @id @default(uuid())
+  pharmacyId        String
+  medicineName      String
+  strength          String?
+  form              String?
+  stockUnit         String   @default("pack")
+  unitPricePence    Int      @default(0)
+  quantityInStock   Int      @default(0)
+  reservedQuantity  Int      @default(0)
+  lowStockThreshold Int      @default(5)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  pharmacy   User                @relation("PharmacyInventoryItems", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  orderItems MedicineOrderItem[] @relation("MedicineOrderItemInventory")
+
+  @@index([pharmacyId, isActive])
+  @@index([pharmacyId, medicineName])
+  @@index([quantityInStock])
+}
+
 model DoctorAvailability {
   id                  String                   @id @default(uuid())
   doctorId            String
@@ -536,6 +798,7 @@ model Prescription {
   patient            User               @relation("PatientPrescriptions", fields: [patientId], references: [id], onDelete: Cascade)
   prescribedByDoctor User               @relation("DoctorPrescriptions", fields: [prescribedByDoctorId], references: [id], onDelete: Restrict)
   items              PrescriptionItem[]
+  medicineOrders     MedicineOrder[]
 
   @@index([patientId])
   @@index([prescribedByDoctorId])
@@ -549,6 +812,7 @@ model PrescriptionItem {
   medicineId          String?           @unique
   name                String
   dose                String
+  quantity            String?
   instructions        String?
   frequency           MedicineFrequency
   customFrequency     String?
@@ -559,12 +823,79 @@ model PrescriptionItem {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  medicine     Medicine?    @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  prescription Prescription        @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine?           @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  orderItems   MedicineOrderItem[]
 
   @@index([prescriptionId])
   @@index([medicineId])
   @@index([startDate])
+}
+
+model PatientPrescriptionSubmission {
+  id                   String  @id @default(uuid())
+  patientId            String
+  pharmacyId           String
+  reviewedByPharmacyId String?
+  verificationDoctorId String?
+
+  requestType PatientPharmacyRequestType @default(PRESCRIPTION_UPLOAD)
+
+  verificationPath              PatientRefillVerificationPath?
+  doctorVerificationStatus      PatientRefillDoctorVerificationStatus @default(NOT_REQUIRED)
+  doctorVerificationRequestedAt DateTime?
+  doctorVerificationNote        String?
+  doctorVerifiedAt              DateTime?
+
+  evidenceType PatientMedicineEvidenceType?
+  imageUrl     String?
+
+  notes           String?
+  rawDetectedText String?
+  ocrConfidence   Float?
+
+  status     PatientPrescriptionSubmissionStatus @default(SUBMITTED)
+  reviewNote String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  patient            User  @relation("PatientPrescriptionSubmissions", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy           User  @relation("PharmacyPrescriptionSubmissions", fields: [pharmacyId], references: [id], onDelete: Restrict)
+  reviewedByPharmacy User? @relation("PharmacyReviewedPrescriptionSubmissions", fields: [reviewedByPharmacyId], references: [id], onDelete: SetNull)
+  verificationDoctor User? @relation("PatientRefillVerificationDoctor", fields: [verificationDoctorId], references: [id], onDelete: SetNull)
+
+  items         PatientPrescriptionSubmissionItem[]
+  medicineOrder MedicineOrder?
+
+  @@index([patientId, status])
+  @@index([pharmacyId, status])
+  @@index([reviewedByPharmacyId])
+  @@index([verificationDoctorId, doctorVerificationStatus])
+  @@index([verificationPath, doctorVerificationStatus])
+  @@index([evidenceType])
+  @@index([requestType])
+  @@index([createdAt])
+}
+
+model PatientPrescriptionSubmissionItem {
+  id           String   @id @default(uuid())
+  submissionId String
+  medicineId   String?
+  name         String
+  dose         String?
+  quantity     String?
+  instructions String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission PatientPrescriptionSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  medicine   Medicine?                     @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  orderItems MedicineOrderItem[]
+
+  @@index([submissionId])
+  @@index([medicineId])
 }
 
 model PatientReport {
@@ -623,22 +954,33 @@ model PatientReportReview {
 }
 
 model Medicine {
-  id                   String         @id @default(uuid())
+  id                   String  @id @default(uuid())
   patientId            String
   prescribedByDoctorId String?
   name                 String
   dose                 String
-  instructions         String?
-  source               MedicineSource @default(MANUAL)
-  isActive             Boolean        @default(true)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  doseQuantity         Int     @default(1)
+  doseUnit             String?
 
-  patient            User                    @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  prescribedByDoctor User?                   @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
+  instructions String?
+  source       MedicineSource @default(MANUAL)
+  isActive     Boolean        @default(true)
+
+  hasMedicineOnHand Boolean?
+  currentStock      Int?
+  stockUnit         String?
+  lowStockThreshold Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient            User                                @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescribedByDoctor User?                               @relation("DoctorPrescribedMedicines", fields: [prescribedByDoctorId], references: [id], onDelete: SetNull)
   reminders          MedicineReminder[]
   prescriptionItem   PrescriptionItem?
   reviewRequests     MedicineReviewRequest[]
+  orderItems         MedicineOrderItem[]
+  submissionItems    PatientPrescriptionSubmissionItem[]
 
   @@index([patientId])
   @@index([prescribedByDoctorId])
@@ -788,17 +1130,231 @@ model PatientDoctorNote {
 }
 
 model MedicineOrder {
-  id        String              @id @default(uuid())
-  patientId String
-  status    MedicineOrderStatus @default(RECEIVED)
+  id          String  @id @default(uuid())
+  orderNumber String? @unique
+
+  patientId           String
+  pharmacyId          String?
+  doctorId            String?
+  caregiverId         String?
+  prescriptionId      String?
+  patientSubmissionId String? @unique
+
+  orderSource MedicineOrderSource @default(MANUAL_REQUEST)
+
+  medicineName String  @default("Medicine request")
+  dose         String?
+  quantity     String  @default("Not specified")
+  instructions String?
+
+  requestedByRole MedicineOrderRequestSource @default(PATIENT)
+  requestedByName String?
+  requestNote     String?
+
+  prescriptionConfirmed   Boolean   @default(false)
+  prescriptionConfirmedAt DateTime?
+  fulfilmentAllowed       Boolean   @default(false)
+
+  status       MedicineOrderStatus @default(RECEIVED)
+  statusReason String?
+
+  acceptedAt       DateTime?
+  rejectedAt       DateTime?
+  preparingAt      DateTime?
+  readyAt          DateTime?
+  outForDeliveryAt DateTime?
+  deliveredAt      DateTime?
+  collectedAt      DateTime?
+  cancelledAt      DateTime?
+  delayedAt        DateTime?
+  outOfStockAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient           User                           @relation("PatientMedicineOrders", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy          User?                          @relation("PharmacyMedicineOrders", fields: [pharmacyId], references: [id], onDelete: SetNull)
+  doctor            User?                          @relation("DoctorMedicineOrders", fields: [doctorId], references: [id], onDelete: SetNull)
+  caregiver         User?                          @relation("CaregiverMedicineOrders", fields: [caregiverId], references: [id], onDelete: SetNull)
+  prescription      Prescription?                  @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  patientSubmission PatientPrescriptionSubmission? @relation(fields: [patientSubmissionId], references: [id], onDelete: SetNull)
+
+  items          MedicineOrderItem[]
+  payment        PrescriptionPayment?
+  exemptionClaim PrescriptionExemptionClaim?
+  statusHistory  MedicineOrderStatusHistory[]
+  notes          PharmacyOrderNote[]
 
   @@index([patientId])
+  @@index([pharmacyId])
+  @@index([doctorId])
+  @@index([caregiverId])
+  @@index([prescriptionId])
+  @@index([patientSubmissionId])
+  @@index([orderSource])
   @@index([status])
+  @@index([createdAt])
+}
+
+model MedicineOrderItem {
+  id                 String  @id @default(uuid())
+  orderId            String
+  medicineId         String?
+  prescriptionItemId String?
+  submissionItemId   String?
+  inventoryItemId    String?
+
+  name         String
+  dose         String?
+  quantity     String?
+  instructions String?
+
+  // Patient-facing requested quantity.
+  // Example: 1 pack.
+  quantityUnit String?
+
+  // Actual quantity supplied by pharmacy.
+  // Example: 28 tablets.
+  dispensedQuantity Int?
+  dispensedUnit     String?
+
+  inventoryReservedQuantity Int       @default(0)
+  inventoryReservedAt       DateTime?
+  inventoryConsumedAt       DateTime?
+  inventoryReleasedAt       DateTime?
+  unitPricePence            Int?
+  lineTotalPence            Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order            MedicineOrder                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  medicine         Medicine?                          @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+  prescriptionItem PrescriptionItem?                  @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
+  submissionItem   PatientPrescriptionSubmissionItem? @relation(fields: [submissionItemId], references: [id], onDelete: SetNull)
+  inventoryItem    PharmacyInventoryItem?             @relation("MedicineOrderItemInventory", fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([medicineId])
+  @@index([prescriptionItemId])
+  @@index([submissionItemId])
+  @@index([inventoryItemId])
+}
+
+model MedicinePackReference {
+  id String @id @default(uuid())
+
+  medicineSlug String
+  medicineName String
+  strength     String
+  form         String
+
+  packageUnit String
+  packSize    Int
+  contentUnit String
+
+  isActive              Boolean @default(true)
+  defaultUnitPricePence Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([medicineSlug, strength])
+  @@index([medicineSlug])
+  @@index([medicineName])
+  @@index([strength])
+  @@index([isActive])
+}
+
+model PrescriptionPayment {
+  id                      String                       @id @default(uuid())
+  orderId                 String                       @unique
+  chargePreference        PrescriptionChargePreference
+  chargeableItemCount     Int                          @default(0)
+  unitChargePence         Int                          @default(0)
+  amountPence             Int                          @default(0)
+  currency                String                       @default("GBP")
+  provider                PaymentProvider              @default(STRIPE)
+  providerPaymentIntentId String?                      @unique
+  testMode                Boolean                      @default(true)
+  status                  PrescriptionPaymentStatus    @default(PENDING)
+  paidAt                  DateTime?
+  failedAt                DateTime?
+  refundedAt              DateTime?
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+
+  order MedicineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PrescriptionExemptionClaim {
+  id                   String                      @id @default(uuid())
+  orderId              String                      @unique
+  pharmacyId           String?
+  verifiedByPharmacyId String?
+  exemptionType        PrescriptionExemptionType
+  referenceNumber      String?
+  evidenceDocumentUrl  String?
+  expiresAt            DateTime?
+  status               ExemptionVerificationStatus @default(PENDING)
+  verifiedAt           DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  order              MedicineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pharmacy           User?         @relation("PharmacyExemptionClaims", fields: [pharmacyId], references: [id], onDelete: SetNull)
+  verifiedByPharmacy User?         @relation("PharmacyVerifiedExemptionClaims", fields: [verifiedByPharmacyId], references: [id], onDelete: SetNull)
+
+  @@index([pharmacyId, status])
+  @@index([verifiedByPharmacyId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model MedicineOrderStatusHistory {
+  id          String  @id @default(uuid())
+  orderId     String
+  changedById String?
+
+  fromStatus MedicineOrderStatus?
+  toStatus   MedicineOrderStatus
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  order     MedicineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User?         @relation("MedicineOrderStatusChanges", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([changedById])
+  @@index([toStatus])
+  @@index([createdAt])
+}
+
+model PharmacyOrderNote {
+  id         String @id @default(uuid())
+  orderId    String
+  pharmacyId String
+
+  noteType   PharmacyOrderNoteType       @default(GENERAL)
+  visibility PharmacyOrderNoteVisibility @default(INTERNAL_ONLY)
+  note       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order    MedicineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pharmacy User          @relation("PharmacyOrderNotes", fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([pharmacyId])
+  @@index([visibility])
+  @@index([createdAt])
 }
 
 model SafetyAlert {

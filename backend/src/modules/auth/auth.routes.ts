@@ -3,7 +3,8 @@ import { Router, urlencoded } from "express";
 import { authController } from "./auth.controller.js";
 import { doctorAuthController } from "./doctor-auth.controller.js";
 import { doctorVerificationUpload } from "../../middleware/upload.middleware.js";
-
+import { pharmacyAuthController } from "./pharmacy-auth.controller.js";
+import { pharmacyVerificationUpload } from "../../middleware/upload.middleware.js";
 const router = Router();
 
 router.post("/register", authController.register);
@@ -45,5 +46,18 @@ router.post(
   urlencoded({ extended: false }),
   authController.resetPassword
 );
-
+router.post(
+  "/pharmacy/signup",
+  pharmacyVerificationUpload.fields([
+    {
+      name: "licenseDocument",
+      maxCount: 1,
+    },
+    {
+      name: "addressProofDocument",
+      maxCount: 1,
+    },
+  ]),
+  pharmacyAuthController.registerPharmacy
+);
 export default router;

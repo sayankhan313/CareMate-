@@ -308,6 +308,7 @@ export const AdminDashboardScreen = ({ navigation }: AdminDashboardScreenProps) 
   const openPharmacyTab = (status: AdminAccountStatus = "PENDING_VERIFICATION") => navigation.navigate("Pharmacies", { status });
   const openUsersTab = (status: "ALL" | AdminAccountStatus = "ALL") => navigation.navigate("Users", { status });
   const openAuditLogs = () => navigation.navigate("AdminAuditLogs");
+  const openMedicineReviews = () => navigation.navigate("AdminMedicineReviewRequests");
 
   const renderStatCard = ({ label, value, helper, icon, backgroundColor, textColor, onPress }: {
     label: string;
@@ -637,9 +638,14 @@ export const AdminDashboardScreen = ({ navigation }: AdminDashboardScreenProps) 
                   <Text style={styles.sectionDescription}>Controlled escalation and release</Text>
                 </View>
 
-                <View style={styles.escalationCountChip}>
-                  <Pill size={12} color={ON_ADMIN_CONTAINER} strokeWidth={2.5} />
-                  <Text style={styles.poolCountText}>{medicineEscalations.length + poolAssignedReviews.length + completedPoolReviews.length}</Text>
+                <View style={styles.poolHeaderActions}>
+                  <View style={styles.escalationCountChip}>
+                    <Pill size={12} color={ON_ADMIN_CONTAINER} strokeWidth={2.5} />
+                    <Text style={styles.poolCountText}>{medicineEscalations.length + poolAssignedReviews.length + completedPoolReviews.length}</Text>
+                  </View>
+                  <TouchableOpacity activeOpacity={0.82} onPress={openMedicineReviews}>
+                    <Text style={styles.sectionLink}>View all</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -666,7 +672,7 @@ export const AdminDashboardScreen = ({ navigation }: AdminDashboardScreenProps) 
               </View>
 
               {medicineEscalations.length > 0 ? (
-                <View style={styles.approvalList}>{medicineEscalations.slice(0, 5).map(renderAwaitingPoolCard)}</View>
+                <View style={styles.approvalList}>{[...medicineEscalations].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map(renderAwaitingPoolCard)}</View>
               ) : (
                 <View style={styles.compactEmptyCard}>
                   <UserCheck size={21} color={ON_SUCCESS_CONTAINER} strokeWidth={2.4} />
@@ -683,7 +689,7 @@ export const AdminDashboardScreen = ({ navigation }: AdminDashboardScreenProps) 
               </View>
 
               {poolAssignedReviews.length > 0 ? (
-                <View style={styles.approvalList}>{poolAssignedReviews.slice(0, 5).map(renderAssignedPoolCard)}</View>
+                <View style={styles.approvalList}>{[...poolAssignedReviews].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map(renderAssignedPoolCard)}</View>
               ) : (
                 <View style={styles.compactEmptyCard}>
                   <Clock3 size={21} color={DOCTOR} strokeWidth={2.4} />
@@ -700,7 +706,7 @@ export const AdminDashboardScreen = ({ navigation }: AdminDashboardScreenProps) 
               </View>
 
               {completedPoolReviews.length > 0 ? (
-                <View style={styles.approvalList}>{completedPoolReviews.slice(0, 5).map(renderCompletedPoolCard)}</View>
+                <View style={styles.approvalList}>{[...completedPoolReviews].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5).map(renderCompletedPoolCard)}</View>
               ) : (
                 <View style={styles.compactEmptyCard}>
                   <FileCheck2 size={21} color={ON_SUCCESS_CONTAINER} strokeWidth={2.4} />
@@ -928,6 +934,7 @@ const styles = StyleSheet.create({
   statLabel: { color: TEXT, fontSize: 13, fontWeight: "700", marginBottom: 2 },
   statHelper: { color: MUTED, fontSize: 11, fontWeight: "500" },
 
+  poolHeaderActions: { alignItems: "flex-end", gap: 6 },
   escalationCountChip: { backgroundColor: ADMIN_CONTAINER, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center" },
   poolCountText: { color: ON_ADMIN_CONTAINER, fontSize: 11, fontWeight: "700", marginLeft: 5 },
   poolSummaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },

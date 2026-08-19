@@ -58,6 +58,7 @@ const PRESCRIPTION_PATTERN_REGEX =
   /\b[01il|]\s*[-–—/\s]\s*[0o]\s*[-–—/\s]\s*[01il|]\b/i;
 
 const DOSE_REGEX = /\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu|units|%)\b/i;
+
 const inferGalleryScanMode = (detectedText: string): ScanMode => {
   const normalizedText = detectedText
     .toLowerCase()
@@ -68,19 +69,19 @@ const inferGalleryScanMode = (detectedText: string): ScanMode => {
 
   const lines = normalizedText
     .split(/\n+/)
-    .map((line) => line.trim())
+    .map(line => line.trim())
     .filter(Boolean);
 
   const hasPrescriptionPattern =
     PRESCRIPTION_PATTERN_REGEX.test(detectedText) ||
     PRESCRIPTION_PATTERN_REGEX.test(normalizedText);
 
-  const medicineLikeLines = lines.filter((line) => {
+  const medicineLikeLines = lines.filter(line => {
     const hasDose = DOSE_REGEX.test(line);
 
     const hasMedicineKeyword =
       /\b(tab|tablet|cap|capsule|syp|syrup|gel|cream|ointment|drop|inhaler|mg|ml)\b/i.test(
-        line
+        line,
       );
 
     const hasSchedule =
@@ -130,6 +131,7 @@ const ScanMedicineScreen = ({ navigation }: Props) => {
         detectedText,
         ocrConfidence,
         source,
+        scannedImageUri: imageUri,
       });
 
       return;
@@ -314,6 +316,7 @@ const ScanMedicineScreen = ({ navigation }: Props) => {
 
             <View style={styles.scannerHintBox}>
               <CheckCircle2 size={17} color={SUCCESS} strokeWidth={2.6} />
+
               <Text style={styles.scannerHintText}>
                 Keep the medicine name, dose and timing pattern clearly visible.
               </Text>
@@ -322,6 +325,7 @@ const ScanMedicineScreen = ({ navigation }: Props) => {
 
           <View style={styles.scanTypeHeader}>
             <Text style={styles.scanTypeTitle}>Choose scan type</Text>
+
             <Text style={styles.scanTypeSubtitle}>
               Tap one option to start scanning.
             </Text>
@@ -367,6 +371,7 @@ const ScanMedicineScreen = ({ navigation }: Props) => {
 
             <View style={styles.tipTextBlock}>
               <Text style={styles.tipTitle}>Before scanning</Text>
+
               <Text style={styles.tipText}>
                 Avoid blur, shadows and glare. Make sure the medicine name,
                 strength and prescription pattern are visible.
@@ -475,10 +480,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   screen: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
+
   appBar: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -486,6 +493,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+
   backButton: {
     width: 42,
     height: 42,
@@ -497,28 +505,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+
   appBarTextBlock: {
     flex: 1,
   },
+
   appBarTitle: {
     color: TEXT,
     fontSize: 27,
     fontWeight: "900",
     letterSpacing: -0.5,
   },
+
   appBarSubtitle: {
     color: MUTED,
     fontSize: 13,
     fontWeight: "700",
     marginTop: 3,
   },
+
   body: {
     flex: 1,
   },
+
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 4,
   },
+
   scannerPanel: {
     backgroundColor: DARK_SCANNER,
     borderRadius: 28,
@@ -526,11 +540,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: "hidden",
   },
+
   scannerTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   scannerStatusBadge: {
     flex: 1,
     flexDirection: "row",
@@ -541,18 +557,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginRight: 10,
   },
+
   scannerStatusDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
     backgroundColor: SUCCESS,
   },
+
   scannerStatusText: {
     color: SURFACE,
     fontSize: 12,
     fontWeight: "900",
     marginLeft: 8,
   },
+
   aiBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -561,12 +580,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 8,
   },
+
   aiBadgeText: {
     color: PRIMARY_DARK,
     fontSize: 11,
     fontWeight: "900",
     marginLeft: 5,
   },
+
   cameraArea: {
     height: 238,
     alignItems: "center",
@@ -574,6 +595,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginTop: 12,
   },
+
   scanFrame: {
     width: "100%",
     height: 164,
@@ -584,6 +606,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+
   scanLine: {
     position: "absolute",
     left: 22,
@@ -592,12 +615,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#7DD3FC",
     opacity: 0.9,
   },
+
   corner: {
     position: "absolute",
     width: 33,
     height: 33,
     borderColor: "#7DD3FC",
   },
+
   topLeftCorner: {
     top: 0,
     left: 0,
@@ -605,6 +630,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderTopLeftRadius: 22,
   },
+
   topRightCorner: {
     top: 0,
     right: 0,
@@ -612,6 +638,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 4,
     borderTopRightRadius: 22,
   },
+
   bottomLeftCorner: {
     bottom: 0,
     left: 0,
@@ -619,6 +646,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderBottomLeftRadius: 22,
   },
+
   bottomRightCorner: {
     bottom: 0,
     right: 0,
@@ -626,6 +654,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 4,
     borderBottomRightRadius: 22,
   },
+
   frameCenterContent: {
     alignItems: "center",
     justifyContent: "center",
@@ -634,6 +663,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
+
   frameText: {
     color: SURFACE,
     fontSize: 13,
@@ -641,6 +671,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
   },
+
   scannerHintBox: {
     backgroundColor: SURFACE,
     borderRadius: 18,
@@ -648,6 +679,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
+
   scannerHintText: {
     flex: 1,
     color: MUTED,
@@ -656,16 +688,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginLeft: 9,
   },
+
   scanTypeHeader: {
     paddingHorizontal: 2,
     marginBottom: 10,
   },
+
   scanTypeTitle: {
     color: TEXT,
     fontSize: 21,
     fontWeight: "900",
     letterSpacing: -0.25,
   },
+
   scanTypeSubtitle: {
     color: MUTED,
     fontSize: 13,
@@ -673,9 +708,11 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 3,
   },
+
   buttonStack: {
     marginBottom: 14,
   },
+
   scanButton: {
     minHeight: 78,
     borderRadius: 22,
@@ -686,17 +723,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
   },
+
   scanButtonPrimary: {
     backgroundColor: PRIMARY,
     borderColor: PRIMARY,
   },
+
   scanButtonSecondary: {
     backgroundColor: SURFACE,
     borderColor: BORDER,
   },
+
   disabledButton: {
     opacity: 0.65,
   },
+
   scanButtonIcon: {
     width: 50,
     height: 50,
@@ -706,21 +747,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
+
   scanButtonIconPrimary: {
     backgroundColor: SURFACE,
   },
+
   scanButtonTextBlock: {
     flex: 1,
     paddingRight: 10,
   },
+
   scanButtonTitle: {
     color: TEXT,
     fontSize: 17,
     fontWeight: "900",
   },
+
   scanButtonTitlePrimary: {
     color: SURFACE,
   },
+
   scanButtonSubtitle: {
     color: MUTED,
     fontSize: 12,
@@ -728,9 +774,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 4,
   },
+
   scanButtonSubtitlePrimary: {
     color: "#EAF1FF",
   },
+
   scanButtonAction: {
     width: 38,
     height: 38,
@@ -739,9 +787,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   scanButtonActionPrimary: {
     backgroundColor: "rgba(255,255,255,0.22)",
   },
+
   tipPanel: {
     backgroundColor: SURFACE,
     borderRadius: 22,
@@ -751,6 +801,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
+
   tipIconCircle: {
     width: 42,
     height: 42,
@@ -760,15 +811,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 11,
   },
+
   tipTextBlock: {
     flex: 1,
   },
+
   tipTitle: {
     color: TEXT,
     fontSize: 14,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   tipText: {
     color: MUTED,
     fontSize: 12,

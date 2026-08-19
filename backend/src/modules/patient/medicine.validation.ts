@@ -20,7 +20,7 @@ const timeOfDaySchema = z
   .trim()
   .regex(
     /^([01]\d|2[0-3]):([0-5]\d)$/,
-    "Time must be in HH:mm format, for example 08:00."
+    "Time must be in HH:mm format, for example 08:00.",
   );
 
 const dateSchema = z
@@ -28,7 +28,43 @@ const dateSchema = z
   .trim()
   .regex(
     /^\d{2}\/\d{2}\/\d{4}$/,
-    "Date must be in DD/MM/YYYY format."
+    "Date must be in DD/MM/YYYY format.",
+  );
+
+const doseQuantitySchema = z
+  .number()
+  .int()
+  .min(
+    1,
+    "Dose quantity must be at least 1.",
+  )
+  .max(
+    20,
+    "Dose quantity cannot exceed 20.",
+  );
+
+const doseUnitSchema = z
+  .string()
+  .trim()
+  .min(
+    1,
+    "Dose unit is required.",
+  )
+  .max(
+    30,
+    "Dose unit cannot exceed 30 characters.",
+  );
+
+const stockUnitSchema = z
+  .string()
+  .trim()
+  .min(
+    1,
+    "Stock unit is required.",
+  )
+  .max(
+    30,
+    "Stock unit cannot exceed 30 characters.",
   );
 
 const reviewMedicineFieldsSchema = z
@@ -38,116 +74,333 @@ const reviewMedicineFieldsSchema = z
       .trim()
       .min(
         2,
-        "Medicine name must be at least 2 characters."
+        "Medicine name must be at least 2 characters.",
       ),
 
     dose: z
       .string()
       .trim()
-      .min(1, "Dose is required."),
+      .min(
+        1,
+        "Strength is required.",
+      ),
 
-    instructions: z
-      .string()
-      .trim()
-      .optional(),
-
-    frequency: medicineFrequencySchema,
-
-    customFrequency: z
-      .string()
-      .trim()
-      .optional(),
-
-    timeOfDay: timeOfDaySchema,
-
-    startDate: dateSchema,
-
-    endDate: dateSchema.optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.frequency === "CUSTOM" &&
-      !data.customFrequency
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["customFrequency"],
-        message:
-          "Custom frequency is required when frequency is CUSTOM.",
-      });
-    }
-  });
-
-export const createMedicineSchema =
-  reviewMedicineFieldsSchema.extend({
-    source:
-      medicineSourceSchema
+    doseQuantity:
+      doseQuantitySchema
         .optional()
-        .default("MANUAL"),
+        .default(1),
 
-    sendToDoctorForReview: z
-      .boolean()
-      .optional()
-      .default(false),
-  });
-
-export const updateMedicineSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .min(2)
-      .optional(),
-
-    dose: z
-      .string()
-      .trim()
-      .min(1)
-      .optional(),
+    doseUnit:
+      doseUnitSchema.optional(),
 
     instructions: z
       .string()
       .trim()
-      .optional(),
-
-    isActive: z
-      .boolean()
+      .max(
+        500,
+        "Instructions cannot exceed 500 characters.",
+      )
       .optional(),
 
     frequency:
-      medicineFrequencySchema.optional(),
+      medicineFrequencySchema,
 
     customFrequency: z
       .string()
       .trim()
+      .max(
+        120,
+        "Custom frequency cannot exceed 120 characters.",
+      )
       .optional(),
 
     timeOfDay:
-      timeOfDaySchema.optional(),
+      timeOfDaySchema,
 
     startDate:
-      dateSchema.optional(),
+      dateSchema,
 
     endDate:
       dateSchema.optional(),
-
-    sendToDoctorForReview: z
-      .boolean()
-      .optional(),
   })
-  .superRefine((data, ctx) => {
-    if (
-      data.frequency === "CUSTOM" &&
-      !data.customFrequency
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["customFrequency"],
-        message:
-          "Custom frequency is required when frequency is CUSTOM.",
-      });
-    }
-  });
+  .superRefine(
+    (data, ctx) => {
+      if (
+        data.frequency ===
+        "CUSTOM" &&
+        !data.customFrequency
+      ) {
+        ctx.addIssue({
+          code:
+            z.ZodIssueCode
+              .custom,
+          path: [
+            "customFrequency",
+          ],
+          message:
+            "Custom frequency is required when frequency is CUSTOM.",
+        });
+      }
+    },
+  );
+
+export const createMedicineSchema =
+  reviewMedicineFieldsSchema
+    .extend({
+      source:
+        medicineSourceSchema
+          .optional()
+          .default("MANUAL"),
+
+      selectedTimes: z
+        .array(
+          timeOfDaySchema,
+        )
+        .min(
+          1,
+          "At least one reminder time is required.",
+        )
+        .max(
+          4,
+          "A maximum of four reminder times is allowed.",
+        )
+        .optional(),
+
+      sendToDoctorForReview:
+        z
+          .boolean()
+          .optional()
+          .default(false),
+
+      hasMedicineOnHand: z
+        .boolean()
+        .optional(),
+
+      currentStock: z
+        .number()
+        .int()
+        .min(
+          0,
+          "Current stock cannot be negative.",
+        )
+        .optional(),
+
+      stockUnit:
+        stockUnitSchema.optional(),
+
+      lowStockThreshold: z
+        .number()
+        .int()
+        .min(
+          0,
+          "Low-stock threshold cannot be negative.",
+        )
+        .optional(),
+    })
+    .superRefine(
+      (data, ctx) => {
+        if (
+          data.hasMedicineOnHand ===
+          true &&
+          (
+            data.currentStock ===
+            undefined ||
+            data.currentStock < 1
+          )
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "currentStock",
+            ],
+            message:
+              "Current stock must be at least 1 when medicine is available.",
+          });
+        }
+
+        if (
+          data.hasMedicineOnHand ===
+          true &&
+          !data.stockUnit
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "stockUnit",
+            ],
+            message:
+              "Stock unit is required when medicine is available.",
+          });
+        }
+
+        if (
+          data.hasMedicineOnHand ===
+          false &&
+          data.currentStock !==
+          undefined &&
+          data.currentStock !== 0
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "currentStock",
+            ],
+            message:
+              "Current stock must be 0 when medicine is unavailable.",
+          });
+        }
+      },
+    );
+
+export const updateMedicineSchema =
+  z
+    .object({
+      name: z
+        .string()
+        .trim()
+        .min(2)
+        .optional(),
+
+      dose: z
+        .string()
+        .trim()
+        .min(1)
+        .optional(),
+
+      doseQuantity:
+        doseQuantitySchema.optional(),
+
+      doseUnit:
+        doseUnitSchema.optional(),
+
+      instructions: z
+        .string()
+        .trim()
+        .max(
+          500,
+          "Instructions cannot exceed 500 characters.",
+        )
+        .optional(),
+
+      isActive: z
+        .boolean()
+        .optional(),
+
+      frequency:
+        medicineFrequencySchema.optional(),
+
+      customFrequency: z
+        .string()
+        .trim()
+        .max(
+          120,
+          "Custom frequency cannot exceed 120 characters.",
+        )
+        .optional(),
+
+      timeOfDay:
+        timeOfDaySchema.optional(),
+
+      startDate:
+        dateSchema.optional(),
+
+      endDate:
+        dateSchema.optional(),
+
+      sendToDoctorForReview:
+        z
+          .boolean()
+          .optional(),
+
+      hasMedicineOnHand: z
+        .boolean()
+        .optional(),
+
+      currentStock: z
+        .number()
+        .int()
+        .min(
+          0,
+          "Current stock cannot be negative.",
+        )
+        .optional(),
+
+      stockUnit:
+        stockUnitSchema.optional(),
+
+      lowStockThreshold: z
+        .number()
+        .int()
+        .min(
+          0,
+          "Low-stock threshold cannot be negative.",
+        )
+        .optional(),
+    })
+    .superRefine(
+      (data, ctx) => {
+        if (
+          data.frequency ===
+          "CUSTOM" &&
+          !data.customFrequency
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "customFrequency",
+            ],
+            message:
+              "Custom frequency is required when frequency is CUSTOM.",
+          });
+        }
+
+        if (
+          data.hasMedicineOnHand ===
+          true &&
+          data.currentStock !==
+          undefined &&
+          data.currentStock < 1
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "currentStock",
+            ],
+            message:
+              "Current stock must be at least 1 when medicine is available.",
+          });
+        }
+
+        if (
+          data.hasMedicineOnHand ===
+          false &&
+          data.currentStock !==
+          undefined &&
+          data.currentStock !== 0
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+            path: [
+              "currentStock",
+            ],
+            message:
+              "Current stock must be 0 when medicine is unavailable.",
+          });
+        }
+      },
+    );
 
 export const resubmitMedicineReviewSchema =
   reviewMedicineFieldsSchema;
@@ -159,11 +412,11 @@ export const requestMedicineDeletionSchema =
       .trim()
       .min(
         3,
-        "Please provide a clear deletion reason."
+        "Please provide a clear deletion reason.",
       )
       .max(
         500,
-        "Deletion reason cannot exceed 500 characters."
+        "Deletion reason cannot exceed 500 characters.",
       ),
   });
 
@@ -171,14 +424,18 @@ export const medicineIdParamsSchema =
   z.object({
     medicineId: z
       .string()
-      .uuid("Invalid medicine id."),
+      .uuid(
+        "Invalid medicine id.",
+      ),
   });
 
 export const reminderIdParamsSchema =
   z.object({
     reminderId: z
       .string()
-      .uuid("Invalid reminder id."),
+      .uuid(
+        "Invalid reminder id.",
+      ),
   });
 
 export const medicineReviewRequestIdParamsSchema =
@@ -186,7 +443,7 @@ export const medicineReviewRequestIdParamsSchema =
     requestId: z
       .string()
       .uuid(
-        "Invalid medicine review request id."
+        "Invalid medicine review request id.",
       ),
   });
 
@@ -197,6 +454,6 @@ export const snoozeMedicineSchema =
       .trim()
       .min(
         1,
-        "Snoozed until date/time is required."
+        "Snoozed until date/time is required.",
       ),
   });

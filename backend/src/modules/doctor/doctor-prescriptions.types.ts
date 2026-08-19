@@ -1,6 +1,4 @@
-export type DoctorPrescriptionSource =
-  | "MANUAL"
-  | "SCANNED";
+export type DoctorPrescriptionSource = "MANUAL" | "SCANNED";
 
 export type DoctorPrescriptionFrequency =
   | "ONCE_DAILY"
@@ -13,6 +11,7 @@ export type DoctorPrescriptionFrequency =
 export type DoctorPrescriptionItemInput = {
   name: string;
   dose: string;
+  quantity: string;
   instructions?: string;
   frequency: DoctorPrescriptionFrequency;
   customFrequency?: string;
@@ -36,6 +35,7 @@ export type DoctorPrescriptionItemResponse = {
   medicineId: string | null;
   name: string;
   dose: string;
+  quantity: string | null;
   instructions: string | null;
   frequency: DoctorPrescriptionFrequency;
   customFrequency: string | null;

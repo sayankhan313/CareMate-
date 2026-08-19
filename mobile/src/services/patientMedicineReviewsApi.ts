@@ -33,6 +33,10 @@ export type PatientMedicineReviewMedicine = {
   instructions: string | null;
   source: string;
   isActive: boolean;
+  hasMedicineOnHand: boolean;
+  currentStock: number | null;
+  stockUnit: string | null;
+  lowStockThreshold: number | null;
   frequency: string | null;
   customFrequency: string | null;
   timeOfDay: string | null;
@@ -95,6 +99,8 @@ export type PatientMedicineReviewActionData = {
 export type ResubmitMedicineReviewInput = {
   name: string;
   dose: string;
+  doseQuantity?: number;
+  doseUnit?: string;
   instructions?: string;
   frequency:
     | "ONCE_DAILY"

@@ -19,7 +19,12 @@ export type DoctorTabParamList = {
   Reviews: undefined;
 };
 
-export type AdminAccountStatus = "PENDING_VERIFICATION" | "ACTIVE" | "APPROVED" | "REJECTED" | "DISABLED";
+export type AdminAccountStatus =
+  | "PENDING_VERIFICATION"
+  | "ACTIVE"
+  | "APPROVED"
+  | "REJECTED"
+  | "DISABLED";
 
 export type AdminUserStatusFilter = AdminAccountStatus | "ALL";
 
@@ -30,7 +35,13 @@ export type AdminTabParamList = {
   Users: { status?: AdminUserStatusFilter } | undefined;
 };
 
-export type MedicineFrequency = "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY" | "FOUR_TIMES_DAILY" | "AS_NEEDED" | "CUSTOM";
+export type MedicineFrequency =
+  | "ONCE_DAILY"
+  | "TWICE_DAILY"
+  | "THREE_TIMES_DAILY"
+  | "FOUR_TIMES_DAILY"
+  | "AS_NEEDED"
+  | "CUSTOM";
 
 export type MedicineFlowMode = "CREATE" | "EDIT_DRAFT" | "RESUBMIT_REVIEW";
 
@@ -46,6 +57,10 @@ export type MedicineDraft = {
   endDate?: string;
   prescriptionPattern?: string | null;
   sendToDoctorForReview: boolean;
+  hasMedicineOnHand?: boolean;
+  currentStock?: number;
+  stockUnit?: string;
+  lowStockThreshold?: number;
 };
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
@@ -53,6 +68,22 @@ export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
 export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
 export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
 export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
+
+export type PharmacyOrderSource =
+  | "DOCTOR_PRESCRIPTION"
+  | "PATIENT_SUBMISSION"
+  | "REFILL_REQUEST"
+  | "MANUAL_REQUEST";
+
+export type PharmacyExemptionStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
+export type PharmacyTabParamList = {
+  Home: { user?: any } | undefined;
+  Orders: { source?: PharmacyOrderSource; title?: string } | undefined;
+  Inventory: undefined;
+  Reviews: { status?: PharmacyExemptionStatus } | undefined;
+  Notifications: undefined;
+};
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -62,47 +93,183 @@ export type RootStackParamList = {
   PatientSignup: undefined;
   DoctorSignup: undefined;
   PharmacySignup: undefined;
-  EmailVerification: { email?: string };
+
+  EmailVerification: {
+    email?: string;
+  };
+
   ForgotPassword: undefined;
-  DoctorPendingApproval: { user?: any; email?: string } | undefined;
-  PharmacyPendingApproval: { user?: any; email?: string } | undefined;
-  PatientTabs: (NavigatorScreenParams<PatientTabParamList> & { user?: any }) | undefined;
-  DoctorTabs: (NavigatorScreenParams<DoctorTabParamList> & { user?: any }) | undefined;
-  AdminTabs: (NavigatorScreenParams<AdminTabParamList> & { user?: any }) | undefined;
-  PharmacyDashboard: { user?: any } | undefined;
+
+  DoctorPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
+  PharmacyPendingApproval:
+    | {
+        user?: any;
+        email?: string;
+      }
+    | undefined;
+
+  PatientTabs:
+    | (NavigatorScreenParams<PatientTabParamList> & {
+        user?: any;
+      })
+    | undefined;
+
+  DoctorTabs:
+    | (NavigatorScreenParams<DoctorTabParamList> & {
+        user?: any;
+      })
+    | undefined;
+
+  AdminTabs:
+    | (NavigatorScreenParams<AdminTabParamList> & {
+        user?: any;
+      })
+    | undefined;
+
+  PharmacyTabs:
+    | (NavigatorScreenParams<PharmacyTabParamList> & {
+        user?: any;
+      })
+    | undefined;
+
+  PharmacyProfile: undefined;
+
+  PharmacyInventory: undefined;
+
+  PharmacyOrders:
+    | {
+        source?: PharmacyOrderSource;
+        title?: string;
+      }
+    | undefined;
+
+  PharmacyOrderDetail: {
+    orderId: string;
+  };
+
+  PharmacyExemptionReviews:
+    | {
+        status?: PharmacyExemptionStatus;
+      }
+    | undefined;
+
+  PharmacyExemptionReview: {
+    evidenceId: string;
+  };
+
   Notifications: undefined;
+
   DoctorProfile: undefined;
+
   AdminProfile: undefined;
+
   AdminDashboard: undefined;
-  AdminDoctorVerificationDetail: { doctorId: string };
-  AdminPharmacyVerificationDetail: { pharmacyId: string };
+
+  AdminMedicineReviewRequests: undefined;
+
+  AdminDoctorVerificationDetail: {
+    doctorId: string;
+  };
+
+  AdminPharmacyVerificationDetail: {
+    pharmacyId: string;
+  };
+
   AdminAuditLogs: undefined;
-  AdminAuditLogDetail: { auditLogId: string };
-  AdminRegisterWebView: { title: string; url: string; helperText?: string };
-  PatientProfile: { user?: any } | undefined;
+
+  AdminAuditLogDetail: {
+    auditLogId: string;
+  };
+
+  AdminRegisterWebView: {
+    title: string;
+    url: string;
+    helperText?: string;
+  };
+
+  PatientProfile:
+    | {
+        user?: any;
+      }
+    | undefined;
+
   EditPatientProfile: undefined;
+
+  MyPharmacies: undefined;
+
+  PrescriptionPaymentSettings: undefined;
+
   NotificationPreferences: undefined;
+
   ReminderSettings: undefined;
+
   SafetyResponseSettings: undefined;
+
   LanguageAccessibility: undefined;
+
   PrivacySecurity: undefined;
+
   SelectDoctor: undefined;
+
   PatientActiveCalls: undefined;
+
   MedicineUpdates: undefined;
+
+  MedicineStock: undefined;
+
   PatientReports: undefined;
+
   PatientUploadReport: undefined;
-  AddMedicine: { medicineDraft?: MedicineDraft; mode?: MedicineFlowMode; medicineReviewRequestId?: string } | undefined;
-  ConfirmReminder: { medicineDraft: MedicineDraft; mode?: MedicineFlowMode; medicineReviewRequestId?: string };
+
+  AddMedicine:
+    | {
+        medicineDraft?: MedicineDraft;
+        mode?: MedicineFlowMode;
+        medicineReviewRequestId?: string;
+      }
+    | undefined;
+
+  ConfirmReminder: {
+    medicineDraft: MedicineDraft;
+    mode?: MedicineFlowMode;
+    medicineReviewRequestId?: string;
+  };
+
   ScanMedicine: undefined;
-  ScanMedicineResult: { detectedText: string; ocrConfidence?: number; source?: ScanMedicineSource; scannedImageUri?: string };
-  PrescriptionScanResult: { detectedText: string; ocrConfidence?: number; source?: ScanMedicineSource };
+
+  ScanMedicineResult: {
+    detectedText: string;
+    ocrConfidence?: number;
+    source?: ScanMedicineSource;
+    scannedImageUri?: string;
+  };
+
+  PrescriptionScanResult: {
+    detectedText: string;
+    ocrConfidence?: number;
+    source?: ScanMedicineSource;
+  };
+
   ConnectedDevice: undefined;
+
   ManualSafetyResponse: undefined;
+
   SafetyResponse: {
     vitalReading: VitalReading;
     triggerSource?: string;
-    manualCriticalInfo?: { title: string; value: string; reason: string };
+    manualCriticalInfo?: {
+      title: string;
+      value: string;
+      reason: string;
+    };
   };
+
   VideoConsultation: {
     consultationId: string;
     consultationType?: "EMERGENCY" | "MANUAL";
@@ -111,6 +278,7 @@ export type RootStackParamList = {
     patientMeetingUrl?: string;
     doctorMeetingUrl?: string;
   };
+
   ConsultationEnded: {
     consultationId: string;
     consultationType?: "EMERGENCY" | "MANUAL";
@@ -118,16 +286,54 @@ export type RootStackParamList = {
     endedBy?: ConsultationEndedBy;
     completionStatus?: ConsultationCompletionStatus;
   };
-  DoctorPatientDetail: { patientId: string; patientName?: string };
-  DoctorAlertDetail: { alertId: string };
-  DoctorPatientReports: { patientId: string; patientName: string };
+
+  DoctorPatientDetail: {
+    patientId: string;
+    patientName?: string;
+  };
+
+  DoctorAlertDetail: {
+    alertId: string;
+  };
+
+  DoctorPatientReports: {
+    patientId: string;
+    patientName: string;
+  };
+
   DoctorReportReviews: undefined;
-  DoctorReportReview: { patientId: string; patientName: string; reportId: string };
+
+  DoctorReportReview: {
+    patientId: string;
+    patientName: string;
+    reportId: string;
+  };
+
   DoctorSelectPrescriptionPatient: undefined;
-  DoctorPrescription: { patientId: string; patientName: string };
+
+  DoctorPrescription: {
+    patientId: string;
+    patientName: string;
+  };
+
   DoctorSelectNotePatient: undefined;
-  DoctorAddNote: { patientId: string; patientName: string };
+
+  DoctorAddNote: {
+    patientId: string;
+    patientName: string;
+  };
+
   DoctorAvailability: undefined;
+
   DoctorMedicineReviewPool: undefined;
-  DoctorMedicineReviewPoolDetail: { requestId: string };
+
+  DoctorMedicineReviewPoolDetail: {
+    requestId: string;
+  };
+
+  DoctorRefillVerifications: undefined;
+
+  DoctorRefillVerificationDetail: {
+    submissionId: string;
+  };
 };

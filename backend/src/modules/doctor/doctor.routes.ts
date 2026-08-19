@@ -5,6 +5,7 @@ import { prescriptionImageUpload } from "../../middleware/prescription-upload.mi
 import { authorizeRoles } from "../../middleware/role.middleware.js";
 import { doctorAlertsController } from "./doctor-alerts.controller.js";
 import { doctorConsultationsController } from "./doctor-consultations.controller.js";
+import { doctorRefillVerificationsController } from "./doctor-refill-verifications.controller.js";
 import { doctorController } from "./doctor.controller.js";
 import { doctorMedicineReviewsController } from "./doctor-medicine-reviews.controller.js";
 import { doctorNotesController } from "./doctor-notes.controller.js";
@@ -40,13 +41,43 @@ router.get("/medicine-review-pool/:requestId", doctorMedicineReviewsController.g
 router.post("/medicine-review-pool/:requestId/approve", doctorMedicineReviewsController.approvePoolReview);
 router.post("/medicine-review-pool/:requestId/reject", doctorMedicineReviewsController.rejectPoolReview);
 
+router.get(
+  "/refill-verifications",
+  doctorRefillVerificationsController.listPending,
+);
+router.get(
+  "/refill-verifications/:submissionId",
+  doctorRefillVerificationsController.getDetail,
+);
+router.post(
+  "/refill-verifications/:submissionId/confirm",
+  doctorRefillVerificationsController.confirm,
+);
+router.post(
+  "/refill-verifications/:submissionId/reject",
+  doctorRefillVerificationsController.reject,
+);
+
 router.get("/reports", doctorReportsController.listReportQueue);
 
-router.post("/prescription-scan/parse", doctorPrescriptionsController.parsePrescriptionScan);
+router.post(
+  "/prescription-scan/parse",
+  doctorPrescriptionsController.parsePrescriptionScan,
+);
 
-router.post("/patients/:patientId/prescriptions", prescriptionImageUpload.single("prescriptionImage"), doctorPrescriptionsController.createPrescription);
-router.get("/patients/:patientId/prescriptions", doctorPrescriptionsController.listPatientPrescriptions);
-router.get("/prescriptions/:prescriptionId", doctorPrescriptionsController.getPrescriptionDetail);
+router.post(
+  "/patients/:patientId/prescriptions",
+  prescriptionImageUpload.single("prescriptionImage"),
+  doctorPrescriptionsController.createPrescription,
+);
+router.get(
+  "/patients/:patientId/prescriptions",
+  doctorPrescriptionsController.listPatientPrescriptions,
+);
+router.get(
+  "/prescriptions/:prescriptionId",
+  doctorPrescriptionsController.getPrescriptionDetail,
+);
 
 router.get("/consultations", doctorConsultationsController.listConsultations);
 router.get("/consultations/:consultationId", doctorConsultationsController.getConsultationDetail);
