@@ -439,6 +439,11 @@ export const MedicineUpdatesScreen = ({
     }, [loadReviews])
   );
 
+  const handleBack = () => {
+    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    navigation.navigate("PatientTabs", { screen: "Medicines" });
+  };
+
   const applyApprovedMedicine = async (
     request: PatientMedicineReviewRequest
   ) => {
@@ -613,9 +618,7 @@ export const MedicineUpdatesScreen = ({
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.84}
-            onPress={() =>
-              navigation.goBack()
-            }
+            onPress={handleBack}
           >
             <ArrowLeft
               size={21}
@@ -1432,6 +1435,21 @@ const MedicineUpdateCard = ({
         </View>
       ) : null}
 
+      {request.status === "APPROVED" &&
+      request.requestType === "ADD" &&
+      (request.medicine?.hasMedicineOnHand === false ||
+        request.medicine?.currentStock === 0) ? (
+        <View style={styles.pharmacyWaitingPanel}>
+          <Clock3 size={17} color={WARNING_DARK} strokeWidth={2.5} />
+          <View style={styles.pharmacyWaitingContent}>
+            <Text style={styles.pharmacyWaitingTitle}>Approved — waiting for pharmacy</Text>
+            <Text style={styles.pharmacyWaitingText}>
+              Your doctor has approved this medicine. It can be added to your active medicines after the pharmacy marks the order as delivered or collected.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       {request.canApply ? (
         <TouchableOpacity
           style={[
@@ -2121,6 +2139,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
   },
+
+  pharmacyWaitingPanel: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: WARNING_LIGHT,
+    borderRadius: 13,
+    padding: 12,
+    marginTop: 12,
+  },
+  pharmacyWaitingContent: { flex: 1, marginLeft: 9 },
+  pharmacyWaitingTitle: { color: WARNING_DARK, fontSize: 12, fontWeight: "800", marginBottom: 3 },
+  pharmacyWaitingText: { color: WARNING_DARK, fontSize: 11, fontWeight: "600", lineHeight: 16 },
 
   pendingPanel: {
     backgroundColor: WARNING_LIGHT,

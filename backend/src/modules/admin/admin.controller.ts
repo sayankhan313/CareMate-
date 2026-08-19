@@ -24,11 +24,7 @@ const getBodyString = (req: Request, fieldName: string) => {
   return value.trim();
 };
 
-const getRequestNotes = (req: Request) => {
-  if (typeof req.body?.notes !== "string") return undefined;
-  return req.body.notes;
-};
-
+const getRequestNotes = (req: Request) => typeof req.body?.notes === "string" ? req.body.notes : undefined;
 const getStatusQuery = (req: Request) => typeof req.query.status === "string" ? req.query.status : undefined;
 
 const getRecord = (value: unknown): UnknownRecord | null => {
@@ -40,11 +36,7 @@ const getStringValue = (value: unknown) => typeof value === "string" && value.tr
 
 const getUserAuditData = (result: unknown) => {
   const resultRecord = getRecord(result);
-  const userRecord =
-    getRecord(resultRecord?.user) ||
-    getRecord(resultRecord?.doctor) ||
-    getRecord(resultRecord?.pharmacy) ||
-    resultRecord;
+  const userRecord = getRecord(resultRecord?.user) || getRecord(resultRecord?.doctor) || getRecord(resultRecord?.pharmacy) || resultRecord;
 
   return {
     role: getStringValue(userRecord?.role) || getStringValue(resultRecord?.role),
@@ -87,7 +79,6 @@ export const adminController = {
       const adminId = getAuthenticatedAdminId(req);
       const requestId = getParamAsString(req, "requestId");
       const doctorId = getBodyString(req, "doctorId");
-
       const result = await adminService.assignMedicineReviewEscalation(requestId, doctorId);
 
       await auditService.safeRecord({
@@ -99,19 +90,11 @@ export const adminController = {
         patientId: result.request?.patientId || undefined,
         outcome: "SUCCESS",
         description: "Administrator assigned an escalated medicine review to the Medicine Review Doctor Pool.",
-        metadata: {
-          poolDoctorId: doctorId,
-          patientAssignmentCreated: false,
-          poolOnlyAccess: true,
-        },
+        metadata: { poolDoctorId: doctorId, patientAssignmentCreated: false, poolOnlyAccess: true },
         requestContext: getAuditRequestContext(req),
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "Medicine review assigned to Medicine Review Doctor Pool successfully",
-        data: result,
-      });
+      return res.status(200).json({ success: true, message: "Medicine review assigned to Medicine Review Doctor Pool successfully", data: result });
     } catch (error) {
       next(error);
     }
@@ -120,11 +103,7 @@ export const adminController = {
   async listMedicineReviewPoolAssignments(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await adminService.listMedicineReviewPoolAssignments();
-      return res.status(200).json({
-        success: true,
-        message: "Assigned Medicine Review Doctor Pool requests fetched successfully",
-        data: result,
-      });
+      return res.status(200).json({ success: true, message: "Assigned Medicine Review Doctor Pool requests fetched successfully", data: result });
     } catch (error) {
       next(error);
     }
@@ -133,11 +112,7 @@ export const adminController = {
   async listCompletedMedicineReviewPoolReviews(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await adminService.listCompletedMedicineReviewPoolReviews();
-      return res.status(200).json({
-        success: true,
-        message: "Completed Medicine Review Doctor Pool requests fetched successfully",
-        data: result,
-      });
+      return res.status(200).json({ success: true, message: "Completed Medicine Review Doctor Pool requests fetched successfully", data: result });
     } catch (error) {
       next(error);
     }
@@ -147,7 +122,6 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const requestId = getParamAsString(req, "requestId");
-
       const result = await adminService.releaseMedicineReviewPoolResult(requestId, adminId);
 
       await auditService.safeRecord({
@@ -159,18 +133,11 @@ export const adminController = {
         patientId: result.request?.patientId || undefined,
         outcome: "SUCCESS",
         description: "Administrator released a completed Medicine Review Doctor Pool result to the patient.",
-        metadata: {
-          poolDoctorId: result.request?.poolDoctorId || null,
-          decision: result.request?.status || null,
-        },
+        metadata: { poolDoctorId: result.request?.poolDoctorId || null, decision: result.request?.status || null },
         requestContext: getAuditRequestContext(req),
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "Medicine review result released to patient successfully",
-        data: result,
-      });
+      return res.status(200).json({ success: true, message: "Medicine review result released to patient successfully", data: result });
     } catch (error) {
       next(error);
     }
@@ -199,12 +166,7 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
-      const result = await adminService.approveDoctorVerification(userId, {
-        adminId,
-        notes: getRequestNotes(req),
-      });
-
+      const result = await adminService.approveDoctorVerification(userId, { adminId, notes: getRequestNotes(req) });
       const auditData = getUserAuditData(result);
 
       await auditService.safeRecord({
@@ -215,11 +177,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator approved a doctor account verification.",
-        metadata: {
-          targetRole: auditData.role || "DOCTOR",
-          accountStatus: auditData.accountStatus,
-          verificationStatus: auditData.verificationStatus,
-        },
+        metadata: { targetRole: auditData.role || "DOCTOR", accountStatus: auditData.accountStatus, verificationStatus: auditData.verificationStatus },
         requestContext: getAuditRequestContext(req),
       });
 
@@ -233,12 +191,7 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
-      const result = await adminService.rejectDoctorVerification(userId, {
-        adminId,
-        notes: getRequestNotes(req),
-      });
-
+      const result = await adminService.rejectDoctorVerification(userId, { adminId, notes: getRequestNotes(req) });
       const auditData = getUserAuditData(result);
 
       await auditService.safeRecord({
@@ -249,11 +202,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator rejected a doctor account verification.",
-        metadata: {
-          targetRole: auditData.role || "DOCTOR",
-          accountStatus: auditData.accountStatus,
-          verificationStatus: auditData.verificationStatus,
-        },
+        metadata: { targetRole: auditData.role || "DOCTOR", accountStatus: auditData.accountStatus, verificationStatus: auditData.verificationStatus },
         requestContext: getAuditRequestContext(req),
       });
 
@@ -286,12 +235,7 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
-      const result = await adminService.approvePharmacyVerification(userId, {
-        adminId,
-        notes: getRequestNotes(req),
-      });
-
+      const result = await adminService.approvePharmacyVerification(userId, { adminId, notes: getRequestNotes(req) });
       const auditData = getUserAuditData(result);
 
       await auditService.safeRecord({
@@ -302,11 +246,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator approved a pharmacy account verification.",
-        metadata: {
-          targetRole: auditData.role || "PHARMACY",
-          accountStatus: auditData.accountStatus,
-          verificationStatus: auditData.verificationStatus,
-        },
+        metadata: { targetRole: auditData.role || "PHARMACY", accountStatus: auditData.accountStatus, verificationStatus: auditData.verificationStatus },
         requestContext: getAuditRequestContext(req),
       });
 
@@ -320,12 +260,7 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
-      const result = await adminService.rejectPharmacyVerification(userId, {
-        adminId,
-        notes: getRequestNotes(req),
-      });
-
+      const result = await adminService.rejectPharmacyVerification(userId, { adminId, notes: getRequestNotes(req) });
       const auditData = getUserAuditData(result);
 
       await auditService.safeRecord({
@@ -336,11 +271,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator rejected a pharmacy account verification.",
-        metadata: {
-          targetRole: auditData.role || "PHARMACY",
-          accountStatus: auditData.accountStatus,
-          verificationStatus: auditData.verificationStatus,
-        },
+        metadata: { targetRole: auditData.role || "PHARMACY", accountStatus: auditData.accountStatus, verificationStatus: auditData.verificationStatus },
         requestContext: getAuditRequestContext(req),
       });
 
@@ -363,7 +294,6 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
       const result = await adminService.suspendUser(userId, adminId);
       const auditData = getUserAuditData(result);
 
@@ -375,10 +305,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator suspended a user account.",
-        metadata: {
-          targetRole: auditData.role,
-          accountStatus: auditData.accountStatus,
-        },
+        metadata: { targetRole: auditData.role, accountStatus: auditData.accountStatus },
         requestContext: getAuditRequestContext(req),
       });
 
@@ -392,7 +319,6 @@ export const adminController = {
     try {
       const adminId = getAuthenticatedAdminId(req);
       const userId = getParamAsString(req, "userId");
-
       const result = await adminService.reactivateUser(userId, adminId);
       const auditData = getUserAuditData(result);
 
@@ -404,10 +330,7 @@ export const adminController = {
         entityId: userId,
         outcome: "SUCCESS",
         description: "Administrator reactivated a disabled user account.",
-        metadata: {
-          targetRole: auditData.role,
-          accountStatus: auditData.accountStatus,
-        },
+        metadata: { targetRole: auditData.role, accountStatus: auditData.accountStatus },
         requestContext: getAuditRequestContext(req),
       });
 

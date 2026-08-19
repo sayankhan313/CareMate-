@@ -1,7 +1,7 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
+import { medicineReviewPharmacySyncService } from "../medicine/medicine-review-pharmacy-sync.service.js";
 import { notificationService } from "../notification/notification.service.js";
-
 import type {
   DoctorMedicineReviewActionResponse,
   DoctorMedicineReviewDetailResponse,
@@ -12,145 +12,64 @@ import type {
   DoctorPoolMedicineReviewResponse,
   DoctorPoolMedicineReviewsResponse,
 } from "./doctor-medicine-reviews.types.js";
-import type {
-  ApproveMedicineReviewInput,
-  DoctorMedicineReviewsQueryInput,
-  RejectMedicineReviewInput,
-} from "./doctor-medicine-reviews.validation.js";
+import type { ApproveMedicineReviewInput, DoctorMedicineReviewsQueryInput, RejectMedicineReviewInput } from "./doctor-medicine-reviews.validation.js";
 
 const reviewInclude = {
-  patient: {
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-    },
-  },
-  medicine: {
-    include: {
-      reminders: {
-        orderBy: { timeOfDay: "asc" as const },
-      },
-    },
-  },
-  reviewedByDoctor: {
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-    },
-  },
+  patient: { select: { id: true, fullName: true, email: true } },
+  medicine: { include: { reminders: { orderBy: { timeOfDay: "asc" as const } } } },
+  reviewedByDoctor: { select: { id: true, fullName: true, email: true } },
 } as const;
 
 const poolReviewInclude = {
   patient: {
     select: {
       id: true,
-      patientProfile: {
-        select: {
-          dateOfBirth: true,
-          gender: true,
-          medicalConditions: true,
-          allergies: true,
-        },
-      },
-      medicines: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          dose: true,
-          instructions: true,
-          source: true,
-        },
-        orderBy: { createdAt: "desc" as const },
-      },
+      patientProfile: { select: { dateOfBirth: true, gender: true, medicalConditions: true, allergies: true } },
+      medicines: { where: { isActive: true }, select: { id: true, name: true, dose: true, instructions: true, source: true }, orderBy: { createdAt: "desc" as const } },
       vitalReadings: {
-        select: {
-          heartRate: true,
-          spo2: true,
-          bpSystolic: true,
-          bpDiastolic: true,
-          glucose: true,
-          temperature: true,
-          status: true,
-          recordedAt: true,
-        },
+        select: { heartRate: true, spo2: true, bpSystolic: true, bpDiastolic: true, glucose: true, temperature: true, status: true, recordedAt: true },
         orderBy: { recordedAt: "desc" as const },
         take: 1,
       },
     },
   },
-  medicine: {
-    include: {
-      reminders: {
-        orderBy: { timeOfDay: "asc" as const },
-      },
-    },
-  },
+  medicine: { include: { reminders: { orderBy: { timeOfDay: "asc" as const } } } },
 } as const;
 
 const ensureApprovedDoctor = async (doctorId: string) => {
   const doctor = await prisma.user.findUnique({
     where: { id: doctorId },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      role: true,
-      accountStatus: true,
-      isEmailVerified: true,
-    },
+    select: { id: true, fullName: true, email: true, role: true, accountStatus: true, isEmailVerified: true },
   });
 
   if (!doctor) throw new AppError("Doctor not found", 404);
   if (doctor.role !== "DOCTOR") throw new AppError("Only doctors can access medicine reviews", 403);
   if (!doctor.isEmailVerified) throw new AppError("Please verify your email first", 403);
-
-  if (doctor.accountStatus !== "ACTIVE" && doctor.accountStatus !== "APPROVED") {
-    throw new AppError("Doctor account is not approved yet", 403);
-  }
-
+  if (doctor.accountStatus !== "ACTIVE" && doctor.accountStatus !== "APPROVED") throw new AppError("Doctor account is not approved yet", 403);
   return doctor;
 };
 
 const getAssignedPatientIds = async (doctorId: string) => {
-  const assignments = await prisma.patientDoctorAssignment.findMany({
-    where: { doctorId, status: "ACTIVE" },
-    select: { patientId: true },
-  });
-
+  const assignments = await prisma.patientDoctorAssignment.findMany({ where: { doctorId, status: "ACTIVE" }, select: { patientId: true } });
   return assignments.map(assignment => assignment.patientId);
 };
 
 const ensureActiveAssignment = async (doctorId: string, patientId: string) => {
-  const assignment = await prisma.patientDoctorAssignment.findFirst({
-    where: { doctorId, patientId, status: "ACTIVE" },
-    select: { id: true },
-  });
-
+  const assignment = await prisma.patientDoctorAssignment.findFirst({ where: { doctorId, patientId, status: "ACTIVE" }, select: { id: true } });
   if (!assignment) throw new AppError("You are no longer assigned to this patient", 403);
   return assignment;
 };
 
 const calculateAge = (dateOfBirth?: Date | null) => {
   if (!dateOfBirth) return null;
-
   const today = new Date();
   let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
-
-  const birthdayPassed =
-    today.getUTCMonth() > dateOfBirth.getUTCMonth() ||
-    (today.getUTCMonth() === dateOfBirth.getUTCMonth() && today.getUTCDate() >= dateOfBirth.getUTCDate());
-
+  const birthdayPassed = today.getUTCMonth() > dateOfBirth.getUTCMonth() || (today.getUTCMonth() === dateOfBirth.getUTCMonth() && today.getUTCDate() >= dateOfBirth.getUTCDate());
   if (!birthdayPassed) age -= 1;
   return age >= 0 ? age : null;
 };
 
-const createPatientReference = (patientId: string) => {
-  const compactId = patientId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  return `CM-${compactId}`;
-};
+const createPatientReference = (patientId: string) => `CM-${patientId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 
 const formatReview = (request: any): DoctorMedicineReviewResponse => {
   const reminder = request.medicine.reminders[0] || null;
@@ -170,19 +89,12 @@ const formatReview = (request: any): DoctorMedicineReviewResponse => {
     appliedAt: request.appliedAt,
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
-
     frequency: reminder?.frequency || "ONCE_DAILY",
     customFrequency: reminder?.customFrequency || null,
     timeOfDay: reminder?.timeOfDay || "08:00",
     startDate: reminder?.startDate || null,
     endDate: reminder?.endDate || null,
-
-    patient: {
-      id: request.patient.id,
-      fullName: request.patient.fullName,
-      email: request.patient.email,
-    },
-
+    patient: { id: request.patient.id, fullName: request.patient.fullName, email: request.patient.email },
     medicine: {
       id: request.medicine.id,
       name: request.medicine.name,
@@ -191,9 +103,7 @@ const formatReview = (request: any): DoctorMedicineReviewResponse => {
       source: request.medicine.source,
       isActive: request.medicine.isActive,
     },
-
     reviewedByDoctor: request.reviewedByDoctor || null,
-
     canApprove: request.status === "PENDING" && request.routingStatus === "ASSIGNED" && Boolean(request.doctorId),
     canReject: request.status === "PENDING" && request.routingStatus === "ASSIGNED" && Boolean(request.doctorId),
   };
@@ -206,13 +116,7 @@ const formatPoolReview = (request: any): DoctorPoolMedicineReviewResponse => {
 
   const otherActiveMedicines = (request.patient.medicines || [])
     .filter((medicine: any) => medicine.id !== request.medicineId)
-    .map((medicine: any) => ({
-      id: medicine.id,
-      name: medicine.name,
-      dose: medicine.dose,
-      instructions: medicine.instructions,
-      source: medicine.source,
-    }));
+    .map((medicine: any) => ({ id: medicine.id, name: medicine.name, dose: medicine.dose, instructions: medicine.instructions, source: medicine.source }));
 
   return {
     id: request.id,
@@ -226,7 +130,6 @@ const formatPoolReview = (request: any): DoctorPoolMedicineReviewResponse => {
     poolReviewedAt: request.poolReviewedAt,
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
-
     medicine: {
       id: request.medicine.id,
       name: request.medicine.name,
@@ -239,7 +142,6 @@ const formatPoolReview = (request: any): DoctorPoolMedicineReviewResponse => {
       startDate: reminder?.startDate || null,
       endDate: reminder?.endDate || null,
     },
-
     clinicalContext: {
       patientReference: createPatientReference(request.patient.id),
       age: calculateAge(profile?.dateOfBirth),
@@ -260,7 +162,6 @@ const formatPoolReview = (request: any): DoctorPoolMedicineReviewResponse => {
           }
         : null,
     },
-
     canApprove: request.status === "PENDING" && request.routingStatus === "POOL_ASSIGNED" && !request.poolDecision,
     canReject: request.status === "PENDING" && request.routingStatus === "POOL_ASSIGNED" && !request.poolDecision,
   };
@@ -269,15 +170,7 @@ const formatPoolReview = (request: any): DoctorPoolMedicineReviewResponse => {
 const getReviewForDoctor = async (doctorId: string, requestId: string) => {
   await ensureApprovedDoctor(doctorId);
 
-  const request = await prisma.medicineReviewRequest.findFirst({
-    where: {
-      id: requestId,
-      doctorId,
-      routingStatus: "ASSIGNED",
-    },
-    include: reviewInclude,
-  });
-
+  const request = await prisma.medicineReviewRequest.findFirst({ where: { id: requestId, doctorId, routingStatus: "ASSIGNED" }, include: reviewInclude });
   if (!request) throw new AppError("Medicine review not found", 404);
 
   await ensureActiveAssignment(doctorId, request.patientId);
@@ -288,12 +181,7 @@ const getPoolReviewForDoctor = async (doctorId: string, requestId: string) => {
   await ensureApprovedDoctor(doctorId);
 
   const request = await prisma.medicineReviewRequest.findFirst({
-    where: {
-      id: requestId,
-      poolDoctorId: doctorId,
-      status: "PENDING",
-      routingStatus: { in: ["POOL_ASSIGNED", "POOL_REVIEW_COMPLETED"] },
-    },
+    where: { id: requestId, poolDoctorId: doctorId, status: "PENDING", routingStatus: { in: ["POOL_ASSIGNED", "POOL_REVIEW_COMPLETED"] } },
     include: poolReviewInclude,
   });
 
@@ -312,12 +200,7 @@ const notifyPatientAboutMedicineReviewDecision = async (request: any) => {
     const notificationType = approved ? "MEDICINE_REVIEW_APPROVED" : "MEDICINE_REVIEW_REJECTED";
 
     const existingNotification = await prisma.userNotification.findFirst({
-      where: {
-        userId: request.patientId,
-        type: notificationType,
-        entityType: "MEDICINE_REVIEW_REQUEST",
-        entityId: request.id,
-      },
+      where: { userId: request.patientId, type: notificationType, entityType: "MEDICINE_REVIEW_REQUEST", entityId: request.id },
       select: { id: true },
     });
 
@@ -326,8 +209,8 @@ const notifyPatientAboutMedicineReviewDecision = async (request: any) => {
     const doctorName = getDoctorDisplayName(request.reviewedByDoctor?.fullName);
     const medicineName = request.medicine.name;
     const isDeletion = request.requestType === "DELETE";
-
     const title = approved ? "Medicine review approved" : "Medicine review declined";
+
     const body = approved
       ? isDeletion
         ? `${doctorName} approved the removal of ${medicineName}.`
@@ -374,25 +257,12 @@ export const doctorMedicineReviewsService = {
 
     if (assignedPatientIds.length === 0) {
       return {
-        summary: {
-          total: 0,
-          pending: 0,
-          approved: 0,
-          rejected: 0,
-          applied: 0,
-          additions: 0,
-          deletions: 0,
-        },
+        summary: { total: 0, pending: 0, approved: 0, rejected: 0, applied: 0, additions: 0, deletions: 0 },
         reviews: [],
       };
     }
 
-    const baseWhere = {
-      doctorId,
-      patientId: { in: assignedPatientIds },
-      routingStatus: "ASSIGNED" as const,
-    };
-
+    const baseWhere = { doctorId, patientId: { in: assignedPatientIds }, routingStatus: "ASSIGNED" as const };
     const filteredWhere = {
       ...baseWhere,
       ...(query.status !== "ALL" ? { status: query.status } : {}),
@@ -400,12 +270,7 @@ export const doctorMedicineReviewsService = {
     };
 
     const [reviews, total, pending, approved, rejected, applied, additions, deletions] = await Promise.all([
-      prisma.medicineReviewRequest.findMany({
-        where: filteredWhere,
-        include: reviewInclude,
-        orderBy: { updatedAt: "desc" },
-        take: 100,
-      }),
+      prisma.medicineReviewRequest.findMany({ where: filteredWhere, include: reviewInclude, orderBy: { updatedAt: "desc" }, take: 100 }),
       prisma.medicineReviewRequest.count({ where: baseWhere }),
       prisma.medicineReviewRequest.count({ where: { ...baseWhere, status: "PENDING" } }),
       prisma.medicineReviewRequest.count({ where: { ...baseWhere, status: "APPROVED" } }),
@@ -415,10 +280,7 @@ export const doctorMedicineReviewsService = {
       prisma.medicineReviewRequest.count({ where: { ...baseWhere, requestType: "DELETE" } }),
     ]);
 
-    return {
-      summary: { total, pending, approved, rejected, applied, additions, deletions },
-      reviews: reviews.map(formatReview),
-    };
+    return { summary: { total, pending, approved, rejected, applied, additions, deletions }, reviews: reviews.map(formatReview) };
   },
 
   async getReviewDetail(doctorId: string, requestId: string): Promise<DoctorMedicineReviewDetailResponse> {
@@ -426,63 +288,42 @@ export const doctorMedicineReviewsService = {
     return { review: formatReview(request) };
   },
 
-  async approveReview(
-    doctorId: string,
-    requestId: string,
-    input: ApproveMedicineReviewInput
-  ): Promise<DoctorMedicineReviewActionResponse> {
+  async approveReview(doctorId: string, requestId: string, input: ApproveMedicineReviewInput): Promise<DoctorMedicineReviewActionResponse> {
     const doctor = await ensureApprovedDoctor(doctorId);
     const request = await getReviewForDoctor(doctorId, requestId);
 
-    if (request.status !== "PENDING") {
-      throw new AppError("Only pending medicine reviews can be approved", 400);
-    }
+    if (request.status !== "PENDING") throw new AppError("Only pending medicine reviews can be approved", 400);
 
     const reviewedAt = new Date();
     const doctorNote = input.note?.trim() || null;
 
     await prisma.$transaction(async tx => {
       const updated = await tx.medicineReviewRequest.updateMany({
-        where: {
-          id: request.id,
-          doctorId: doctor.id,
-          status: "PENDING",
-          routingStatus: "ASSIGNED",
-        },
-        data: {
-          status: "APPROVED",
-          reviewedByDoctorId: doctor.id,
-          reviewedAt,
-          doctorNote,
-        },
+        where: { id: request.id, doctorId: doctor.id, status: "PENDING", routingStatus: "ASSIGNED" },
+        data: { status: "APPROVED", reviewedByDoctorId: doctor.id, reviewedAt, doctorNote },
       });
 
-      if (updated.count === 0) {
-        throw new AppError("This medicine review has already been reassigned or processed", 409);
-      }
+      if (updated.count === 0) throw new AppError("This medicine review has already been reassigned or processed", 409);
 
       if (request.requestType === "ADD") {
         await tx.medicineReminder.updateMany({
           where: { medicineId: request.medicineId },
-          data: {
-            reviewStatus: "APPROVED",
-            reviewedByDoctorId: doctor.id,
-            reviewedAt,
-            reviewNote: doctorNote,
-          },
+          data: { reviewStatus: "APPROVED", reviewedByDoctorId: doctor.id, reviewedAt, reviewNote: doctorNote },
+        });
+
+        await medicineReviewPharmacySyncService.syncDecision(tx, {
+          patientId: request.patientId,
+          medicineId: request.medicineId,
+          reviewerId: doctor.id,
+          decision: "APPROVED",
+          note: doctorNote,
+          reviewedAt,
         });
       }
 
       if (request.requestType === "DELETE") {
-        await tx.medicine.update({
-          where: { id: request.medicineId },
-          data: { isActive: false },
-        });
-
-        await tx.medicineReminder.updateMany({
-          where: { medicineId: request.medicineId },
-          data: { isActive: false },
-        });
+        await tx.medicine.update({ where: { id: request.medicineId }, data: { isActive: false } });
+        await tx.medicineReminder.updateMany({ where: { medicineId: request.medicineId }, data: { isActive: false } });
       }
     });
 
@@ -492,56 +333,38 @@ export const doctorMedicineReviewsService = {
     return { review: formatReview(updatedRequest) };
   },
 
-  async rejectReview(
-    doctorId: string,
-    requestId: string,
-    input: RejectMedicineReviewInput
-  ): Promise<DoctorMedicineReviewActionResponse> {
+  async rejectReview(doctorId: string, requestId: string, input: RejectMedicineReviewInput): Promise<DoctorMedicineReviewActionResponse> {
     const doctor = await ensureApprovedDoctor(doctorId);
     const request = await getReviewForDoctor(doctorId, requestId);
 
-    if (request.status !== "PENDING") {
-      throw new AppError("Only pending medicine reviews can be rejected", 400);
-    }
+    if (request.status !== "PENDING") throw new AppError("Only pending medicine reviews can be rejected", 400);
 
     const reviewedAt = new Date();
     const doctorNote = input.note.trim();
 
     await prisma.$transaction(async tx => {
       const updated = await tx.medicineReviewRequest.updateMany({
-        where: {
-          id: request.id,
-          doctorId: doctor.id,
-          status: "PENDING",
-          routingStatus: "ASSIGNED",
-        },
-        data: {
-          status: "REJECTED",
-          reviewedByDoctorId: doctor.id,
-          reviewedAt,
-          doctorNote,
-        },
+        where: { id: request.id, doctorId: doctor.id, status: "PENDING", routingStatus: "ASSIGNED" },
+        data: { status: "REJECTED", reviewedByDoctorId: doctor.id, reviewedAt, doctorNote },
       });
 
-      if (updated.count === 0) {
-        throw new AppError("This medicine review has already been reassigned or processed", 409);
-      }
+      if (updated.count === 0) throw new AppError("This medicine review has already been reassigned or processed", 409);
 
       if (request.requestType === "ADD") {
         await tx.medicineReminder.updateMany({
           where: { medicineId: request.medicineId },
-          data: {
-            isActive: false,
-            reviewStatus: "REJECTED",
-            reviewedByDoctorId: doctor.id,
-            reviewedAt,
-            reviewNote: doctorNote,
-          },
+          data: { isActive: false, reviewStatus: "REJECTED", reviewedByDoctorId: doctor.id, reviewedAt, reviewNote: doctorNote },
         });
 
-        await tx.medicine.update({
-          where: { id: request.medicineId },
-          data: { isActive: false },
+        await tx.medicine.update({ where: { id: request.medicineId }, data: { isActive: false } });
+
+        await medicineReviewPharmacySyncService.syncDecision(tx, {
+          patientId: request.patientId,
+          medicineId: request.medicineId,
+          reviewerId: doctor.id,
+          decision: "REJECTED",
+          note: doctorNote,
+          reviewedAt,
         });
       }
     });
@@ -552,90 +375,43 @@ export const doctorMedicineReviewsService = {
     return { review: formatReview(updatedRequest) };
   },
 
- async listPoolReviews(doctorId: string): Promise<DoctorPoolMedicineReviewsResponse> {
-  await ensureApprovedDoctor(doctorId);
+  async listPoolReviews(doctorId: string): Promise<DoctorPoolMedicineReviewsResponse> {
+    await ensureApprovedDoctor(doctorId);
 
-  const [reviews, awaitingReview, completed] = await Promise.all([
-    prisma.medicineReviewRequest.findMany({
-      where: {
-        poolDoctorId: doctorId,
-        status: "PENDING",
-        routingStatus: { in: ["POOL_ASSIGNED", "POOL_REVIEW_COMPLETED"] },
-      },
-      include: poolReviewInclude,
-      orderBy: [{ poolAssignedAt: "asc" }, { createdAt: "asc" }],
-      take: 100,
-    }),
+    const [reviews, awaitingReview, completed] = await Promise.all([
+      prisma.medicineReviewRequest.findMany({
+        where: { poolDoctorId: doctorId, status: "PENDING", routingStatus: { in: ["POOL_ASSIGNED", "POOL_REVIEW_COMPLETED"] } },
+        include: poolReviewInclude,
+        orderBy: [{ poolAssignedAt: "asc" }, { createdAt: "asc" }],
+        take: 100,
+      }),
+      prisma.medicineReviewRequest.count({ where: { poolDoctorId: doctorId, status: "PENDING", routingStatus: "POOL_ASSIGNED" } }),
+      prisma.medicineReviewRequest.count({ where: { poolDoctorId: doctorId, status: "PENDING", routingStatus: "POOL_REVIEW_COMPLETED" } }),
+    ]);
 
-    prisma.medicineReviewRequest.count({
-      where: {
-        poolDoctorId: doctorId,
-        status: "PENDING",
-        routingStatus: "POOL_ASSIGNED",
-      },
-    }),
+    return { summary: { total: reviews.length, awaitingReview, completed }, reviews: reviews.map(formatPoolReview) };
+  },
 
-    prisma.medicineReviewRequest.count({
-      where: {
-        poolDoctorId: doctorId,
-        status: "PENDING",
-        routingStatus: "POOL_REVIEW_COMPLETED",
-      },
-    }),
-  ]);
-
-  return {
-    summary: {
-      total: reviews.length,
-      awaitingReview,
-      completed,
-    },
-    reviews: reviews.map(formatPoolReview),
-  };
-},
-
-  async getPoolReviewDetail(
-    doctorId: string,
-    requestId: string
-  ): Promise<DoctorPoolMedicineReviewDetailResponse> {
+  async getPoolReviewDetail(doctorId: string, requestId: string): Promise<DoctorPoolMedicineReviewDetailResponse> {
     const request = await getPoolReviewForDoctor(doctorId, requestId);
     return { review: formatPoolReview(request) };
   },
 
-  async approvePoolReview(
-    doctorId: string,
-    requestId: string,
-    input: ApproveMedicineReviewInput
-  ): Promise<DoctorPoolMedicineReviewActionResponse> {
+  async approvePoolReview(doctorId: string, requestId: string, input: ApproveMedicineReviewInput): Promise<DoctorPoolMedicineReviewActionResponse> {
     await ensureApprovedDoctor(doctorId);
     const request = await getPoolReviewForDoctor(doctorId, requestId);
 
-    if (request.routingStatus !== "POOL_ASSIGNED" || request.poolDecision) {
-      throw new AppError("This Medicine Review Doctor Pool request has already been completed", 409);
-    }
+    if (request.routingStatus !== "POOL_ASSIGNED" || request.poolDecision) throw new AppError("This Medicine Review Doctor Pool request has already been completed", 409);
 
     const reviewedAt = new Date();
     const note = input.note?.trim() || null;
 
     const updated = await prisma.medicineReviewRequest.updateMany({
-      where: {
-        id: request.id,
-        poolDoctorId: doctorId,
-        status: "PENDING",
-        routingStatus: "POOL_ASSIGNED",
-        poolDecision: null,
-      },
-      data: {
-        poolDecision: "APPROVED",
-        poolDoctorNote: note,
-        poolReviewedAt: reviewedAt,
-        routingStatus: "POOL_REVIEW_COMPLETED",
-      },
+      where: { id: request.id, poolDoctorId: doctorId, status: "PENDING", routingStatus: "POOL_ASSIGNED", poolDecision: null },
+      data: { poolDecision: "APPROVED", poolDoctorNote: note, poolReviewedAt: reviewedAt, routingStatus: "POOL_REVIEW_COMPLETED" },
     });
 
-    if (updated.count === 0) {
-      throw new AppError("This Medicine Review Doctor Pool request has already been completed or reassigned", 409);
-    }
+    if (updated.count === 0) throw new AppError("This Medicine Review Doctor Pool request has already been completed or reassigned", 409);
 
     const updatedRequest = await getPoolReviewForDoctor(doctorId, requestId);
 
@@ -645,40 +421,21 @@ export const doctorMedicineReviewsService = {
     };
   },
 
-  async rejectPoolReview(
-    doctorId: string,
-    requestId: string,
-    input: RejectMedicineReviewInput
-  ): Promise<DoctorPoolMedicineReviewActionResponse> {
+  async rejectPoolReview(doctorId: string, requestId: string, input: RejectMedicineReviewInput): Promise<DoctorPoolMedicineReviewActionResponse> {
     await ensureApprovedDoctor(doctorId);
     const request = await getPoolReviewForDoctor(doctorId, requestId);
 
-    if (request.routingStatus !== "POOL_ASSIGNED" || request.poolDecision) {
-      throw new AppError("This Medicine Review Doctor Pool request has already been completed", 409);
-    }
+    if (request.routingStatus !== "POOL_ASSIGNED" || request.poolDecision) throw new AppError("This Medicine Review Doctor Pool request has already been completed", 409);
 
     const reviewedAt = new Date();
     const note = input.note.trim();
 
     const updated = await prisma.medicineReviewRequest.updateMany({
-      where: {
-        id: request.id,
-        poolDoctorId: doctorId,
-        status: "PENDING",
-        routingStatus: "POOL_ASSIGNED",
-        poolDecision: null,
-      },
-      data: {
-        poolDecision: "REJECTED",
-        poolDoctorNote: note,
-        poolReviewedAt: reviewedAt,
-        routingStatus: "POOL_REVIEW_COMPLETED",
-      },
+      where: { id: request.id, poolDoctorId: doctorId, status: "PENDING", routingStatus: "POOL_ASSIGNED", poolDecision: null },
+      data: { poolDecision: "REJECTED", poolDoctorNote: note, poolReviewedAt: reviewedAt, routingStatus: "POOL_REVIEW_COMPLETED" },
     });
 
-    if (updated.count === 0) {
-      throw new AppError("This Medicine Review Doctor Pool request has already been completed or reassigned", 409);
-    }
+    if (updated.count === 0) throw new AppError("This Medicine Review Doctor Pool request has already been completed or reassigned", 409);
 
     const updatedRequest = await getPoolReviewForDoctor(doctorId, requestId);
 

@@ -1,96 +1,35 @@
-import {
-  useCallback,
-  useMemo,
-  useState,
-} from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import {
-  useFocusEffect,
-  type CompositeScreenProps,
-} from "@react-navigation/native";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import Svg, {
-  Circle,
-} from "react-native-svg";
-import {
-  AlertCircle,
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  FileCheck2,
-  Moon,
-  Pill,
-  Plus,
-  RefreshCw,
-  Sunrise,
-  Sun,
-  Trash2,
-  X,
-} from "lucide-react-native";
+import Svg, { Circle } from "react-native-svg";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, FileCheck2, Moon, Package, Pill, Plus, ShoppingBag, Sunrise, Sun, Trash2, X } from "lucide-react-native";
 
+import { LocalizedText as Text } from "../../components/common/LocalizedText";
+import { LocalizedTextInput as TextInput } from "../../components/common/LocalizedTextInput";
 import { API_BASE_URL } from "../../constants/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { patientMedicineReviewsApi } from "../../services/patientMedicineReviewsApi";
 import { patientSettingsApi, type ReminderSettings } from "../../services/patientSettingsApi";
 import { tokenStorage } from "../../services/tokenStorage";
-import type {
-  PatientTabParamList,
-  RootStackParamList,
-} from "../../types/navigation";
+import type { PatientTabParamList, RootStackParamList } from "../../types/navigation";
 
-type MedicinesScreenProps =
-  CompositeScreenProps<
-    BottomTabScreenProps<
-      PatientTabParamList,
-      "Medicines"
-    >,
-    NativeStackScreenProps<RootStackParamList>
-  >;
+type Props = CompositeScreenProps<BottomTabScreenProps<PatientTabParamList, "Medicines">, NativeStackScreenProps<RootStackParamList>>;
 
-type MedicineStatus =
-  | "PENDING"
-  | "TAKEN"
-  | "MISSED"
-  | "SNOOZED";
-
-type DateTab =
-  | "TODAY"
-  | "TOMORROW"
-  | "WEEK";
-
-type MedicinePeriod =
-  | "Morning"
-  | "Afternoon"
-  | "Evening";
-
-type ActionLoadingType =
-  | "TAKEN"
-  | "SNOOZE";
+type MedicineStatus = "PENDING" | "TAKEN" | "MISSED" | "SNOOZED";
+type DateTab = "TODAY" | "TOMORROW" | "WEEK";
+type MedicinePeriod = "Morning" | "Afternoon" | "Evening";
+type ActionLoadingType = "TAKEN" | "SNOOZE";
 
 type TodayMedicine = {
   medicineId: string;
   reminderId: string;
   name: string;
   dose: string;
+  doseQuantity?: number | null;
+  doseUnit?: string | null;
   instructions?: string | null;
   source: string;
   frequency: string;
@@ -108,3897 +47,962 @@ type TodayMedicine = {
   snoozedUntil?: string | null;
   deletionReviewPending?: boolean;
   pendingDeletionRequestId?: string | null;
+  hasMedicineOnHand?: boolean | null;
+  currentStock?: number | null;
+  stockUnit?: string | null;
+  lowStockThreshold?: number | null;
+  isLowStock?: boolean;
 };
 
-type TodayMedicineSummary = {
-  totalCount: number;
-  takenCount: number;
-  pendingCount: number;
-  missedCount: number;
-  snoozedCount: number;
-  progressPercentage: number;
+type TrackedMedicine = {
+  id: string;
+  name: string;
+  dose: string;
+  doseQuantity?: number | null;
+  doseUnit?: string | null;
+  instructions?: string | null;
+  source: string;
+  isActive: boolean;
+  hasMedicineOnHand?: boolean | null;
+  currentStock?: number | null;
+  stockUnit?: string | null;
+  lowStockThreshold?: number | null;
+  isLowStock?: boolean;
+  deletionReviewPending?: boolean;
+  reminders: { id: string; frequency: string; timeOfDay: string; isActive: boolean }[];
 };
 
-type TodayMedicineResponse = {
-  summary: TodayMedicineSummary;
-  medicines: TodayMedicine[];
-};
-
-type RemovalModalState = {
-  medicineId: string;
-  medicineName: string;
-} | null;
+type TodayMedicineSummary = { totalCount: number; takenCount: number; pendingCount: number; missedCount: number; snoozedCount: number; progressPercentage: number };
+type RemovalModalState = { medicineId: string; medicineName: string } | null;
 
 const BACKGROUND = "#F2F3F8";
 const SURFACE = "#FFFFFF";
 const SURFACE_VARIANT = "#E7E9F2";
 const SOFT_PANEL = "#F3F4FA";
-
 const TEXT = "#1B1D2A";
 const MUTED = "#5F6270";
-
 const PRIMARY = "#4C6FE0";
 const PRIMARY_CONTAINER = "#E1E7FF";
 const ON_PRIMARY_CONTAINER = "#0C2A8C";
-
 const SUCCESS = "#3A9D75";
 const SUCCESS_CONTAINER = "#DBF3E7";
 const ON_SUCCESS_CONTAINER = "#0F5C3C";
-
 const WARNING = "#C77A1F";
 const WARNING_CONTAINER = "#FBE7CD";
 const ON_WARNING_CONTAINER = "#7A4708";
-
 const DANGER = "#C6404A";
 const DANGER_CONTAINER = "#FBDADC";
 const ON_DANGER_CONTAINER = "#8C1D24";
-
 const SECONDARY = "#6B59B5";
 const SECONDARY_CONTAINER = "#E9E4F8";
-const ON_SECONDARY_CONTAINER = "#4C3E87";
-
-const DISABLED_CONTAINER = "#E5E7EC";
-const DISABLED_TEXT = "#969AA5";
-
 const SNOOZED_RING = "#A9B8F3";
 
-const PROGRESS_RING_SIZE = 108;
-const PROGRESS_RING_STROKE = 10;
-const PROGRESS_RING_RADIUS = 43;
-const PROGRESS_RING_CENTER =
-  PROGRESS_RING_SIZE / 2;
-const PROGRESS_RING_CIRCUMFERENCE =
-  2 *
-  Math.PI *
-  PROGRESS_RING_RADIUS;
+const RING_SIZE = 108;
+const RING_STROKE = 10;
+const RING_RADIUS = 43;
+const RING_CENTER = RING_SIZE / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-const elevate = (
-  level: number
-) => ({
+const elevate = (level: number) => ({
   elevation: level,
   shadowColor: TEXT,
-  shadowOpacity:
-    Platform.OS === "android"
-      ? 0
-      : 0.08 + level * 0.01,
-  shadowRadius:
-    level * 1.6,
-  shadowOffset: {
-    width: 0,
-    height: level * 0.8,
-  },
+  shadowOpacity: Platform.OS === "android" ? 0 : 0.08,
+  shadowRadius: level * 1.5,
+  shadowOffset: { width: 0, height: level },
 });
 
-const getDateKeyFromOffset = (
-  offsetDays: number
-) => {
+const getDateKeyFromOffset = (offset: number) => {
   const date = new Date();
-
-  date.setDate(
-    date.getDate() +
-      offsetDays
-  );
-
-  const year =
-    date.getFullYear();
-
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
-
+  date.setDate(date.getDate() + offset);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
-const normalizeDateKey = (
-  dateValue?: string | null
-) => {
-  if (!dateValue) {
-    return "";
-  }
+const normalizeDateKey = (value?: string | null) => {
+  if (!value) return "";
 
-  const trimmedValue =
-    String(dateValue).trim();
+  const text = String(value).trim();
 
-  if (
-    /^\d{4}-\d{2}-\d{2}/.test(
-      trimmedValue
-    )
-  ) {
-    return trimmedValue.slice(
-      0,
-      10
-    );
-  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
 
-  if (
-    /^\d{2}\/\d{2}\/\d{4}$/.test(
-      trimmedValue
-    )
-  ) {
-    const [
-      day,
-      month,
-      year,
-    ] =
-      trimmedValue.split("/");
-
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
+    const [day, month, year] = text.split("/");
     return `${year}-${month}-${day}`;
   }
 
-  const parsedDate =
-    new Date(trimmedValue);
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
 
-  if (
-    Number.isNaN(
-      parsedDate.getTime()
-    )
-  ) {
-    return "";
-  }
-
-  const year =
-    parsedDate.getFullYear();
-
-  const month = String(
-    parsedDate.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    parsedDate.getDate()
-  ).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 };
 
-const getMedicineDateKey = (
-  medicine: TodayMedicine
-) => {
-  return (
-    normalizeDateKey(
-      medicine.scheduledFor
-    ) ||
-    normalizeDateKey(
-      medicine.scheduledDate
-    ) ||
-    normalizeDateKey(
-      medicine.reminderDate
-    ) ||
-    normalizeDateKey(
-      medicine.date
-    ) ||
-    normalizeDateKey(
-      medicine.startDate
-    )
-  );
+const getMedicineDateKey = (medicine: TodayMedicine) =>
+  normalizeDateKey(medicine.scheduledFor) ||
+  normalizeDateKey(medicine.scheduledDate) ||
+  normalizeDateKey(medicine.reminderDate) ||
+  normalizeDateKey(medicine.date) ||
+  normalizeDateKey(medicine.startDate);
+
+const getAllowedDates = (tab: DateTab) => {
+  if (tab === "TODAY") return [getDateKeyFromOffset(0)];
+  if (tab === "TOMORROW") return [getDateKeyFromOffset(1)];
+  return Array.from({ length: 7 }, (_, index) => getDateKeyFromOffset(index));
 };
 
-const getAllowedDateKeys = (
-  selectedTab: DateTab
-) => {
-  if (
-    selectedTab === "TODAY"
-  ) {
-    return [
-      getDateKeyFromOffset(0),
-    ];
-  }
+const getTimeMinutes = (time?: string | null) => {
+  if (!time) return Number.MAX_SAFE_INTEGER;
 
-  if (
-    selectedTab ===
-    "TOMORROW"
-  ) {
-    return [
-      getDateKeyFromOffset(1),
-    ];
-  }
+  const match = /^(\d{1,2}):(\d{2})/.exec(time.trim());
+  if (!match) return Number.MAX_SAFE_INTEGER;
 
-  return [
-    getDateKeyFromOffset(0),
-    getDateKeyFromOffset(1),
-    getDateKeyFromOffset(2),
-    getDateKeyFromOffset(3),
-    getDateKeyFromOffset(4),
-    getDateKeyFromOffset(5),
-    getDateKeyFromOffset(6),
-  ];
+  return Number(match[1]) * 60 + Number(match[2]);
 };
 
-const getTimeMinutes = (
-  timeValue?: string | null
-) => {
-  if (!timeValue) {
-    return Number.MAX_SAFE_INTEGER;
-  }
+const sortMedicines = (medicines: TodayMedicine[]) =>
+  [...medicines].sort((a, b) => {
+    const dateDifference = getMedicineDateKey(a).localeCompare(getMedicineDateKey(b));
+    if (dateDifference !== 0) return dateDifference;
+    return getTimeMinutes(a.timeOfDay) - getTimeMinutes(b.timeOfDay);
+  });
 
-  const match =
-    /^(\d{1,2}):(\d{2})/.exec(
-      timeValue.trim()
-    );
-
-  if (!match) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-
-  const hour = Number(
-    match[1]
-  );
-
-  const minute = Number(
-    match[2]
-  );
-
-  if (
-    !Number.isInteger(hour) ||
-    !Number.isInteger(minute) ||
-    hour < 0 ||
-    hour > 23 ||
-    minute < 0 ||
-    minute > 59
-  ) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-
-  return hour * 60 + minute;
-};
-
-const getDateSortValue = (
-  medicine: TodayMedicine
-) => {
-  const dateKey =
-    getMedicineDateKey(
-      medicine
-    );
-
-  if (!dateKey) {
-    return 0;
-  }
-
-  const parsedDate =
-    new Date(
-      `${dateKey}T00:00:00`
-    );
-
-  if (
-    Number.isNaN(
-      parsedDate.getTime()
-    )
-  ) {
-    return 0;
-  }
-
-  return parsedDate.getTime();
-};
-
-const sortMedicinesBySchedule = (
-  medicines: TodayMedicine[]
-) => {
-  return medicines
-    .map(
-      (
-        medicine,
-        index
-      ) => ({
-        medicine,
-        index,
-      })
-    )
-    .sort(
-      (
-        first,
-        second
-      ) => {
-        const dateDifference =
-          getDateSortValue(
-            first.medicine
-          ) -
-          getDateSortValue(
-            second.medicine
-          );
-
-        if (
-          dateDifference !== 0
-        ) {
-          return dateDifference;
-        }
-
-        const timeDifference =
-          getTimeMinutes(
-            first.medicine
-              .timeOfDay
-          ) -
-          getTimeMinutes(
-            second.medicine
-              .timeOfDay
-          );
-
-        if (
-          timeDifference !== 0
-        ) {
-          return timeDifference;
-        }
-
-        return (
-          first.index -
-          second.index
-        );
-      }
-    )
-    .map(
-      (item) =>
-        item.medicine
-    );
-};
-
-const buildSummaryFromMedicines =
-  (
-    medicines: TodayMedicine[]
-  ): TodayMedicineSummary => {
-    const totalCount =
-      medicines.length;
-
-    const takenCount =
-      medicines.filter(
-        (medicine) =>
-          medicine.status ===
-          "TAKEN"
-      ).length;
-
-    const pendingCount =
-      medicines.filter(
-        (medicine) =>
-          medicine.status ===
-          "PENDING"
-      ).length;
-
-    const missedCount =
-      medicines.filter(
-        (medicine) =>
-          medicine.status ===
-          "MISSED"
-      ).length;
-
-    const snoozedCount =
-      medicines.filter(
-        (medicine) =>
-          medicine.status ===
-          "SNOOZED"
-      ).length;
-
-    const progressPercentage =
-      totalCount === 0
-        ? 0
-        : Math.round(
-            (takenCount /
-              totalCount) *
-              100
-          );
-
-    return {
-      totalCount,
-      takenCount,
-      pendingCount,
-      missedCount,
-      snoozedCount,
-      progressPercentage,
-    };
-  };
-
-type Translate = ReturnType<typeof useLanguage>["t"];
-
-const getFrequencyLabel = (frequency: string, t: Translate) => {
-  if (frequency === "ONCE_DAILY") return t("medicines.onceDaily");
-  if (frequency === "TWICE_DAILY") return t("medicines.twiceDaily");
-  if (frequency === "THREE_TIMES_DAILY") return t("medicines.threeDaily");
-  if (frequency === "FOUR_TIMES_DAILY") return t("medicines.fourDaily");
-  if (frequency === "AS_NEEDED") return t("medicines.asNeeded");
-  if (frequency === "CUSTOM") return t("medicines.customSchedule");
-  return frequency;
-};
-
-const getStatusLabel = (status: MedicineStatus, t: Translate) => {
-  if (status === "TAKEN") return t("common.taken");
-  if (status === "PENDING") return t("common.pending");
-  if (status === "MISSED") return t("common.missed");
-  if (status === "SNOOZED") return t("common.snoozed");
-  return status;
-};
-
-const getProgressTitle = (selectedTab: DateTab, t: Translate) => {
-  if (selectedTab === "TODAY") return t("medicines.todayProgress");
-  if (selectedTab === "TOMORROW") return t("medicines.tomorrowPlan");
-  return t("medicines.thisWeek");
-};
-
-const getHeaderSubtitle = (selectedTab: DateTab, t: Translate) => {
-  if (selectedTab === "TODAY") return t("medicines.trackToday");
-  if (selectedTab === "TOMORROW") return t("medicines.planTomorrow");
-  return t("medicines.reviewWeek");
-};
-
-const getEmptyTitle = (selectedTab: DateTab, t: Translate) => {
-  if (selectedTab === "TODAY") return t("medicines.noToday");
-  if (selectedTab === "TOMORROW") return t("medicines.noTomorrow");
-  return t("medicines.noWeek");
-};
-
-const getPeriodLabel = (period: MedicinePeriod, t: Translate) => {
-  if (period === "Morning") return t("common.morning");
-  if (period === "Afternoon") return t("common.afternoon");
-  return t("common.evening");
-};
-
-const getCardKey = (
-  medicine: TodayMedicine,
-  index: number
-) => {
-  const dateKey =
-    getMedicineDateKey(
-      medicine
-    );
-
-  return `${medicine.medicineId}-${medicine.reminderId}-${dateKey}-${medicine.timeOfDay}-${index}`;
-};
-
-const getStatusTone = (
-  status: MedicineStatus
-) => {
-  if (
-    status === "TAKEN"
-  ) {
-    return {
-      background:
-        SUCCESS_CONTAINER,
-      text:
-        ON_SUCCESS_CONTAINER,
-      dot: SUCCESS,
-      iconBackground:
-        SUCCESS_CONTAINER,
-      iconColor: SUCCESS,
-    };
-  }
-
-  if (
-    status === "PENDING"
-  ) {
-    return {
-      background:
-        WARNING_CONTAINER,
-      text:
-        ON_WARNING_CONTAINER,
-      dot: WARNING,
-      iconBackground:
-        WARNING_CONTAINER,
-      iconColor: WARNING,
-    };
-  }
-
-  if (
-    status === "MISSED"
-  ) {
-    return {
-      background:
-        DANGER_CONTAINER,
-      text:
-        ON_DANGER_CONTAINER,
-      dot: DANGER,
-      iconBackground:
-        DANGER_CONTAINER,
-      iconColor: DANGER,
-    };
-  }
+const buildSummary = (medicines: TodayMedicine[]): TodayMedicineSummary => {
+  const totalCount = medicines.length;
+  const takenCount = medicines.filter(item => item.status === "TAKEN").length;
+  const pendingCount = medicines.filter(item => item.status === "PENDING").length;
+  const missedCount = medicines.filter(item => item.status === "MISSED").length;
+  const snoozedCount = medicines.filter(item => item.status === "SNOOZED").length;
 
   return {
-    background:
-      PRIMARY_CONTAINER,
-    text:
-      ON_PRIMARY_CONTAINER,
-    dot: PRIMARY,
-    iconBackground:
-      PRIMARY_CONTAINER,
-    iconColor: PRIMARY,
+    totalCount,
+    takenCount,
+    pendingCount,
+    missedCount,
+    snoozedCount,
+    progressPercentage: totalCount === 0 ? 0 : Math.round((takenCount / totalCount) * 100),
   };
 };
 
-const getPeriodTone = (
-  period: MedicinePeriod
-) => {
-  if (
-    period === "Morning"
-  ) {
-    return {
-      background:
-        WARNING_CONTAINER,
-      color: WARNING,
-    };
-  }
+const getStatusTone = (status: MedicineStatus) => {
+  if (status === "TAKEN") return { background: SUCCESS_CONTAINER, text: ON_SUCCESS_CONTAINER, color: SUCCESS };
+  if (status === "MISSED") return { background: DANGER_CONTAINER, text: ON_DANGER_CONTAINER, color: DANGER };
+  if (status === "SNOOZED") return { background: PRIMARY_CONTAINER, text: ON_PRIMARY_CONTAINER, color: PRIMARY };
+  return { background: WARNING_CONTAINER, text: ON_WARNING_CONTAINER, color: WARNING };
+};
 
-  if (
-    period ===
-    "Afternoon"
-  ) {
-    return {
-      background:
-        PRIMARY_CONTAINER,
-      color: PRIMARY,
-    };
-  }
+const getPeriodTone = (period: MedicinePeriod) => {
+  if (period === "Morning") return { background: WARNING_CONTAINER, color: WARNING };
+  if (period === "Afternoon") return { background: PRIMARY_CONTAINER, color: PRIMARY };
+  return { background: SECONDARY_CONTAINER, color: SECONDARY };
+};
 
-  return {
-    background:
-      SECONDARY_CONTAINER,
-    color: SECONDARY,
+const getPeriodIcon = (period: MedicinePeriod) => {
+  const tone = getPeriodTone(period);
+
+  if (period === "Morning") return <Sunrise size={19} color={tone.color} strokeWidth={2.2} />;
+  if (period === "Afternoon") return <Sun size={19} color={tone.color} strokeWidth={2.2} />;
+  return <Moon size={19} color={tone.color} strokeWidth={2.2} />;
+};
+
+const singularUnit = (unit?: string | null) => {
+  const value = unit?.trim().toLowerCase() || "dose";
+
+  const map: Record<string, string> = {
+    tablets: "tablet",
+    capsules: "capsule",
+    puffs: "puff",
+    doses: "dose",
+    sprays: "spray",
+    sachets: "sachet",
+    inhalers: "inhaler",
+    bottles: "bottle",
+    packs: "pack",
   };
+
+  return map[value] || value;
 };
 
-const getPeriodIcon = (
-  period: MedicinePeriod
-) => {
-  const tone =
-    getPeriodTone(period);
-
-  if (
-    period === "Morning"
-  ) {
-    return (
-      <Sunrise
-        size={19}
-        color={tone.color}
-        strokeWidth={2.2}
-      />
-    );
-  }
-
-  if (
-    period ===
-    "Afternoon"
-  ) {
-    return (
-      <Sun
-        size={19}
-        color={tone.color}
-        strokeWidth={2.2}
-      />
-    );
-  }
-
-  return (
-    <Moon
-      size={19}
-      color={tone.color}
-      strokeWidth={2.2}
-    />
-  );
+const displayUnit = (unit: string, quantity: number) => {
+  const value = singularUnit(unit);
+  if (quantity === 1 || ["ml", "g", "mg", "mcg"].includes(value)) return value;
+  return value.endsWith("s") ? value : `${value}s`;
 };
 
-const ProgressRing = ({
-  summary,
-  progress,
-}: {
-  summary: TodayMedicineSummary;
-  progress: number;
-}) => {
-  const { t } = useLanguage();
-  const total =
-    summary.totalCount;
+const getDoseAmountText = (medicine: Pick<TodayMedicine, "doseQuantity" | "doseUnit" | "stockUnit">) => {
+  const quantity = medicine.doseQuantity ?? 1;
+  const unit = singularUnit(medicine.doseUnit || medicine.stockUnit);
+  return `${quantity} ${displayUnit(unit, quantity)}`;
+};
 
+const ProgressRing = ({ summary }: { summary: TodayMedicineSummary }) => {
   const segments = [
-    {
-      key: "taken",
-      count:
-        summary.takenCount,
-      color: SUCCESS,
-    },
-    {
-      key: "pending",
-      count:
-        summary.pendingCount,
-      color: WARNING,
-    },
-    {
-      key: "missed",
-      count:
-        summary.missedCount,
-      color: DANGER,
-    },
-    {
-      key: "snoozed",
-      count:
-        summary.snoozedCount,
-      color: SNOOZED_RING,
-    },
-  ].filter(
-    (segment) =>
-      segment.count > 0
-  );
+    { key: "taken", count: summary.takenCount, color: SUCCESS },
+    { key: "pending", count: summary.pendingCount, color: WARNING },
+    { key: "missed", count: summary.missedCount, color: DANGER },
+    { key: "snoozed", count: summary.snoozedCount, color: SNOOZED_RING },
+  ].filter(item => item.count > 0);
 
-  let accumulatedLength = 0;
+  let accumulated = 0;
 
   return (
-    <View
-      style={
-        styles.progressRingContainer
-      }
-    >
-      <Svg
-        width={
-          PROGRESS_RING_SIZE
-        }
-        height={
-          PROGRESS_RING_SIZE
-        }
-        viewBox={`0 0 ${PROGRESS_RING_SIZE} ${PROGRESS_RING_SIZE}`}
-      >
-        <Circle
-          cx={
-            PROGRESS_RING_CENTER
-          }
-          cy={
-            PROGRESS_RING_CENTER
-          }
-          r={
-            PROGRESS_RING_RADIUS
-          }
-          stroke="rgba(255,255,255,0.25)"
-          strokeWidth={
-            PROGRESS_RING_STROKE
-          }
-          fill="none"
-        />
+    <View style={styles.progressRing}>
+      <Svg width={RING_SIZE} height={RING_SIZE}>
+        <Circle cx={RING_CENTER} cy={RING_CENTER} r={RING_RADIUS} stroke="rgba(255,255,255,0.25)" strokeWidth={RING_STROKE} fill="none" />
 
-        {total > 0
-          ? segments.map(
-              (segment) => {
-                const segmentLength =
-                  (segment.count /
-                    total) *
-                  PROGRESS_RING_CIRCUMFERENCE;
+        {summary.totalCount > 0
+          ? segments.map(segment => {
+              const length = (segment.count / summary.totalCount) * RING_CIRCUMFERENCE;
+              const offset = -accumulated;
+              accumulated += length;
 
-                const strokeDashoffset =
-                  -accumulatedLength;
-
-                accumulatedLength +=
-                  segmentLength;
-
-                return (
-                  <Circle
-                    key={
-                      segment.key
-                    }
-                    cx={
-                      PROGRESS_RING_CENTER
-                    }
-                    cy={
-                      PROGRESS_RING_CENTER
-                    }
-                    r={
-                      PROGRESS_RING_RADIUS
-                    }
-                    stroke={
-                      segment.color
-                    }
-                    strokeWidth={
-                      PROGRESS_RING_STROKE
-                    }
-                    fill="none"
-                    strokeDasharray={`${segmentLength} ${
-                      PROGRESS_RING_CIRCUMFERENCE -
-                      segmentLength
-                    }`}
-                    strokeDashoffset={
-                      strokeDashoffset
-                    }
-                    strokeLinecap="round"
-                    rotation="-90"
-                    originX={
-                      PROGRESS_RING_CENTER
-                    }
-                    originY={
-                      PROGRESS_RING_CENTER
-                    }
-                  />
-                );
-              }
-            )
+              return (
+                <Circle
+                  key={segment.key}
+                  cx={RING_CENTER}
+                  cy={RING_CENTER}
+                  r={RING_RADIUS}
+                  stroke={segment.color}
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                  strokeDasharray={`${length} ${RING_CIRCUMFERENCE - length}`}
+                  strokeDashoffset={offset}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  originX={RING_CENTER}
+                  originY={RING_CENTER}
+                />
+              );
+            })
           : null}
       </Svg>
 
-      <View
-        style={
-          styles.progressRingCenter
-        }
-      >
-        <Text
-          style={
-            styles.progressPercentage
-          }
-        >
-          {progress}%
-        </Text>
-
-        <Text
-          style={
-            styles.progressCenterLabel
-          }
-        >
-          {t("medicines.done")}
-        </Text>
+      <View style={styles.progressCenter}>
+        <Text style={styles.progressPercentage}>{summary.progressPercentage}%</Text>
+        <Text style={styles.progressDone}>Done</Text>
       </View>
     </View>
   );
 };
 
-export const MedicinesScreen =
-  ({
-    navigation,
-  }: MedicinesScreenProps) => {
-    const insets = useSafeAreaInsets();
-    const { t } = useLanguage();
+export const MedicinesScreen = ({ navigation }: Props) => {
+  const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
 
-    const [
-      defaultSnoozeMinutes,
-      setDefaultSnoozeMinutes,
-    ] = useState<
-      ReminderSettings["defaultSnoozeMinutes"]
-    >(10);
+  const [selectedTab, setSelectedTab] = useState<DateTab>("TODAY");
+  const [allMedicines, setAllMedicines] = useState<TodayMedicine[]>([]);
+  const [trackedMedicines, setTrackedMedicines] = useState<TrackedMedicine[]>([]);
+  const [defaultSnoozeMinutes, setDefaultSnoozeMinutes] = useState<ReminderSettings["defaultSnoozeMinutes"]>(10);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [actionLoadingReminderId, setActionLoadingReminderId] = useState<string | null>(null);
+  const [actionLoadingType, setActionLoadingType] = useState<ActionLoadingType | null>(null);
+  const [medicineUpdatesUnread, setMedicineUpdatesUnread] = useState(0);
+  const [removalModal, setRemovalModal] = useState<RemovalModalState>(null);
+  const [removalReason, setRemovalReason] = useState("");
+  const [isSubmittingRemoval, setIsSubmittingRemoval] = useState(false);
 
-    const [
-      selectedTab,
-      setSelectedTab,
-    ] =
-      useState<DateTab>(
-        "TODAY"
-      );
+  const filteredMedicines = useMemo(() => {
+    const allowedDates = getAllowedDates(selectedTab);
+    const filtered = allMedicines.filter(item => allowedDates.includes(getMedicineDateKey(item)));
 
-    const [
-      allMedicines,
-      setAllMedicines,
-    ] = useState<
-      TodayMedicine[]
-    >([]);
+    if (selectedTab !== "WEEK") return sortMedicines(filtered);
 
-    const [
-      isLoading,
-      setIsLoading,
-    ] = useState(true);
+    const unique = new Map<string, TodayMedicine>();
 
-    const [
-      isRefreshing,
-      setIsRefreshing,
-    ] = useState(false);
+    filtered.forEach(item => {
+      const key = `${item.reminderId}-${item.timeOfDay}`;
+      if (!unique.has(key)) unique.set(key, item);
+    });
 
-    const [
-      actionLoadingReminderId,
-      setActionLoadingReminderId,
-    ] =
-      useState<
-        string | null
-      >(null);
+    return sortMedicines(Array.from(unique.values()));
+  }, [allMedicines, selectedTab]);
 
-    const [
-      actionLoadingType,
-      setActionLoadingType,
-    ] =
-      useState<
-        ActionLoadingType | null
-      >(null);
+  const summary = useMemo(() => buildSummary(filteredMedicines), [filteredMedicines]);
 
-    const [
-      medicineUpdatesUnread,
-      setMedicineUpdatesUnread,
-    ] = useState(0);
+  const stockAttention = useMemo(
+    () =>
+      trackedMedicines.filter(
+        medicine =>
+          medicine.currentStock === 0 ||
+          (medicine.currentStock !== null && medicine.currentStock !== undefined && medicine.isLowStock === true),
+      ),
+    [trackedMedicines],
+  );
 
-    const [
-      removalModal,
-      setRemovalModal,
-    ] =
-      useState<RemovalModalState>(
-        null
-      );
+  const outOfStockCount = useMemo(() => stockAttention.filter(medicine => medicine.currentStock === 0).length, [stockAttention]);
+  const lowStockCount = stockAttention.length - outOfStockCount;
 
-    const [
-      removalReason,
-      setRemovalReason,
-    ] = useState("");
+  const loadReviewSummary = useCallback(async () => {
+    try {
+      const result = await patientMedicineReviewsApi.listReviews();
+      setMedicineUpdatesUnread(result.summary?.unread || 0);
+    } catch {
+      setMedicineUpdatesUnread(0);
+    }
+  }, []);
 
-    const [
-      isSubmittingRemoval,
-      setIsSubmittingRemoval,
-    ] = useState(false);
+  const loadReminderSettings = useCallback(async () => {
+    try {
+      const result = await patientSettingsApi.getReminderSettings();
+      setDefaultSnoozeMinutes(result.settings.defaultSnoozeMinutes);
+    } catch {
+      return;
+    }
+  }, []);
 
-    const filteredMedicines =
-      useMemo(() => {
-        const allowedDateKeys =
-          getAllowedDateKeys(
-            selectedTab
-          );
+  const fetchMedicines = useCallback(
+    async (mode: "initial" | "refresh" | "silent" = "initial") => {
+      try {
+        if (mode === "initial") setIsLoading(true);
+        if (mode === "refresh") setIsRefreshing(true);
 
-        const dateFilteredMedicines =
-          allMedicines.filter(
-            (medicine) => {
-              const medicineDateKey =
-                getMedicineDateKey(
-                  medicine
-                );
+        const token = await tokenStorage.getToken();
 
-              return allowedDateKeys.includes(
-                medicineDateKey
-              );
-            }
-          );
-
-        if (
-          selectedTab !==
-          "WEEK"
-        ) {
-          return sortMedicinesBySchedule(
-            dateFilteredMedicines
-          );
-        }
-
-        const uniqueReminderMap =
-          new Map<
-            string,
-            TodayMedicine
-          >();
-
-        dateFilteredMedicines.forEach(
-          (medicine) => {
-            const uniqueKey =
-              `${medicine.reminderId}-${medicine.timeOfDay}`;
-
-            if (
-              !uniqueReminderMap.has(
-                uniqueKey
-              )
-            ) {
-              uniqueReminderMap.set(
-                uniqueKey,
-                medicine
-              );
-            }
-          }
-        );
-
-        return sortMedicinesBySchedule(
-          Array.from(
-            uniqueReminderMap.values()
-          )
-        );
-      }, [
-        allMedicines,
-        selectedTab,
-      ]);
-
-    const summary =
-      useMemo(() => {
-        return buildSummaryFromMedicines(
-          filteredMedicines
-        );
-      }, [
-        filteredMedicines,
-      ]);
-
-    const loadReviewSummary =
-      useCallback(
-        async () => {
-          try {
-            const result =
-              await patientMedicineReviewsApi.listReviews();
-
-            setMedicineUpdatesUnread(
-              result.summary
-                ?.unread || 0
-            );
-          } catch {
-            setMedicineUpdatesUnread(
-              0
-            );
-          }
-        },
-        []
-      );
-
-    const loadReminderSettings =
-      useCallback(
-        async () => {
-          try {
-            const result =
-              await patientSettingsApi.getReminderSettings();
-
-            setDefaultSnoozeMinutes(
-              result.settings.defaultSnoozeMinutes
-            );
-          } catch {
-            return;
-          }
-        },
-        []
-      );
-
-    const fetchMedicines =
-      useCallback(
-        async (
-          mode:
-            | "initial"
-            | "refresh"
-            | "silent" =
-            "initial"
-        ) => {
-          try {
-            if (
-              mode ===
-              "initial"
-            ) {
-              setIsLoading(
-                true
-              );
-            }
-
-            if (
-              mode ===
-              "refresh"
-            ) {
-              setIsRefreshing(
-                true
-              );
-            }
-
-            const token =
-              await tokenStorage.getToken();
-
-            if (!token) {
-              Alert.alert(
-                t("common.sessionExpired"),
-                t("common.pleaseLoginAgain")
-              );
-
-              return;
-            }
-
-            const response =
-              await fetch(
-                `${API_BASE_URL}/patient/medicines/today`,
-                {
-                  method:
-                    "GET",
-                  headers: {
-                    Authorization:
-                      `Bearer ${token}`,
-                  },
-                }
-              );
-
-            let result: any =
-              {};
-
-            try {
-              result =
-                await response.json();
-            } catch {
-              result = {};
-            }
-
-            if (
-              !response.ok
-            ) {
-              Alert.alert(
-                t("medicines.unableFetch"),
-                result.message ||
-                  t("common.pleaseTryAgain")
-              );
-
-              return;
-            }
-
-            const data:
-              TodayMedicineResponse =
-              result.data;
-
-            setAllMedicines(
-              Array.isArray(
-                data?.medicines
-              )
-                ? data.medicines
-                : []
-            );
-          } catch {
-            Alert.alert(
-              t("common.networkError"),
-              t("common.unableConnect")
-            );
-          } finally {
-            if (
-              mode ===
-              "initial"
-            ) {
-              setIsLoading(
-                false
-              );
-            }
-
-            if (
-              mode ===
-              "refresh"
-            ) {
-              setIsRefreshing(
-                false
-              );
-            }
-          }
-        },
-        [t]
-      );
-
-    useFocusEffect(
-      useCallback(() => {
-        void fetchMedicines(
-          "initial"
-        );
-
-        void loadReviewSummary();
-
-        void loadReminderSettings();
-      }, [
-        fetchMedicines,
-        loadReviewSummary,
-        loadReminderSettings,
-      ])
-    );
-
-    const refreshAll =
-      useCallback(
-        async () => {
-          await Promise.all([
-            fetchMedicines(
-              "refresh"
-            ),
-            loadReviewSummary(),
-            loadReminderSettings(),
-          ]);
-        },
-        [
-          fetchMedicines,
-          loadReviewSummary,
-          loadReminderSettings,
-        ]
-      );
-
-    const markTaken =
-      async (
-        reminderId: string
-      ) => {
-        if (
-          actionLoadingReminderId
-        ) {
+        if (!token) {
+          Alert.alert(t("common.sessionExpired"), t("common.pleaseLoginAgain"));
           return;
         }
 
-        try {
-          setActionLoadingReminderId(
-            reminderId
-          );
+        const headers = { Authorization: `Bearer ${token}` };
 
-          setActionLoadingType(
-            "TAKEN"
-          );
+        const [todayResponse, allResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/patient/medicines/today`, { headers }),
+          fetch(`${API_BASE_URL}/patient/medicines`, { headers }),
+        ]);
 
-          const token =
-            await tokenStorage.getToken();
+        const todayResult = await todayResponse.json().catch(() => ({}));
+        const allResult = await allResponse.json().catch(() => ({}));
 
-          if (!token) {
-            Alert.alert(
-              t("common.sessionExpired"),
-              t("common.pleaseLoginAgain")
-            );
-
-            return;
-          }
-
-          const response =
-            await fetch(
-              `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`,
-              {
-                method:
-                  "POST",
-                headers: {
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-              }
-            );
-
-          let result: any =
-            {};
-
-          try {
-            result =
-              await response.json();
-          } catch {
-            result = {};
-          }
-
-          if (
-            !response.ok
-          ) {
-            Alert.alert(
-              t("medicines.unableUpdate"),
-              result.message ||
-                t("common.pleaseTryAgain")
-            );
-
-            return;
-          }
-
-          setAllMedicines(
-            (
-              currentMedicines
-            ) =>
-              currentMedicines.map(
-                (
-                  medicine
-                ) =>
-                  medicine.reminderId ===
-                  reminderId
-                    ? {
-                        ...medicine,
-                        status:
-                          "TAKEN",
-                        takenAt:
-                          new Date().toISOString(),
-                        snoozedUntil:
-                          null,
-                      }
-                    : medicine
-              )
-          );
-
-          await fetchMedicines(
-            "silent"
-          );
-        } catch {
-          Alert.alert(
-            t("common.networkError"),
-            t("common.unableConnect")
-          );
-        } finally {
-          setActionLoadingReminderId(
-            null
-          );
-
-          setActionLoadingType(
-            null
-          );
-        }
-      };
-
-    const snoozeReminder =
-      async (
-        reminderId: string
-      ) => {
-        if (
-          actionLoadingReminderId
-        ) {
+        if (!todayResponse.ok) {
+          Alert.alert(t("medicines.unableFetch"), todayResult.message || t("common.pleaseTryAgain"));
           return;
         }
 
-        try {
-          setActionLoadingReminderId(
-            reminderId
-          );
-
-          setActionLoadingType(
-            "SNOOZE"
-          );
-
-          const token =
-            await tokenStorage.getToken();
-
-          if (!token) {
-            Alert.alert(
-              t("common.sessionExpired"),
-              t("common.pleaseLoginAgain")
-            );
-
-            return;
-          }
-
-          const snoozedUntil =
-            new Date(
-              Date.now() +
-                defaultSnoozeMinutes *
-                  60 *
-                  1000
-            ).toISOString();
-
-          const response =
-            await fetch(
-              `${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`,
-              {
-                method:
-                  "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-                body:
-                  JSON.stringify(
-                    {
-                      snoozedUntil,
-                    }
-                  ),
-              }
-            );
-
-          let result: any =
-            {};
-
-          try {
-            result =
-              await response.json();
-          } catch {
-            result = {};
-          }
-
-          if (
-            !response.ok
-          ) {
-            Alert.alert(
-              t("medicines.unableSnooze"),
-              result.message ||
-                t("common.pleaseTryAgain")
-            );
-
-            return;
-          }
-
-          setAllMedicines(
-            (
-              currentMedicines
-            ) =>
-              currentMedicines.map(
-                (
-                  medicine
-                ) =>
-                  medicine.reminderId ===
-                  reminderId
-                    ? {
-                        ...medicine,
-                        status:
-                          "SNOOZED",
-                        snoozedUntil,
-                      }
-                    : medicine
-              )
-          );
-
-          await fetchMedicines(
-            "silent"
-          );
-        } catch {
-          Alert.alert(
-            t("common.networkError"),
-            t("common.unableConnect")
-          );
-        } finally {
-          setActionLoadingReminderId(
-            null
-          );
-
-          setActionLoadingType(
-            null
-          );
-        }
-      };
-
-    const openRemovalModal =
-      (
-        medicine: TodayMedicine
-      ) => {
-        if (
-          medicine.deletionReviewPending
-        ) {
-          navigation.navigate(
-            "MedicineUpdates"
-          );
-
+        if (!allResponse.ok) {
+          Alert.alert(t("medicines.unableFetch"), allResult.message || t("common.pleaseTryAgain"));
           return;
         }
 
-        setRemovalModal({
-          medicineId:
-            medicine.medicineId,
-          medicineName:
-            medicine.name,
-        });
-
-        setRemovalReason("");
-      };
-
-    const closeRemovalModal =
-      () => {
-        if (
-          isSubmittingRemoval
-        ) {
-          return;
-        }
-
-        setRemovalModal(
-          null
-        );
-
-        setRemovalReason("");
-      };
-
-    const submitRemovalRequest =
-      async () => {
-        if (
-          !removalModal ||
-          isSubmittingRemoval
-        ) {
-          return;
-        }
-
-        const reason =
-          removalReason.trim();
-
-        if (
-          reason.length < 3
-        ) {
-          Alert.alert(
-            t("medicines.reasonRequired"),
-            t("medicines.reasonRequiredText")
-          );
-
-          return;
-        }
-
-        try {
-          setIsSubmittingRemoval(
-            true
-          );
-
-          const result =
-            await patientMedicineReviewsApi.requestDeletion(
-              removalModal.medicineId,
-              reason
-            );
-
-          const requestId =
-            result.request?.id ||
-            null;
-
-          setAllMedicines(
-            (
-              currentMedicines
-            ) =>
-              currentMedicines.map(
-                (
-                  medicine
-                ) =>
-                  medicine.medicineId ===
-                  removalModal.medicineId
-                    ? {
-                        ...medicine,
-                        deletionReviewPending:
-                          true,
-                        pendingDeletionRequestId:
-                          requestId,
-                      }
-                    : medicine
-              )
-          );
-
-          const medicineName =
-            removalModal.medicineName;
-
-          setRemovalModal(
-            null
-          );
-
-          setRemovalReason("");
-
-          await Promise.all([
-            fetchMedicines(
-              "silent"
-            ),
-            loadReviewSummary(),
-          ]);
-
-          Alert.alert(
-            t("medicines.removalSentTitle"),
-            t("medicines.removalSentText", { medicine: medicineName }),
-            [
-              {
-                text:
-                  t("medicines.viewUpdates"),
-                onPress:
-                  () => {
-                    navigation.navigate(
-                      "MedicineUpdates"
-                    );
-                  },
-              },
-              {
-                text: t("common.ok"),
-              },
-            ]
-          );
-        } catch (error) {
-          Alert.alert(
-            t("medicines.unableRequestRemoval"),
-            error instanceof Error
-              ? error.message
-              : t("medicines.removalRequestFailed")
-          );
-        } finally {
-          setIsSubmittingRemoval(
-            false
-          );
-        }
-      };
-
-    const getMedicinesByPeriod =
-      (
-        period: MedicinePeriod
-      ) => {
-        return filteredMedicines.filter(
-          (medicine) =>
-            medicine.period ===
-            period
-        );
-      };
-
-    const getMedicineMetaText =
-      (
-        medicine: TodayMedicine
-      ) => {
-        const instructionOrFrequency =
-          medicine.instructions?.trim() ||
-          (medicine.frequency ===
-            "CUSTOM"
-            ? medicine.customFrequency ||
-              t("medicines.customSchedule")
-            : getFrequencyLabel(medicine.frequency, t));
-
-        const dateKey =
-          getMedicineDateKey(
-            medicine
-          );
-
-        if (
-          selectedTab ===
-            "WEEK" &&
-          dateKey
-        ) {
-          return `${dateKey} · ${medicine.timeOfDay} · ${instructionOrFrequency}`;
-        }
-
-        return `${medicine.timeOfDay} · ${instructionOrFrequency}`;
-      };
-
-    const renderDateTab =
-      (
-        tab: DateTab,
-        label: string
-      ) => {
-        const isSelected =
-          selectedTab === tab;
-
-        return (
-          <TouchableOpacity
-            key={tab}
-            style={[
-              styles.dateTab,
-              isSelected
-                ? styles.activeDateTab
-                : undefined,
-            ]}
-            onPress={() =>
-              setSelectedTab(
-                tab
-              )
-            }
-            activeOpacity={
-              0.82
-            }
-          >
-            <Text
-              style={[
-                styles.dateTabText,
-                isSelected
-                  ? styles.activeDateTabText
-                  : undefined,
-              ]}
-            >
-              {label}
-            </Text>
-          </TouchableOpacity>
-        );
-      };
-
-    const renderProgressCard =
-      () => {
-        const progress =
-          Number.isFinite(
-            summary.progressPercentage
-          )
-            ? summary.progressPercentage
-            : 0;
-
-        return (
-          <View
-            style={
-              styles.progressCard
-            }
-          >
-            <View
-              style={
-                styles.progressTopRow
-              }
-            >
-              <View
-                style={
-                  styles.progressTextBlock
-                }
-              >
-                <Text
-                  style={
-                    styles.progressKicker
-                  }
-                >
-                  {t("medicines.medicationPlan")}
-                </Text>
-
-                <Text
-                  style={
-                    styles.progressTitle
-                  }
-                >
-                  {getProgressTitle(selectedTab, t)}
-                </Text>
-
-                <Text
-                  style={
-                    styles.progressSubtitle
-                  }
-                >
-                  {summary.totalCount === 0
-                    ? t("medicines.noReminders")
-                    : t("medicines.dosesCompleted", { taken: summary.takenCount, total: summary.totalCount })}
-                </Text>
-              </View>
-
-              <ProgressRing
-                summary={
-                  summary
-                }
-                progress={
-                  progress
-                }
-              />
-            </View>
-
-            <View
-              style={
-                styles.summaryPanel
-              }
-            >
-              <SummaryMetric
-                label={t("common.taken")}
-                value={
-                  summary.takenCount
-                }
-                color={
-                  SUCCESS
-                }
-              />
-
-              <View
-                style={
-                  styles.summaryDivider
-                }
-              />
-
-              <SummaryMetric
-                label={t("common.pending")}
-                value={
-                  summary.pendingCount
-                }
-                color={
-                  WARNING
-                }
-              />
-
-              <View
-                style={
-                  styles.summaryDivider
-                }
-              />
-
-              <SummaryMetric
-                label={t("common.missed")}
-                value={
-                  summary.missedCount
-                }
-                color={
-                  DANGER
-                }
-              />
-
-              <View
-                style={
-                  styles.summaryDivider
-                }
-              />
-
-              <SummaryMetric
-                label={t("common.snoozed")}
-                value={
-                  summary.snoozedCount
-                }
-                color={
-                  SNOOZED_RING
-                }
-              />
-            </View>
-          </View>
-        );
-      };
-
-    const renderStatusBadge =
-      (
-        status: MedicineStatus
-      ) => {
-        const tone =
-          getStatusTone(status);
-
-        return (
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  tone.background,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.statusBadgeDot,
-                {
-                  backgroundColor:
-                    tone.dot,
-                },
-              ]}
-            />
-
-            <Text
-              style={[
-                styles.statusBadgeText,
-                {
-                  color:
-                    tone.text,
-                },
-              ]}
-            >
-              {getStatusLabel(status, t)}
-            </Text>
-          </View>
-        );
-      };
-
-    const renderMedicineRow =
-      (
-        medicine: TodayMedicine,
-        index: number,
-        isLast: boolean
-      ) => {
-        const isMissed =
-          medicine.status ===
-          "MISSED";
-
-        const isSnoozed =
-          medicine.status ===
-          "SNOOZED";
-
-        const tone =
-          getStatusTone(
-            medicine.status
-          );
-
-        const shouldShowDoseActions =
-          selectedTab ===
-            "TODAY" &&
-          (medicine.status ===
-            "PENDING" ||
-            medicine.status ===
-              "SNOOZED" ||
-            medicine.status ===
-              "MISSED");
-
-        const isCurrentMedicineActionLoading =
-          actionLoadingReminderId ===
-          medicine.reminderId;
-
-        const isTakingThisMedicine =
-          isCurrentMedicineActionLoading &&
-          actionLoadingType ===
-            "TAKEN";
-
-        const isSnoozingThisMedicine =
-          isCurrentMedicineActionLoading &&
-          actionLoadingType ===
-            "SNOOZE";
-
-        const isTakenButtonDisabled =
-          isCurrentMedicineActionLoading ||
-          isMissed;
-
-        const isSnoozeButtonDisabled =
-          isCurrentMedicineActionLoading ||
-          isMissed ||
-          isSnoozed;
-
-        return (
-          <View
-            key={getCardKey(
-              medicine,
-              index
-            )}
-            style={[
-              styles.medicineRow,
-              isLast
-                ? styles.lastMedicineRow
-                : undefined,
-            ]}
-          >
-            <View
-              style={
-                styles.timeColumn
-              }
-            >
-              <View
-                style={
-                  styles.timeBox
-                }
-              >
-                <Text
-                  style={
-                    styles.medicineTime
-                  }
-                  numberOfLines={
-                    1
-                  }
-                >
-                  {
-                    medicine.timeOfDay
-                  }
-                </Text>
-
-                <Text
-                  style={
-                    styles.timeLabel
-                  }
-                >
-                  {t("common.due")}
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={
-                styles.medicineContent
-              }
-            >
-              <View
-                style={
-                  styles.medicineTopRow
-                }
-              >
-                <View
-                  style={[
-                    styles.medicineIconBox,
-                    {
-                      backgroundColor:
-                        tone.iconBackground,
-                    },
-                  ]}
-                >
-                  <Pill
-                    size={20}
-                    color={
-                      tone.iconColor
-                    }
-                    strokeWidth={
-                      2.2
-                    }
-                  />
-                </View>
-
-                <View
-                  style={
-                    styles.medicineTextBlock
-                  }
-                >
-                  <Text
-                    style={
-                      styles.medicineName
-                    }
-                    numberOfLines={
-                      1
-                    }
-                  >
-                    {
-                      medicine.name
-                    }
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.medicineDose
-                    }
-                    numberOfLines={
-                      1
-                    }
-                  >
-                    {
-                      medicine.dose
-                    }
-                  </Text>
-                </View>
-
-                {renderStatusBadge(
-                  medicine.status
-                )}
-              </View>
-
-              <Text
-                style={
-                  styles.medicineMeta
-                }
-                numberOfLines={
-                  2
-                }
-              >
-                {getMedicineMetaText(
-                  medicine
-                )}
-              </Text>
-
-              {medicine.deletionReviewPending ? (
-                <TouchableOpacity
-                  style={
-                    styles.removalPendingPanel
-                  }
-                  activeOpacity={
-                    0.84
-                  }
-                  onPress={() =>
-                    navigation.navigate(
-                      "MedicineUpdates"
-                    )
-                  }
-                >
-                  <View
-                    style={
-                      styles.removalPendingIcon
-                    }
-                  >
-                    <Clock3
-                      size={17}
-                      color={
-                        ON_WARNING_CONTAINER
-                      }
-                      strokeWidth={
-                        2.5
-                      }
-                    />
-                  </View>
-
-                  <View
-                    style={
-                      styles.removalPendingTextBlock
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.removalPendingTitle
-                      }
-                    >
-                      {t("medicines.removalPendingTitle")}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.removalPendingText
-                      }
-                    >
-                      {t("medicines.removalPendingText")}
-                    </Text>
-                  </View>
-
-                  <FileCheck2
-                    size={18}
-                    color={
-                      ON_WARNING_CONTAINER
-                    }
-                    strokeWidth={
-                      2.5
-                    }
-                  />
-                </TouchableOpacity>
-              ) : null}
-
-              {shouldShowDoseActions ? (
-                <View
-                  style={
-                    styles.actionsRow
-                  }
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.takenButton,
-                      isTakingThisMedicine
-                        ? styles.disabledButton
-                        : undefined,
-                      isMissed
-                        ? styles.disabledActionButton
-                        : undefined,
-                    ]}
-                    disabled={
-                      isTakenButtonDisabled
-                    }
-                    onPress={() =>
-                      void markTaken(
-                        medicine.reminderId
-                      )
-                    }
-                    activeOpacity={
-                      0.82
-                    }
-                  >
-                    {isTakingThisMedicine ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={
-                          SURFACE
-                        }
-                      />
-                    ) : (
-                      <>
-                        <CheckCircle2
-                          size={
-                            17
-                          }
-                          color={
-                            isMissed
-                              ? DISABLED_TEXT
-                              : SURFACE
-                          }
-                          strokeWidth={
-                            2.2
-                          }
-                        />
-
-                        <Text
-                          style={[
-                            styles.takenButtonText,
-                            isMissed
-                              ? styles.disabledActionText
-                              : undefined,
-                          ]}
-                        >
-                          {t("common.taken")}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.snoozeButton,
-                      isSnoozingThisMedicine
-                        ? styles.disabledButton
-                        : undefined,
-                      isMissed ||
-                      isSnoozed
-                        ? styles.disabledActionButton
-                        : undefined,
-                    ]}
-                    disabled={
-                      isSnoozeButtonDisabled
-                    }
-                    onPress={() =>
-                      void snoozeReminder(
-                        medicine.reminderId
-                      )
-                    }
-                    activeOpacity={
-                      0.82
-                    }
-                  >
-                    {isSnoozingThisMedicine ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={
-                          ON_PRIMARY_CONTAINER
-                        }
-                      />
-                    ) : (
-                      <>
-                        <Clock3
-                          size={
-                            17
-                          }
-                          color={
-                            isMissed ||
-                            isSnoozed
-                              ? DISABLED_TEXT
-                              : ON_PRIMARY_CONTAINER
-                          }
-                          strokeWidth={
-                            2.2
-                          }
-                        />
-
-                        <Text
-                          style={[
-                            styles.snoozeButtonText,
-                            isMissed ||
-                            isSnoozed
-                              ? styles.disabledActionText
-                              : undefined,
-                          ]}
-                        >
-                          {t("common.snooze")}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-
-              {!medicine.deletionReviewPending ? (
-                <TouchableOpacity
-                  style={
-                    styles.removeMedicineButton
-                  }
-                  activeOpacity={
-                    0.84
-                  }
-                  onPress={() =>
-                    openRemovalModal(
-                      medicine
-                    )
-                  }
-                  disabled={
-                    isCurrentMedicineActionLoading
-                  }
-                >
-                  <Trash2
-                    size={16}
-                    color={
-                      ON_DANGER_CONTAINER
-                    }
-                    strokeWidth={
-                      2.4
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.removeMedicineButtonText
-                    }
-                  >
-                    {t("medicines.requestRemoval")}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {isMissed ? (
-                <View
-                  style={
-                    styles.missedHelpPanel
-                  }
-                >
-                  <Text
-                    style={
-                      styles.missedHelpText
-                    }
-                  >
-                    {t("medicines.missedHelp")}
-                  </Text>
-                </View>
-              ) : null}
-
-              {isSnoozed ? (
-                <View
-                  style={
-                    styles.snoozedHelpPanel
-                  }
-                >
-                  <Text
-                    style={
-                      styles.snoozedHelpText
-                    }
-                  >
-                    {t("medicines.snoozedHelp")}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-        );
-      };
-
-    const renderPeriodSection =
-      (
-        period: MedicinePeriod
-      ) => {
-        const periodMedicines =
-          getMedicinesByPeriod(
-            period
-          );
-
-        if (
-          periodMedicines.length ===
-          0
-        ) {
-          return null;
-        }
-
-        const periodTone =
-          getPeriodTone(
-            period
-          );
-
-        return (
-          <View
-            key={period}
-            style={
-              styles.periodSection
-            }
-          >
-            <View
-              style={
-                styles.periodHeader
-              }
-            >
-              <View
-                style={
-                  styles.periodHeaderLeft
-                }
-              >
-                <View
-                  style={[
-                    styles.periodIconBox,
-                    {
-                      backgroundColor:
-                        periodTone.background,
-                    },
-                  ]}
-                >
-                  {getPeriodIcon(
-                    period
-                  )}
-                </View>
-
-                <Text
-                  style={
-                    styles.periodTitle
-                  }
-                >
-                  {getPeriodLabel(period, t)}
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.periodCountBadge
-                }
-              >
-                <Text
-                  style={
-                    styles.periodCountText
-                  }
-                >
-                  {
-                    periodMedicines.length
-                  }
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={
-                styles.periodPanel
-              }
-            >
-              {periodMedicines.map(
-                (
-                  medicine,
-                  index
-                ) => {
-                  return renderMedicineRow(
-                    medicine,
-                    index,
-                    index ===
-                      periodMedicines.length -
-                        1
-                  );
-                }
-              )}
-            </View>
-          </View>
-        );
-      };
-
-    if (isLoading) {
-      return (
-        <SafeAreaView
-          style={
-            styles.loadingContainer
-          }
-          edges={[
-            "top",
-            "bottom",
-          ]}
-        >
-          <StatusBar
-            backgroundColor={
-              BACKGROUND
-            }
-            barStyle="dark-content"
-          />
-
-          <View
-            style={
-              styles.loadingPanel
-            }
-          >
-            <ActivityIndicator
-              size="large"
-              color={PRIMARY}
-            />
-
-            <Text
-              style={
-                styles.loadingTitle
-              }
-            >
-              {t("medicines.loadingTitle")}
-            </Text>
-
-            <Text
-              style={
-                styles.loadingText
-              }
-            >
-              {t("medicines.loadingText")}
-            </Text>
-          </View>
-        </SafeAreaView>
-      );
+        setAllMedicines(Array.isArray(todayResult.data?.medicines) ? todayResult.data.medicines : []);
+        setTrackedMedicines(Array.isArray(allResult.data) ? allResult.data : []);
+      } catch {
+        Alert.alert(t("common.networkError"), t("common.unableConnect"));
+      } finally {
+        if (mode === "initial") setIsLoading(false);
+        if (mode === "refresh") setIsRefreshing(false);
+      }
+    },
+    [t],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchMedicines();
+      void loadReviewSummary();
+      void loadReminderSettings();
+    }, [fetchMedicines, loadReviewSummary, loadReminderSettings]),
+  );
+
+  const refreshAll = async () => {
+    await Promise.all([fetchMedicines("refresh"), loadReviewSummary(), loadReminderSettings()]);
+  };
+
+  const markTaken = async (reminderId: string, medicineId: string) => {
+    if (actionLoadingReminderId) return;
+
+    try {
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("TAKEN");
+
+      const token = await tokenStorage.getToken();
+      if (!token) throw new Error("Please login again.");
+
+      const response = await fetch(`${API_BASE_URL}/patient/medicine-reminders/${reminderId}/taken`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        Alert.alert("Unable to update medicine", result.message || "Please try again.");
+        return;
+      }
+
+      await fetchMedicines("silent");
+
+      const updatedStock = result.data?.stock;
+
+      if (updatedStock?.currentStock === 0) {
+        Alert.alert("Medicine stock empty", "This dose was recorded as taken. Future reminders are paused until medicine is available.", [
+          { text: "Request Medicine", onPress: () => navigation.navigate("MedicineStock", { initialRequest: { medicineId } }) },
+          { text: "OK" },
+        ]);
+      } else if (updatedStock?.isLowStock) {
+        Alert.alert("Medicine stock running low", `${updatedStock.currentStock} ${updatedStock.stockUnit || "units"} remaining.`, [
+          { text: "Request More", onPress: () => navigation.navigate("MedicineStock", { initialRequest: { medicineId } }) },
+          { text: "OK" },
+        ]);
+      }
+    } catch (error) {
+      Alert.alert("Unable to update medicine", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
+    }
+  };
+
+  const snoozeReminder = async (reminderId: string) => {
+    if (actionLoadingReminderId) return;
+
+    try {
+      setActionLoadingReminderId(reminderId);
+      setActionLoadingType("SNOOZE");
+
+      const token = await tokenStorage.getToken();
+      if (!token) throw new Error("Please login again.");
+
+      const snoozedUntil = new Date(Date.now() + defaultSnoozeMinutes * 60 * 1000).toISOString();
+
+      const response = await fetch(`${API_BASE_URL}/patient/medicine-reminders/${reminderId}/snooze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ snoozedUntil }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        Alert.alert("Unable to snooze reminder", result.message || "Please try again.");
+        return;
+      }
+
+      await fetchMedicines("silent");
+    } catch (error) {
+      Alert.alert("Unable to snooze reminder", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setActionLoadingReminderId(null);
+      setActionLoadingType(null);
+    }
+  };
+
+  const openPharmacyRequest = (medicineId: string) => {
+    navigation.navigate("MedicineStock", { initialRequest: { medicineId } });
+  };
+
+  const openRemovalModal = (medicineId: string, medicineName: string) => {
+    setRemovalModal({ medicineId, medicineName });
+    setRemovalReason("");
+  };
+
+  const closeRemovalModal = () => {
+    if (isSubmittingRemoval) return;
+    setRemovalModal(null);
+  };
+
+  const submitRemoval = async () => {
+    if (!removalModal || isSubmittingRemoval) return;
+
+    const reason = removalReason.trim();
+
+    if (reason.length < 3) {
+      Alert.alert("Reason required", "Please provide a short reason for removing this medicine.");
+      return;
     }
 
+    try {
+      setIsSubmittingRemoval(true);
+      await patientMedicineReviewsApi.requestDeletion(removalModal.medicineId, reason);
+
+      setRemovalModal(null);
+      setRemovalReason("");
+
+      await Promise.all([fetchMedicines("silent"), loadReviewSummary()]);
+
+      Alert.alert("Removal request sent", "Your medicine removal request has been sent for review.");
+    } catch (error) {
+      Alert.alert("Unable to request removal", error instanceof Error ? error.message : "The request could not be sent.");
+    } finally {
+      setIsSubmittingRemoval(false);
+    }
+  };
+
+  const renderAttentionBanner = () => {
+    if (stockAttention.length === 0) return null;
+
     return (
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={["top"]}
-      >
-        <StatusBar
-          backgroundColor={
-            BACKGROUND
-          }
-          barStyle="dark-content"
-        />
-
-        <View
-          style={styles.screen}
-        >
-          <View
-            style={styles.header}
-          >
-            <View
-              style={
-                styles.headerTextBlock
-              }
-            >
-              <Text
-                style={
-                  styles.headerTitle
-                }
-              >
-                {t("medicines.title")}
-              </Text>
-
-              <Text
-                style={
-                  styles.headerSubtitle
-                }
-              >
-                {getHeaderSubtitle(selectedTab, t)}
-              </Text>
-            </View>
-
-            <View
-              style={
-                styles.headerActions
-              }
-            >
-              <TouchableOpacity
-                style={
-                  styles.updatesButton
-                }
-                onPress={() =>
-                  navigation.navigate(
-                    "MedicineUpdates"
-                  )
-                }
-                activeOpacity={
-                  0.82
-                }
-              >
-                <FileCheck2
-                  size={21}
-                  color={PRIMARY}
-                  strokeWidth={
-                    2.4
-                  }
-                />
-
-                {medicineUpdatesUnread >
-                0 ? (
-                  <View
-                    style={
-                      styles.updatesBadge
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.updatesBadgeText
-                      }
-                    >
-                      {medicineUpdatesUnread >
-                      9
-                        ? "9+"
-                        : medicineUpdatesUnread}
-                    </Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={
-                  styles.addButton
-                }
-                onPress={() =>
-                  navigation.navigate(
-                    "AddMedicine"
-                  )
-                }
-                activeOpacity={
-                  0.82
-                }
-              >
-                <Plus
-                  size={23}
-                  color={
-                    SURFACE
-                  }
-                  strokeWidth={
-                    2.3
-                  }
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <ScrollView
-            style={
-              styles.content
-            }
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                paddingBottom:
-                  Math.max(
-                    36,
-                    insets.bottom +
-                      112
-                  ),
-              },
-            ]}
-            showsVerticalScrollIndicator={
-              false
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={
-                  isRefreshing
-                }
-                onRefresh={() =>
-                  void refreshAll()
-                }
-                tintColor={
-                  PRIMARY
-                }
-                colors={[
-                  PRIMARY,
-                ]}
-              />
-            }
-          >
-            {renderProgressCard()}
-
-            <TouchableOpacity
-              style={
-                styles.updatesPanel
-              }
-              activeOpacity={
-                0.84
-              }
-              onPress={() =>
-                navigation.navigate(
-                  "MedicineUpdates"
-                )
-              }
-            >
-              <View
-                style={
-                  styles.updatesPanelIcon
-                }
-              >
-                <FileCheck2
-                  size={22}
-                  color={
-                    PRIMARY
-                  }
-                  strokeWidth={
-                    2.5
-                  }
-                />
-              </View>
-
-              <View
-                style={
-                  styles.updatesPanelTextBlock
-                }
-              >
-                <Text
-                  style={
-                    styles.updatesPanelTitle
-                  }
-                >
-                  {t("medicines.updatesTitle")}
-                </Text>
-
-                <Text
-                  style={
-                    styles.updatesPanelText
-                  }
-                >
-                  {t("medicines.updatesText")}
-                </Text>
-              </View>
-
-              {medicineUpdatesUnread >
-              0 ? (
-                <View
-                  style={
-                    styles.unreadCountBadge
-                  }
-                >
-                  <Text
-                    style={
-                      styles.unreadCountText
-                    }
-                  >
-                    {
-                      medicineUpdatesUnread
-                    }
-                  </Text>
-                </View>
-              ) : (
-                <RefreshCw
-                  size={18}
-                  color={MUTED}
-                  strokeWidth={
-                    2.3
-                  }
-                />
-              )}
-            </TouchableOpacity>
-
-            <View
-              style={
-                styles.dateTabs
-              }
-            >
-              {renderDateTab("TODAY", t("common.today"))}
-
-              {renderDateTab("TOMORROW", t("common.tomorrow"))}
-
-              {renderDateTab("WEEK", t("common.week"))}
-            </View>
-
-            {filteredMedicines.length ===
-            0 ? (
-              <View
-                style={
-                  styles.emptyPanel
-                }
-              >
-                <View
-                  style={
-                    styles.emptyIconBox
-                  }
-                >
-                  <Pill
-                    size={32}
-                    color={PRIMARY}
-                    strokeWidth={
-                      2.2
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.emptyTitle
-                  }
-                >
-                  {getEmptyTitle(selectedTab, t)}
-                </Text>
-
-                <Text
-                  style={
-                    styles.emptyText
-                  }
-                >
-                  {t("medicines.addReminderText")}
-                </Text>
-
-                <TouchableOpacity
-                  style={
-                    styles.emptyButton
-                  }
-                  onPress={() =>
-                    navigation.navigate(
-                      "AddMedicine"
-                    )
-                  }
-                  activeOpacity={
-                    0.82
-                  }
-                >
-                  <Plus
-                    size={18}
-                    color={
-                      SURFACE
-                    }
-                    strokeWidth={
-                      2.2
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.emptyButtonText
-                    }
-                  >
-                    {t("medicines.addMedicine")}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <View
-                  style={
-                    styles.scheduleHeader
-                  }
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.sectionTitle
-                      }
-                    >
-                      {t("medicines.schedule")}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.sectionSubtitle
-                      }
-                    >
-                      {filteredMedicines.length === 1
-                        ? t("medicines.oneReminderFound")
-                        : t("medicines.manyRemindersFound", { count: filteredMedicines.length })}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.scheduleIconBox
-                    }
-                  >
-                    <CalendarDays
-                      size={21}
-                      color={
-                        PRIMARY
-                      }
-                      strokeWidth={
-                        2.2
-                      }
-                    />
-                  </View>
-                </View>
-
-                {renderPeriodSection(
-                  "Morning"
-                )}
-
-                {renderPeriodSection(
-                  "Afternoon"
-                )}
-
-                {renderPeriodSection(
-                  "Evening"
-                )}
-              </>
-            )}
-          </ScrollView>
+      <TouchableOpacity style={styles.attentionBanner} onPress={() => navigation.navigate("MedicineStock")} activeOpacity={0.84}>
+        <View style={styles.attentionIcon}>
+          <AlertTriangle size={23} color={WARNING} strokeWidth={2.6} />
         </View>
 
-        <Modal
-          visible={Boolean(
-            removalModal
-          )}
-          transparent
-          animationType="fade"
-          onRequestClose={
-            closeRemovalModal
-          }
-        >
-          <KeyboardAvoidingView
-            style={
-              styles.modalBackdrop
-            }
-            behavior={
-              Platform.OS ===
-              "ios"
-                ? "padding"
-                : undefined
-            }
-          >
-            <View
-              style={
-                styles.modalCard
-              }
-            >
-              <View
-                style={
-                  styles.modalHeader
-                }
-              >
-                <View
-                  style={
-                    styles.modalHeaderText
-                  }
-                >
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    {t("medicines.modalTitle")}
-                  </Text>
+        <View style={styles.attentionTextBlock}>
+          <Text style={styles.attentionTitle}>
+            {stockAttention.length} {stockAttention.length === 1 ? "medicine needs" : "medicines need"} stock attention
+          </Text>
 
-                  <Text
-                    style={
-                      styles.modalSubtitle
-                    }
-                  >
-                    {removalModal?.medicineName ||
-                      ""}
-                  </Text>
-                </View>
+          <Text style={styles.attentionText}>
+            {outOfStockCount > 0 ? `${outOfStockCount} out of stock` : ""}
+            {outOfStockCount > 0 && lowStockCount > 0 ? "  •  " : ""}
+            {lowStockCount > 0 ? `${lowStockCount} low stock` : ""}
+          </Text>
+        </View>
 
-                <TouchableOpacity
-                  style={
-                    styles.modalCloseButton
-                  }
-                  onPress={
-                    closeRemovalModal
-                  }
-                  disabled={
-                    isSubmittingRemoval
-                  }
-                  activeOpacity={
-                    0.84
-                  }
-                >
-                  <X
-                    size={20}
-                    color={TEXT}
-                    strokeWidth={
-                      2.5
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <View
-                style={
-                  styles.modalWarningPanel
-                }
-              >
-                <AlertCircle
-                  size={20}
-                  color={
-                    ON_WARNING_CONTAINER
-                  }
-                  strokeWidth={
-                    2.5
-                  }
-                />
-
-                <Text
-                  style={
-                    styles.modalWarningText
-                  }
-                >
-                  {t("medicines.modalWarning")}
-                </Text>
-              </View>
-
-              <Text
-                style={
-                  styles.modalInputLabel
-                }
-              >
-                {t("medicines.modalQuestion")}
-              </Text>
-
-              <TextInput
-                style={
-                  styles.removalReasonInput
-                }
-                value={
-                  removalReason
-                }
-                onChangeText={
-                  setRemovalReason
-                }
-                placeholder={t("medicines.modalPlaceholder")}
-                placeholderTextColor={
-                  MUTED
-                }
-                multiline
-                textAlignVertical="top"
-                maxLength={500}
-                editable={
-                  !isSubmittingRemoval
-                }
-              />
-
-              <Text
-                style={
-                  styles.characterCount
-                }
-              >
-                {
-                  removalReason.length
-                }
-                /500
-              </Text>
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <TouchableOpacity
-                  style={
-                    styles.modalCancelButton
-                  }
-                  onPress={
-                    closeRemovalModal
-                  }
-                  disabled={
-                    isSubmittingRemoval
-                  }
-                  activeOpacity={
-                    0.84
-                  }
-                >
-                  <Text
-                    style={
-                      styles.modalCancelText
-                    }
-                  >
-                    {t("common.cancel")}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.modalSubmitButton,
-                    isSubmittingRemoval
-                      ? styles.disabledButton
-                      : undefined,
-                  ]}
-                  onPress={() =>
-                    void submitRemovalRequest()
-                  }
-                  disabled={
-                    isSubmittingRemoval
-                  }
-                  activeOpacity={
-                    0.84
-                  }
-                >
-                  {isSubmittingRemoval ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={
-                        SURFACE
-                      }
-                    />
-                  ) : (
-                    <>
-                      <Trash2
-                        size={
-                          17
-                        }
-                        color={
-                          SURFACE
-                        }
-                        strokeWidth={
-                          2.5
-                        }
-                      />
-
-                      <Text
-                        style={
-                          styles.modalSubmitText
-                        }
-                      >
-                        {t("common.sendRequest")}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </SafeAreaView>
+        <ChevronRight size={21} color={WARNING} strokeWidth={2.6} />
+      </TouchableOpacity>
     );
   };
 
-const SummaryMetric = ({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) => {
-  return (
-    <View
-      style={
-        styles.summaryMetric
-      }
-    >
-      <View
-        style={[
-          styles.summaryDot,
-          {
-            backgroundColor:
-              color,
-          },
-        ]}
-      />
+  const renderProgress = () => (
+    <View style={styles.progressCard}>
+      <View style={styles.progressTop}>
+        <View style={styles.progressTextBlock}>
+          <Text style={styles.progressKicker}>MEDICATION PLAN</Text>
 
-      <Text
-        style={
-          styles.summaryValue
-        }
-      >
-        {value}
-      </Text>
+          <Text style={styles.progressTitle}>
+            {selectedTab === "TODAY" ? "Today's progress" : selectedTab === "TOMORROW" ? "Tomorrow's plan" : "This week"}
+          </Text>
 
-      <Text
-        style={
-          styles.summaryLabel
-        }
-      >
-        {label}
-      </Text>
+          <Text style={styles.progressSubtitle}>
+            {summary.totalCount === 0 ? "No scheduled reminders" : `${summary.takenCount} of ${summary.totalCount} doses completed`}
+          </Text>
+        </View>
+
+        <ProgressRing summary={summary} />
+      </View>
+
+      <View style={styles.summaryPanel}>
+        <Summary label="Taken" value={summary.takenCount} color={SUCCESS} />
+        <SummaryDivider />
+        <Summary label="Pending" value={summary.pendingCount} color={WARNING} />
+        <SummaryDivider />
+        <Summary label="Missed" value={summary.missedCount} color={DANGER} />
+        <SummaryDivider />
+        <Summary label="Snoozed" value={summary.snoozedCount} color={SNOOZED_RING} />
+      </View>
     </View>
+  );
+
+  const renderMedicine = (medicine: TodayMedicine, index: number, last: boolean) => {
+    const tone = getStatusTone(medicine.status);
+    const noStock = medicine.currentStock === 0;
+    const lowStock = !noStock && medicine.isLowStock === true;
+    const actionLoading = actionLoadingReminderId === medicine.reminderId;
+    const canDoseAction = selectedTab === "TODAY" && !noStock && ["PENDING", "SNOOZED", "MISSED"].includes(medicine.status);
+
+    return (
+      <View key={`${medicine.reminderId}-${medicine.timeOfDay}-${index}`} style={[styles.medicineRow, last && styles.lastMedicineRow]}>
+        <View style={styles.timeBox}>
+          <Text style={styles.timeText}>{medicine.timeOfDay}</Text>
+          <Text style={styles.timeDue}>DUE</Text>
+        </View>
+
+        <View style={styles.medicineContent}>
+          <View style={styles.medicineTop}>
+            <View style={[styles.medicineIcon, { backgroundColor: tone.background }]}>
+              <Pill size={20} color={tone.color} strokeWidth={2.3} />
+            </View>
+
+            <View style={styles.medicineTextBlock}>
+              <Text style={styles.medicineName}>{medicine.name}</Text>
+              <Text style={styles.medicineDose}>{medicine.dose} · {getDoseAmountText(medicine)} each time</Text>
+            </View>
+
+            <View style={[styles.statusBadge, { backgroundColor: tone.background }]}>
+              <Text style={[styles.statusText, { color: tone.text }]}>{medicine.status}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.medicineMeta}>
+            {medicine.instructions?.trim() || `${medicine.frequency.replaceAll("_", " ").toLowerCase()} · ${medicine.timeOfDay}`}
+          </Text>
+
+          {medicine.currentStock !== null && medicine.currentStock !== undefined ? (
+            <View style={[styles.stockBadge, noStock ? styles.stockBadgeEmpty : lowStock ? styles.stockBadgeLow : styles.stockBadgeHealthy]}>
+              <Package size={14} color={noStock ? DANGER : lowStock ? WARNING : SUCCESS} strokeWidth={2.4} />
+
+              <Text style={[styles.stockBadgeText, { color: noStock ? ON_DANGER_CONTAINER : lowStock ? ON_WARNING_CONTAINER : ON_SUCCESS_CONTAINER }]}>
+                {noStock
+                  ? "Out of stock · reminders paused"
+                  : lowStock
+                    ? `Low stock · ${medicine.currentStock} ${medicine.stockUnit || "units"} remaining`
+                    : `${medicine.currentStock} ${medicine.stockUnit || "units"} remaining`}
+              </Text>
+            </View>
+          ) : null}
+
+          {noStock ? (
+            <TouchableOpacity style={styles.outStockRequestButton} onPress={() => openPharmacyRequest(medicine.medicineId)} activeOpacity={0.84}>
+              <ShoppingBag size={17} color={SURFACE} strokeWidth={2.5} />
+              <Text style={styles.outStockRequestText}>Request from Pharmacy</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              {canDoseAction ? (
+                <View style={styles.doseActions}>
+                  <TouchableOpacity
+                    style={[styles.takenButton, (actionLoading || medicine.status === "MISSED") && styles.disabledButton]}
+                    disabled={actionLoading || medicine.status === "MISSED"}
+                    onPress={() => void markTaken(medicine.reminderId, medicine.medicineId)}
+                  >
+                    {actionLoading && actionLoadingType === "TAKEN" ? (
+                      <ActivityIndicator size="small" color={SURFACE} />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={17} color={SURFACE} strokeWidth={2.3} />
+                        <Text style={styles.takenText}>Taken</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.snoozeButton, (actionLoading || medicine.status === "MISSED" || medicine.status === "SNOOZED") && styles.disabledButton]}
+                    disabled={actionLoading || medicine.status === "MISSED" || medicine.status === "SNOOZED"}
+                    onPress={() => void snoozeReminder(medicine.reminderId)}
+                  >
+                    {actionLoading && actionLoadingType === "SNOOZE" ? (
+                      <ActivityIndicator size="small" color={PRIMARY} />
+                    ) : (
+                      <>
+                        <Clock3 size={17} color={PRIMARY} strokeWidth={2.3} />
+                        <Text style={styles.snoozeText}>Snooze</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={styles.managementActions}>
+                {lowStock ? (
+                  <TouchableOpacity style={styles.requestMoreButton} onPress={() => openPharmacyRequest(medicine.medicineId)} activeOpacity={0.84}>
+                    <ShoppingBag size={16} color={ON_WARNING_CONTAINER} strokeWidth={2.5} />
+                    <Text style={styles.requestMoreText}>Request More</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {!medicine.deletionReviewPending ? (
+                  <TouchableOpacity
+                    style={[styles.removeButton, lowStock && styles.flexManagementButton]}
+                    onPress={() => openRemovalModal(medicine.medicineId, medicine.name)}
+                    activeOpacity={0.84}
+                  >
+                    <Trash2 size={15} color={ON_DANGER_CONTAINER} strokeWidth={2.4} />
+                    <Text style={styles.removeText}>Request Removal</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.reviewPendingButton} onPress={() => navigation.navigate("MedicineUpdates")}>
+                    <FileCheck2 size={15} color={ON_WARNING_CONTAINER} strokeWidth={2.4} />
+                    <Text style={styles.reviewPendingText}>Removal Pending</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderPeriod = (period: MedicinePeriod) => {
+    const medicines = filteredMedicines.filter(item => item.period === period);
+    if (medicines.length === 0) return null;
+
+    const tone = getPeriodTone(period);
+
+    return (
+      <View style={styles.periodSection} key={period}>
+        <View style={styles.periodHeader}>
+          <View style={styles.periodHeaderLeft}>
+            <View style={[styles.periodIcon, { backgroundColor: tone.background }]}>{getPeriodIcon(period)}</View>
+            <Text style={styles.periodTitle}>{period}</Text>
+          </View>
+
+          <View style={styles.periodCount}>
+            <Text style={styles.periodCountText}>{medicines.length}</Text>
+          </View>
+        </View>
+
+        <View style={styles.periodCard}>
+          {medicines.map((medicine, index) => renderMedicine(medicine, index, index === medicines.length - 1))}
+        </View>
+      </View>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={PRIMARY} />
+        <Text style={styles.loadingTitle}>Loading medicines</Text>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar backgroundColor={BACKGROUND} barStyle="dark-content" />
+
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.headerTitle}>Medicines</Text>
+            <Text style={styles.headerSubtitle}>Your medication schedule</Text>
+          </View>
+
+          <TouchableOpacity style={styles.updatesButton} onPress={() => navigation.navigate("MedicineUpdates")}>
+            <FileCheck2 size={21} color={PRIMARY} strokeWidth={2.4} />
+
+            {medicineUpdatesUnread > 0 ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{medicineUpdatesUnread > 9 ? "9+" : medicineUpdatesUnread}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("AddMedicine")}>
+            <Plus size={23} color={SURFACE} strokeWidth={2.4} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 110, 130) }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshAll()} colors={[PRIMARY]} />}
+        >
+          {renderAttentionBanner()}
+          {renderProgress()}
+
+          <View style={styles.dateTabs}>
+            {(["TODAY", "TOMORROW", "WEEK"] as DateTab[]).map(tab => (
+              <TouchableOpacity key={tab} style={[styles.dateTab, selectedTab === tab && styles.selectedDateTab]} onPress={() => setSelectedTab(tab)}>
+                <Text style={[styles.dateTabText, selectedTab === tab && styles.selectedDateTabText]}>
+                  {tab === "TODAY" ? "Today" : tab === "TOMORROW" ? "Tomorrow" : "Week"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {filteredMedicines.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIcon}>
+                <Pill size={31} color={PRIMARY} strokeWidth={2.3} />
+              </View>
+
+              <Text style={styles.emptyTitle}>No scheduled medicines</Text>
+              <Text style={styles.emptyText}>Medicines with no stock are paused and remain available from Medicine Stock.</Text>
+
+              {stockAttention.length > 0 ? (
+                <TouchableOpacity style={styles.stockShortcutButton} onPress={() => navigation.navigate("MedicineStock")}>
+                  <Package size={18} color={SURFACE} strokeWidth={2.4} />
+                  <Text style={styles.stockShortcutText}>Open Medicine Stock</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.stockShortcutButton} onPress={() => navigation.navigate("AddMedicine")}>
+                  <Plus size={18} color={SURFACE} strokeWidth={2.4} />
+                  <Text style={styles.stockShortcutText}>Add Medicine</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <>
+              <View style={styles.scheduleHeader}>
+                <View>
+                  <Text style={styles.scheduleTitle}>Schedule</Text>
+                  <Text style={styles.scheduleSubtitle}>
+                    {filteredMedicines.length} {filteredMedicines.length === 1 ? "reminder" : "reminders"}
+                  </Text>
+                </View>
+
+                <View style={styles.scheduleIcon}>
+                  <CalendarDays size={20} color={PRIMARY} strokeWidth={2.3} />
+                </View>
+              </View>
+
+              {renderPeriod("Morning")}
+              {renderPeriod("Afternoon")}
+              {renderPeriod("Evening")}
+            </>
+          )}
+        </ScrollView>
+      </View>
+
+      <Modal visible={Boolean(removalModal)} transparent animationType="fade" onRequestClose={closeRemovalModal}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>Request medicine removal</Text>
+                <Text style={styles.modalSubtitle}>{removalModal?.medicineName || ""}</Text>
+              </View>
+
+              <TouchableOpacity style={styles.modalClose} onPress={closeRemovalModal}>
+                <X size={20} color={TEXT} strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Why do you want to remove this medicine?</Text>
+
+            <TextInput
+              style={styles.noteInput}
+              value={removalReason}
+              onChangeText={setRemovalReason}
+              placeholder="Enter reason"
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={closeRemovalModal}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.removeConfirmButton, isSubmittingRemoval && styles.disabledButton]}
+                disabled={isSubmittingRemoval}
+                onPress={() => void submitRemoval()}
+              >
+                {isSubmittingRemoval ? (
+                  <ActivityIndicator color={SURFACE} />
+                ) : (
+                  <>
+                    <Trash2 size={17} color={SURFACE} strokeWidth={2.5} />
+                    <Text style={styles.sendText}>Send Request</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        BACKGROUND,
-    },
-
-    screen: {
-      flex: 1,
-      backgroundColor:
-        BACKGROUND,
-    },
-
-    loadingContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        BACKGROUND,
-      paddingHorizontal: 20,
-    },
-
-    loadingPanel: {
-      width: "100%",
-      maxWidth: 420,
-      backgroundColor:
-        SURFACE,
-      borderRadius: 16,
-      paddingHorizontal: 24,
-      paddingVertical: 28,
-      alignItems: "center",
-      ...elevate(1),
-    },
-
-    loadingTitle: {
-      color: TEXT,
-      fontSize: 17,
-      fontWeight: "700",
-      marginTop: 14,
-    },
-
-    loadingText: {
-      color: MUTED,
-      fontSize: 13,
-      fontWeight: "500",
-      lineHeight: 19,
-      marginTop: 5,
-      textAlign: "center",
-    },
-
-    header: {
-      paddingHorizontal: 20,
-      paddingTop: 10,
-      paddingBottom: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-      backgroundColor:
-        BACKGROUND,
-    },
-
-    headerTextBlock: {
-      flex: 1,
-      paddingRight: 12,
-    },
-
-    headerTitle: {
-      color: TEXT,
-      fontSize: 26,
-      fontWeight: "700",
-      letterSpacing: -0.3,
-    },
-
-    headerSubtitle: {
-      color: MUTED,
-      fontSize: 13,
-      fontWeight: "500",
-      marginTop: 3,
-    },
-
-    headerActions: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    updatesButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor:
-        SURFACE,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 9,
-      overflow: "hidden",
-      ...elevate(1),
-    },
-
-    updatesBadge: {
-      position: "absolute",
-      top: 3,
-      right: 3,
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
-      backgroundColor:
-        DANGER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      borderWidth: 2,
-      borderColor: SURFACE,
-    },
-
-    updatesBadgeText: {
-      color: SURFACE,
-      fontSize: 8,
-      fontWeight: "700",
-    },
-
-    addButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor:
-        PRIMARY,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      overflow: "hidden",
-      ...elevate(2),
-    },
-
-    content: {
-      flex: 1,
-    },
-
-    scrollContent: {
-      paddingHorizontal: 16,
-      paddingTop: 4,
-    },
-
-    progressCard: {
-      backgroundColor:
-        PRIMARY,
-      borderRadius: 18,
-      padding: 18,
-      marginBottom: 14,
-      overflow: "hidden",
-      ...elevate(2),
-    },
-
-    progressTopRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-    },
-
-    progressTextBlock: {
-      flex: 1,
-      paddingRight: 12,
-    },
-
-    progressKicker: {
-      color: "#E4EAFF",
-      fontSize: 11,
-      fontWeight: "600",
-      textTransform:
-        "uppercase",
-      letterSpacing: 0.6,
-      marginBottom: 7,
-    },
-
-    progressTitle: {
-      color: SURFACE,
-      fontSize: 25,
-      fontWeight: "700",
-      letterSpacing: -0.3,
-      lineHeight: 31,
-    },
-
-    progressSubtitle: {
-      color: "#E4EAFF",
-      fontSize: 13,
-      fontWeight: "500",
-      lineHeight: 19,
-      marginTop: 7,
-    },
-
-    progressRingContainer: {
-      width:
-        PROGRESS_RING_SIZE,
-      height:
-        PROGRESS_RING_SIZE,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      position: "relative",
-    },
-
-    progressRingCenter: {
-      position: "absolute",
-      width: 68,
-      height: 68,
-      borderRadius: 34,
-      backgroundColor:
-        "rgba(255,255,255,0.14)",
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    progressPercentage: {
-      color: SURFACE,
-      fontSize: 20,
-      fontWeight: "700",
-      lineHeight: 24,
-    },
-
-    progressCenterLabel: {
-      color: "#E4EAFF",
-      fontSize: 10,
-      fontWeight: "600",
-      textTransform:
-        "uppercase",
-      marginTop: 1,
-    },
-
-    summaryPanel: {
-      flexDirection: "row",
-      alignItems: "stretch",
-      backgroundColor:
-        "rgba(255,255,255,0.14)",
-      borderRadius: 14,
-      paddingVertical: 11,
-      paddingHorizontal: 6,
-      marginTop: 17,
-    },
-
-    summaryMetric: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    summaryDivider: {
-      width:
-        StyleSheet.hairlineWidth,
-      backgroundColor:
-        "rgba(255,255,255,0.28)",
-    },
-
-    summaryDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      marginBottom: 5,
-    },
-
-    summaryValue: {
-      color: SURFACE,
-      fontSize: 15,
-      fontWeight: "700",
-    },
-
-    summaryLabel: {
-      color: "#E4EAFF",
-      fontSize: 10,
-      fontWeight: "600",
-      marginTop: 2,
-    },
-
-    updatesPanel: {
-      backgroundColor:
-        SURFACE,
-      borderRadius: 15,
-      padding: 13,
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 14,
-      ...elevate(1),
-    },
-
-    updatesPanelIcon: {
-      width: 45,
-      height: 45,
-      borderRadius: 13,
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 11,
-    },
-
-    updatesPanelTextBlock: {
-      flex: 1,
-      paddingRight: 10,
-    },
-
-    updatesPanelTitle: {
-      color: TEXT,
-      fontSize: 14,
-      fontWeight: "700",
-    },
-
-    updatesPanelText: {
-      color: MUTED,
-      fontSize: 11,
-      fontWeight: "500",
-      lineHeight: 16,
-      marginTop: 3,
-    },
-
-    unreadCountBadge: {
-      minWidth: 28,
-      height: 28,
-      borderRadius: 9,
-      backgroundColor:
-        DANGER_CONTAINER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      paddingHorizontal: 7,
-    },
-
-    unreadCountText: {
-      color:
-        ON_DANGER_CONTAINER,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-
-    dateTabs: {
-      flexDirection: "row",
-      backgroundColor:
-        SURFACE,
-      borderRadius: 16,
-      padding: 5,
-      marginBottom: 20,
-      ...elevate(1),
-    },
-
-    dateTab: {
-      flex: 1,
-      borderRadius: 12,
-      paddingVertical: 10,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      overflow: "hidden",
-    },
-
-    activeDateTab: {
-      backgroundColor:
-        PRIMARY_CONTAINER,
-    },
-
-    dateTabText: {
-      color: MUTED,
-      fontSize: 13,
-      fontWeight: "600",
-    },
-
-    activeDateTabText: {
-      color:
-        ON_PRIMARY_CONTAINER,
-      fontWeight: "700",
-    },
-
-    emptyPanel: {
-      backgroundColor:
-        SURFACE,
-      borderRadius: 16,
-      paddingHorizontal: 24,
-      paddingVertical: 27,
-      alignItems: "center",
-      ...elevate(1),
-    },
-
-    emptyIconBox: {
-      width: 68,
-      height: 68,
-      borderRadius: 16,
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginBottom: 15,
-    },
-
-    emptyTitle: {
-      color: TEXT,
-      fontSize: 18,
-      fontWeight: "700",
-      marginBottom: 8,
-      textAlign: "center",
-    },
-
-    emptyText: {
-      color: MUTED,
-      fontSize: 14,
-      fontWeight: "500",
-      textAlign: "center",
-      lineHeight: 21,
-    },
-
-    emptyButton: {
-      marginTop: 18,
-      backgroundColor:
-        PRIMARY,
-      borderRadius: 13,
-      paddingHorizontal: 18,
-      paddingVertical: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      overflow: "hidden",
-      ...elevate(1),
-    },
-
-    emptyButtonText: {
-      color: SURFACE,
-      fontSize: 14,
-      fontWeight: "700",
-      marginLeft: 7,
-    },
-
-    scheduleHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-      marginBottom: 12,
-    },
-
-    sectionTitle: {
-      color: TEXT,
-      fontSize: 19,
-      fontWeight: "700",
-      letterSpacing: -0.2,
-    },
-
-    sectionSubtitle: {
-      color: MUTED,
-      fontSize: 12,
-      fontWeight: "500",
-      marginTop: 3,
-    },
-
-    scheduleIconBox: {
-      width: 42,
-      height: 42,
-      borderRadius: 13,
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    periodSection: {
-      marginBottom: 18,
-    },
-
-    periodHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-      marginBottom: 9,
-    },
-
-    periodHeaderLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    periodIconBox: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 10,
-    },
-
-    periodTitle: {
-      color: TEXT,
-      fontSize: 17,
-      fontWeight: "700",
-    },
-
-    periodCountBadge: {
-      minWidth: 30,
-      height: 28,
-      borderRadius: 8,
-      paddingHorizontal: 9,
-      backgroundColor:
-        SURFACE_VARIANT,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    periodCountText: {
-      color: MUTED,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-
-    periodPanel: {
-      backgroundColor:
-        SURFACE,
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      overflow: "hidden",
-      ...elevate(1),
-    },
-
-    medicineRow: {
-      flexDirection: "row",
-      paddingVertical: 14,
-      borderBottomWidth:
-        StyleSheet.hairlineWidth,
-      borderBottomColor:
-        SURFACE_VARIANT,
-    },
-
-    lastMedicineRow: {
-      borderBottomWidth: 0,
-    },
-
-    timeColumn: {
-      width: 68,
-      paddingRight: 10,
-    },
-
-    timeBox: {
-      minHeight: 52,
-      borderRadius: 12,
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      paddingHorizontal: 5,
-      paddingVertical: 7,
-    },
-
-    medicineTime: {
-      color:
-        ON_PRIMARY_CONTAINER,
-      fontSize: 12,
-      fontWeight: "700",
-      textAlign: "center",
-    },
-
-    timeLabel: {
-      color:
-        ON_PRIMARY_CONTAINER,
-      fontSize: 9,
-      fontWeight: "600",
-      textTransform:
-        "uppercase",
-      marginTop: 2,
-    },
-
-    medicineContent: {
-      flex: 1,
-    },
-
-    medicineTopRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    medicineIconBox: {
-      width: 44,
-      height: 44,
-      borderRadius: 13,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 10,
-    },
-
-    medicineTextBlock: {
-      flex: 1,
-      paddingRight: 7,
-    },
-
-    medicineName: {
-      color: TEXT,
-      fontSize: 15,
-      fontWeight: "700",
-      marginBottom: 3,
-    },
-
-    medicineDose: {
-      color: MUTED,
-      fontSize: 12,
-      fontWeight: "500",
-    },
-
-    medicineMeta: {
-      color: MUTED,
-      fontSize: 12,
-      fontWeight: "500",
-      lineHeight: 18,
-      marginTop: 9,
-    },
-
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderRadius: 8,
-      paddingHorizontal: 9,
-      paddingVertical: 6,
-    },
-
-    statusBadgeDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      marginRight: 5,
-    },
-
-    statusBadgeText: {
-      fontSize: 10,
-      fontWeight: "700",
-    },
-
-    actionsRow: {
-      flexDirection: "row",
-      marginTop: 12,
-    },
-
-    takenButton: {
-      flex: 1,
-      backgroundColor:
-        SUCCESS,
-      borderRadius: 12,
-      paddingVertical: 12,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 9,
-      flexDirection: "row",
-      overflow: "hidden",
-      ...elevate(1),
-    },
-
-    takenButtonText: {
-      color: SURFACE,
-      fontSize: 14,
-      fontWeight: "700",
-      marginLeft: 6,
-    },
-
-    snoozeButton: {
-      flex: 1,
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      borderRadius: 12,
-      paddingVertical: 12,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      flexDirection: "row",
-      overflow: "hidden",
-    },
-
-    snoozeButtonText: {
-      color:
-        ON_PRIMARY_CONTAINER,
-      fontSize: 14,
-      fontWeight: "700",
-      marginLeft: 6,
-    },
-
-    removeMedicineButton: {
-      minHeight: 40,
-      borderRadius: 11,
-      backgroundColor:
-        DANGER_CONTAINER,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginTop: 10,
-      paddingHorizontal: 10,
-    },
-
-    removeMedicineButtonText: {
-      color:
-        ON_DANGER_CONTAINER,
-      fontSize: 11,
-      fontWeight: "700",
-      marginLeft: 6,
-    },
-
-    removalPendingPanel: {
-      backgroundColor:
-        WARNING_CONTAINER,
-      borderRadius: 12,
-      padding: 10,
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: 10,
-    },
-
-    removalPendingIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
-      backgroundColor:
-        SURFACE,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 9,
-    },
-
-    removalPendingTextBlock: {
-      flex: 1,
-      paddingRight: 8,
-    },
-
-    removalPendingTitle: {
-      color:
-        ON_WARNING_CONTAINER,
-      fontSize: 11,
-      fontWeight: "700",
-    },
-
-    removalPendingText: {
-      color:
-        ON_WARNING_CONTAINER,
-      fontSize: 10,
-      fontWeight: "500",
-      lineHeight: 15,
-      marginTop: 2,
-    },
-
-    disabledButton: {
-      opacity: 0.55,
-    },
-
-    disabledActionButton: {
-      backgroundColor:
-        DISABLED_CONTAINER,
-      elevation: 0,
-      shadowOpacity: 0,
-    },
-
-    disabledActionText: {
-      color: DISABLED_TEXT,
-    },
-
-    missedHelpPanel: {
-      backgroundColor:
-        DANGER_CONTAINER,
-      borderRadius: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      marginTop: 10,
-    },
-
-    missedHelpText: {
-      color:
-        ON_DANGER_CONTAINER,
-      fontSize: 11,
-      fontWeight: "500",
-      lineHeight: 17,
-    },
-
-    snoozedHelpPanel: {
-      backgroundColor:
-        PRIMARY_CONTAINER,
-      borderRadius: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      marginTop: 10,
-    },
-
-    snoozedHelpText: {
-      color:
-        ON_PRIMARY_CONTAINER,
-      fontSize: 11,
-      fontWeight: "500",
-      lineHeight: 17,
-    },
-
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor:
-        "rgba(17,25,54,0.48)",
-      justifyContent:
-        "center",
-      paddingHorizontal: 20,
-    },
-
-    modalCard: {
-      backgroundColor:
-        SURFACE,
-      borderRadius: 18,
-      padding: 17,
-      ...elevate(3),
-    },
-
-    modalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-    },
-
-    modalHeaderText: {
-      flex: 1,
-      paddingRight: 12,
-    },
-
-    modalTitle: {
-      color: TEXT,
-      fontSize: 19,
-      fontWeight: "700",
-    },
-
-    modalSubtitle: {
-      color: MUTED,
-      fontSize: 12,
-      fontWeight: "600",
-      marginTop: 3,
-    },
-
-    modalCloseButton: {
-      width: 39,
-      height: 39,
-      borderRadius: 12,
-      backgroundColor:
-        SOFT_PANEL,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    modalWarningPanel: {
-      backgroundColor:
-        WARNING_CONTAINER,
-      borderRadius: 12,
-      padding: 11,
-      marginTop: 15,
-      flexDirection: "row",
-      alignItems:
-        "flex-start",
-    },
-
-    modalWarningText: {
-      flex: 1,
-      color:
-        ON_WARNING_CONTAINER,
-      fontSize: 11,
-      fontWeight: "500",
-      lineHeight: 17,
-      marginLeft: 8,
-    },
-
-    modalInputLabel: {
-      color: TEXT,
-      fontSize: 12,
-      fontWeight: "700",
-      marginTop: 17,
-      marginBottom: 7,
-    },
-
-    removalReasonInput: {
-      minHeight: 125,
-      borderRadius: 13,
-      borderWidth: 1,
-      borderColor:
-        SURFACE_VARIANT,
-      backgroundColor:
-        SOFT_PANEL,
-      color: TEXT,
-      fontSize: 13,
-      fontWeight: "500",
-      lineHeight: 19,
-      padding: 12,
-    },
-
-    characterCount: {
-      color: MUTED,
-      fontSize: 10,
-      fontWeight: "600",
-      textAlign: "right",
-      marginTop: 5,
-    },
-
-    modalActions: {
-      flexDirection: "row",
-      marginTop: 15,
-    },
-
-    modalCancelButton: {
-      flex: 1,
-      minHeight: 46,
-      borderRadius: 12,
-      backgroundColor:
-        SOFT_PANEL,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginRight: 7,
-    },
-
-    modalCancelText: {
-      color: TEXT,
-      fontSize: 13,
-      fontWeight: "700",
-    },
-
-    modalSubmitButton: {
-      flex: 1,
-      minHeight: 46,
-      borderRadius: 12,
-      backgroundColor:
-        DANGER,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      marginLeft: 7,
-    },
-
-    modalSubmitText: {
-      color: SURFACE,
-      fontSize: 13,
-      fontWeight: "700",
-      marginLeft: 6,
-    },
-  });
+const Summary = ({ label, value, color }: { label: string; value: number; color: string }) => (
+  <View style={styles.summaryItem}>
+    <View style={[styles.summaryDot, { backgroundColor: color }]} />
+    <Text style={styles.summaryValue}>{value}</Text>
+    <Text style={styles.summaryLabel}>{label}</Text>
+  </View>
+);
+
+const SummaryDivider = () => <View style={styles.summaryDivider} />;
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: BACKGROUND },
+  screen: { flex: 1, backgroundColor: BACKGROUND },
+  content: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
+  loadingContainer: { flex: 1, backgroundColor: BACKGROUND, justifyContent: "center", alignItems: "center" },
+  loadingTitle: { color: TEXT, fontSize: 16, fontWeight: "700", marginTop: 12 },
+  header: { paddingHorizontal: 18, paddingVertical: 12, flexDirection: "row", alignItems: "center" },
+  headerTextBlock: { flex: 1 },
+  headerTitle: { color: TEXT, fontSize: 26, fontWeight: "700" },
+  headerSubtitle: { color: MUTED, fontSize: 12, fontWeight: "500", marginTop: 3 },
+  updatesButton: { width: 44, height: 44, borderRadius: 13, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", marginRight: 9, ...elevate(1) },
+  unreadBadge: { position: "absolute", right: -2, top: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: DANGER, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  unreadText: { color: SURFACE, fontSize: 8, fontWeight: "700" },
+  addButton: { width: 44, height: 44, borderRadius: 13, backgroundColor: PRIMARY, alignItems: "center", justifyContent: "center", ...elevate(1) },
+  attentionBanner: { backgroundColor: WARNING_CONTAINER, borderRadius: 16, padding: 13, flexDirection: "row", alignItems: "center", marginBottom: 13, ...elevate(1) },
+  attentionIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: "#FFF3DF", alignItems: "center", justifyContent: "center", marginRight: 11 },
+  attentionTextBlock: { flex: 1 },
+  attentionTitle: { color: ON_WARNING_CONTAINER, fontSize: 13, fontWeight: "700" },
+  attentionText: { color: ON_WARNING_CONTAINER, fontSize: 10, fontWeight: "600", marginTop: 3 },
+  progressCard: { backgroundColor: PRIMARY, borderRadius: 18, padding: 17, marginBottom: 13, ...elevate(2) },
+  progressTop: { flexDirection: "row", alignItems: "center" },
+  progressTextBlock: { flex: 1, paddingRight: 8 },
+  progressKicker: { color: "#DDE5FF", fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+  progressTitle: { color: SURFACE, fontSize: 21, fontWeight: "700", marginTop: 6 },
+  progressSubtitle: { color: "#E7ECFF", fontSize: 11, fontWeight: "500", marginTop: 5 },
+  progressRing: { width: RING_SIZE, height: RING_SIZE, alignItems: "center", justifyContent: "center" },
+  progressCenter: { position: "absolute", alignItems: "center" },
+  progressPercentage: { color: SURFACE, fontSize: 20, fontWeight: "700" },
+  progressDone: { color: "#DDE5FF", fontSize: 9, fontWeight: "600" },
+  summaryPanel: { minHeight: 67, backgroundColor: "rgba(255,255,255,0.13)", borderRadius: 13, flexDirection: "row", alignItems: "center", marginTop: 13 },
+  summaryItem: { flex: 1, alignItems: "center" },
+  summaryDot: { width: 7, height: 7, borderRadius: 4, marginBottom: 4 },
+  summaryValue: { color: SURFACE, fontSize: 14, fontWeight: "700" },
+  summaryLabel: { color: "#E9EDFF", fontSize: 8, fontWeight: "600", marginTop: 2 },
+  summaryDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: "rgba(255,255,255,0.25)" },
+  dateTabs: { backgroundColor: SURFACE, borderRadius: 14, padding: 5, flexDirection: "row", marginBottom: 14, ...elevate(1) },
+  dateTab: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  selectedDateTab: { backgroundColor: PRIMARY_CONTAINER },
+  dateTabText: { color: MUTED, fontSize: 11, fontWeight: "700" },
+  selectedDateTabText: { color: ON_PRIMARY_CONTAINER },
+  emptyCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 24, alignItems: "center", ...elevate(1) },
+  emptyIcon: { width: 62, height: 62, borderRadius: 18, backgroundColor: PRIMARY_CONTAINER, alignItems: "center", justifyContent: "center" },
+  emptyTitle: { color: TEXT, fontSize: 16, fontWeight: "700", marginTop: 12 },
+  emptyText: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 17, textAlign: "center", marginTop: 5 },
+  stockShortcutButton: { minHeight: 44, borderRadius: 12, backgroundColor: PRIMARY, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 15 },
+  stockShortcutText: { color: SURFACE, fontSize: 11, fontWeight: "700", marginLeft: 6 },
+  scheduleHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  scheduleTitle: { color: TEXT, fontSize: 16, fontWeight: "700" },
+  scheduleSubtitle: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 3 },
+  scheduleIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: PRIMARY_CONTAINER, alignItems: "center", justifyContent: "center" },
+  periodSection: { marginBottom: 14 },
+  periodHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
+  periodHeaderLeft: { flexDirection: "row", alignItems: "center" },
+  periodIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", marginRight: 8 },
+  periodTitle: { color: TEXT, fontSize: 13, fontWeight: "700" },
+  periodCount: { minWidth: 27, height: 27, borderRadius: 14, backgroundColor: SURFACE_VARIANT, alignItems: "center", justifyContent: "center" },
+  periodCountText: { color: MUTED, fontSize: 9, fontWeight: "700" },
+  periodCard: { backgroundColor: SURFACE, borderRadius: 15, overflow: "hidden", ...elevate(1) },
+  medicineRow: { flexDirection: "row", padding: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SURFACE_VARIANT },
+  lastMedicineRow: { borderBottomWidth: 0 },
+  timeBox: { width: 55, borderRadius: 10, backgroundColor: SOFT_PANEL, alignItems: "center", justifyContent: "center", alignSelf: "flex-start", paddingVertical: 8, marginRight: 9 },
+  timeText: { color: TEXT, fontSize: 11, fontWeight: "700" },
+  timeDue: { color: MUTED, fontSize: 7, fontWeight: "600", marginTop: 2 },
+  medicineContent: { flex: 1 },
+  medicineTop: { flexDirection: "row", alignItems: "center" },
+  medicineIcon: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", marginRight: 9 },
+  medicineTextBlock: { flex: 1, minWidth: 0 },
+  medicineName: { color: TEXT, fontSize: 13, fontWeight: "700" },
+  medicineDose: { color: MUTED, fontSize: 9, fontWeight: "600", marginTop: 2 },
+  medicineMeta: { color: MUTED, fontSize: 9, fontWeight: "500", lineHeight: 14, marginTop: 8 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 5, marginLeft: 6 },
+  statusText: { fontSize: 7, fontWeight: "700" },
+  stockBadge: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", marginTop: 8 },
+  stockBadgeHealthy: { backgroundColor: SUCCESS_CONTAINER },
+  stockBadgeLow: { backgroundColor: WARNING_CONTAINER },
+  stockBadgeEmpty: { backgroundColor: DANGER_CONTAINER },
+  stockBadgeText: { fontSize: 9, fontWeight: "700", marginLeft: 5 },
+  doseActions: { flexDirection: "row", marginTop: 10 },
+  takenButton: { flex: 1, minHeight: 40, borderRadius: 10, backgroundColor: SUCCESS, flexDirection: "row", alignItems: "center", justifyContent: "center", marginRight: 5 },
+  takenText: { color: SURFACE, fontSize: 10, fontWeight: "700", marginLeft: 5 },
+  snoozeButton: { flex: 1, minHeight: 40, borderRadius: 10, backgroundColor: PRIMARY_CONTAINER, flexDirection: "row", alignItems: "center", justifyContent: "center", marginLeft: 5 },
+  snoozeText: { color: PRIMARY, fontSize: 10, fontWeight: "700", marginLeft: 5 },
+  disabledButton: { opacity: 0.45 },
+  managementActions: { flexDirection: "row", marginTop: 9 },
+  requestMoreButton: { flex: 1, minHeight: 37, borderRadius: 10, backgroundColor: WARNING_CONTAINER, flexDirection: "row", alignItems: "center", justifyContent: "center", marginRight: 5 },
+  requestMoreText: { color: ON_WARNING_CONTAINER, fontSize: 9, fontWeight: "700", marginLeft: 5 },
+  removeButton: { minHeight: 37, borderRadius: 10, backgroundColor: DANGER_CONTAINER, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  flexManagementButton: { flex: 1, marginLeft: 5 },
+  removeText: { color: ON_DANGER_CONTAINER, fontSize: 9, fontWeight: "700", marginLeft: 5 },
+  reviewPendingButton: { flex: 1, minHeight: 37, borderRadius: 10, backgroundColor: WARNING_CONTAINER, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  reviewPendingText: { color: ON_WARNING_CONTAINER, fontSize: 9, fontWeight: "700", marginLeft: 5 },
+  outStockRequestButton: { minHeight: 43, borderRadius: 11, backgroundColor: PRIMARY, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 10 },
+  outStockRequestText: { color: SURFACE, fontSize: 10, fontWeight: "700", marginLeft: 6 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(27,29,42,0.48)", justifyContent: "center", paddingHorizontal: 18 },
+  modalCard: { backgroundColor: SURFACE, borderRadius: 18, padding: 17 },
+  modalHeader: { flexDirection: "row", alignItems: "center" },
+  modalHeaderText: { flex: 1, paddingRight: 10 },
+  modalTitle: { color: TEXT, fontSize: 18, fontWeight: "700" },
+  modalSubtitle: { color: MUTED, fontSize: 11, fontWeight: "600", marginTop: 3 },
+  modalClose: { width: 39, height: 39, borderRadius: 12, backgroundColor: SOFT_PANEL, alignItems: "center", justifyContent: "center" },
+  inputLabel: { color: TEXT, fontSize: 11, fontWeight: "700", marginTop: 15, marginBottom: 6 },
+  noteInput: { minHeight: 90, borderRadius: 12, borderWidth: 1, borderColor: SURFACE_VARIANT, backgroundColor: SOFT_PANEL, color: TEXT, padding: 12 },
+  modalActions: { flexDirection: "row", marginTop: 14 },
+  cancelButton: { flex: 1, minHeight: 46, borderRadius: 12, backgroundColor: SOFT_PANEL, alignItems: "center", justifyContent: "center", marginRight: 6 },
+  cancelText: { color: TEXT, fontSize: 12, fontWeight: "700" },
+  removeConfirmButton: { flex: 1, minHeight: 46, borderRadius: 12, backgroundColor: DANGER, flexDirection: "row", alignItems: "center", justifyContent: "center", marginLeft: 6 },
+  sendText: { color: SURFACE, fontSize: 11, fontWeight: "700", marginLeft: 6 },
+});
 
 export default MedicinesScreen;

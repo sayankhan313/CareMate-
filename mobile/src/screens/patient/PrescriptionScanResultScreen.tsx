@@ -42,7 +42,10 @@ import {
   type ParsedPrescriptionMedicine,
   type ParsedPrescriptionScan,
 } from "../../services/medicineScanApi";
-import type { RootStackParamList } from "../../types/navigation";
+import type {
+  MedicineDraft,
+  RootStackParamList,
+} from "../../types/navigation";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -121,7 +124,7 @@ const PrescriptionScanResultScreen = ({ navigation, route }: Props) => {
   }, [route.params.detectedText, route.params.ocrConfidence]);
 
   useEffect(() => {
-    loadPrescriptionResult();
+    void loadPrescriptionResult();
   }, [loadPrescriptionResult]);
 
   const matchedMedicines = useMemo(() => {
@@ -129,7 +132,7 @@ const PrescriptionScanResultScreen = ({ navigation, route }: Props) => {
       return [];
     }
 
-    return scanResult.medicines.filter((medicine) => {
+    return scanResult.medicines.filter(medicine => {
       return medicine.matched && medicine.medicineReference;
     });
   }, [scanResult]);
@@ -137,8 +140,17 @@ const PrescriptionScanResultScreen = ({ navigation, route }: Props) => {
   const totalDetectedMedicines = scanResult?.medicines?.length || 0;
 
   const handleAddMedicine = (medicine: ParsedPrescriptionMedicine) => {
-    navigation.navigate("ConfirmReminder", {
-      medicineDraft: medicine.medicineDraft,
+    const scannedDraft: MedicineDraft = {
+      ...medicine.medicineDraft,
+      hasMedicineOnHand: undefined,
+      currentStock: undefined,
+      stockUnit: undefined,
+      lowStockThreshold: undefined,
+    };
+
+    navigation.navigate("AddMedicine", {
+      medicineDraft: scannedDraft,
+      mode: "EDIT_DRAFT",
     });
   };
 
@@ -510,7 +522,7 @@ const MedicinePrescriptionCard = ({
         activeOpacity={0.86}
         onPress={onAdd}
       >
-        <Text style={styles.addButtonText}>Add this medicine</Text>
+        <Text style={styles.addButtonText}>Review & Add Medicine</Text>
 
         <ChevronRight size={20} color={SURFACE} strokeWidth={2.8} />
       </TouchableOpacity>
@@ -612,7 +624,7 @@ const SideEffectsBlock = ({
 
       <View style={styles.sideEffectWrap}>
         {medicine.commonSideEffects.length > 0 ? (
-          medicine.commonSideEffects.map((sideEffect) => (
+          medicine.commonSideEffects.map(sideEffect => (
             <View key={sideEffect} style={styles.sideEffectChip}>
               <Text style={styles.sideEffectText}>{sideEffect}</Text>
             </View>

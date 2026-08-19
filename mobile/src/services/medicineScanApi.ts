@@ -24,14 +24,18 @@ export type PrescriptionSchedule = {
   morning: boolean;
   afternoon: boolean;
   night: boolean;
-  frequency: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY";
+  frequency:
+    | "ONCE_DAILY"
+    | "TWICE_DAILY"
+    | "THREE_TIMES_DAILY";
   selectedTimes: string[];
   instructionText: string;
 };
 
-export type MedicineDraftWithPrescription = MedicineDraft & {
-  prescriptionPattern?: string | null;
-};
+export type MedicineDraftWithPrescription =
+  MedicineDraft & {
+    prescriptionPattern?: string | null;
+  };
 
 export type MedicineReference = {
   id: string;
@@ -45,7 +49,8 @@ export type MedicineReference = {
   usedFor: string;
   commonSideEffects: string[];
   defaultInstructions: string;
-  defaultFrequency: MedicineReferenceFrequency;
+  defaultFrequency:
+    MedicineReferenceFrequency;
   defaultTimeOfDay: string;
   safetyLevel: MedicineSafetyLevel;
   safetyNote: string;
@@ -53,10 +58,11 @@ export type MedicineReference = {
   imageAltText: string | null;
 };
 
-export type MedicineSuggestion = MedicineReference & {
-  matchConfidence: number;
-  matchReason?: string;
-};
+export type MedicineSuggestion =
+  MedicineReference & {
+    matchConfidence: number;
+    matchReason?: string;
+  };
 
 export type ParsedMedicineScan = {
   rawText: string;
@@ -78,7 +84,8 @@ export type ParsedMedicineScan = {
   commonSideEffects: string[];
   instructions: string;
 
-  prescriptionSchedule: PrescriptionSchedule | null;
+  prescriptionSchedule:
+    PrescriptionSchedule | null;
 
   safetyLevel: MedicineSafetyLevel;
   safetyNote: string;
@@ -86,10 +93,14 @@ export type ParsedMedicineScan = {
   imageUrl: string | null;
   imageAltText: string | null;
 
-  medicineReference: MedicineReference | null;
-  suggestedMatches?: MedicineSuggestion[];
+  medicineReference:
+    MedicineReference | null;
 
-  medicineDraft: MedicineDraftWithPrescription;
+  suggestedMatches?:
+    MedicineSuggestion[];
+
+  medicineDraft:
+    MedicineDraftWithPrescription;
 };
 
 export type ParsedPrescriptionMedicine = {
@@ -112,7 +123,8 @@ export type ParsedPrescriptionMedicine = {
   commonSideEffects: string[];
   instructions: string;
 
-  prescriptionSchedule: PrescriptionSchedule | null;
+  prescriptionSchedule:
+    PrescriptionSchedule | null;
 
   safetyLevel: MedicineSafetyLevel;
   safetyNote: string;
@@ -120,33 +132,57 @@ export type ParsedPrescriptionMedicine = {
   imageUrl: string | null;
   imageAltText: string | null;
 
-  medicineReference: MedicineReference | null;
-  suggestedMatches?: MedicineSuggestion[];
+  medicineReference:
+    MedicineReference | null;
 
-  medicineDraft: MedicineDraftWithPrescription;
+  suggestedMatches?:
+    MedicineSuggestion[];
+
+  medicineDraft:
+    MedicineDraftWithPrescription;
 };
 
 export type ParsedPrescriptionScan = {
   rawText: string;
   ocrConfidence: number;
-  medicines: ParsedPrescriptionMedicine[];
+  medicines:
+    ParsedPrescriptionMedicine[];
 };
 
-export type SearchMedicineReferenceResult = MedicineReference & {
-  matchConfidence?: number;
-  matchReason?: string;
+export type SearchMedicineReferenceResult =
+  MedicineReference & {
+    matchConfidence?: number;
+    matchReason?: string;
+  };
+
+export type MedicinePackReference = {
+  id: string;
+  medicineSlug: string;
+  medicineName: string;
+  strength: string;
+  form: string;
+  packageUnit: string;
+  packSize: number;
+  contentUnit: string;
 };
 
-const getBackendBaseUrl = () => {
-  return API_BASE_URL.replace(/\/api\/v1\/?$/, "");
-};
+const getBackendBaseUrl = () =>
+  API_BASE_URL.replace(
+    /\/api\/v1\/?$/,
+    "",
+  );
 
-export const getMedicineImageUrl = (imageUrl?: string | null) => {
+export const getMedicineImageUrl = (
+  imageUrl?: string | null,
+) => {
   if (!imageUrl) {
     return null;
   }
 
-  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+  if (
+    imageUrl.startsWith("http://") ||
+    imageUrl.startsWith("https://")
+  ) {
     return imageUrl;
   }
 
@@ -154,10 +190,13 @@ export const getMedicineImageUrl = (imageUrl?: string | null) => {
 };
 
 const getAuthHeaders = async () => {
-  const token = await tokenStorage.getToken();
+  const token =
+    await tokenStorage.getToken();
 
   if (!token) {
-    throw new Error("Session expired. Please login again.");
+    throw new Error(
+      "Session expired. Please login again.",
+    );
   }
 
   return {
@@ -166,41 +205,69 @@ const getAuthHeaders = async () => {
   };
 };
 
-const getErrorMessage = async (response: Response) => {
+const getErrorMessage = async (
+  response: Response,
+) => {
   try {
-    const result = await response.json();
+    const result =
+      await response.json();
 
-    if (typeof result?.message === "string") {
+    if (
+      typeof result?.message ===
+      "string"
+    ) {
       return result.message;
     }
 
-    if (Array.isArray(result?.message)) {
-      return result.message[0]?.message || "Unable to complete request.";
+    if (
+      Array.isArray(
+        result?.message,
+      )
+    ) {
+      return (
+        result.message[0]
+          ?.message ||
+        "Unable to complete request."
+      );
     }
 
-    if (Array.isArray(result?.errors)) {
-      return result.errors[0]?.message || "Unable to complete request.";
+    if (
+      Array.isArray(
+        result?.errors,
+      )
+    ) {
+      return (
+        result.errors[0]
+          ?.message ||
+        "Unable to complete request."
+      );
     }
-  } catch (error) {
+  } catch {
     return "Unable to complete request.";
   }
 
   return "Unable to complete request.";
 };
 
-const getResponseData = async <T>(response: Response): Promise<T> => {
-  const result = await response.json();
+const getResponseData = async <T>(
+  response: Response,
+): Promise<T> => {
+  const result =
+    await response.json();
 
   if (!response.ok) {
     const message =
-      typeof result?.message === "string"
+      typeof result?.message ===
+      "string"
         ? result.message
         : "Unable to complete request.";
 
     throw new Error(message);
   }
 
-  if (result?.data !== undefined) {
+  if (
+    result?.data !== undefined
+  ) {
     return result.data as T;
   }
 
@@ -209,25 +276,71 @@ const getResponseData = async <T>(response: Response): Promise<T> => {
 
 export const medicineScanApi = {
   async searchMedicineReferences(
-    query: string
-  ): Promise<SearchMedicineReferenceResult[]> {
-    const headers = await getAuthHeaders();
+    query: string,
+  ): Promise<
+    SearchMedicineReferenceResult[]
+  > {
+    const headers =
+      await getAuthHeaders();
 
-    const response = await fetch(
-      `${API_BASE_URL}/patient/medicine-references/search?query=${encodeURIComponent(
-        query
-      )}`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
+    const response =
+      await fetch(
+        `${API_BASE_URL}/patient/medicine-references/search?query=${encodeURIComponent(
+          query,
+        )}`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
 
     if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
+      throw new Error(
+        await getErrorMessage(
+          response,
+        ),
+      );
     }
 
-    return getResponseData<SearchMedicineReferenceResult[]>(response);
+    return getResponseData<
+      SearchMedicineReferenceResult[]
+    >(response);
+  },
+
+  async getPackReference({
+    medicineName,
+    strength,
+  }: {
+    medicineName: string;
+    strength: string;
+  }): Promise<MedicinePackReference> {
+    const headers =
+      await getAuthHeaders();
+
+    const response =
+      await fetch(
+        `${API_BASE_URL}/patient/medicine-pack-reference?medicineName=${encodeURIComponent(
+          medicineName,
+        )}&strength=${encodeURIComponent(
+          strength,
+        )}`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        await getErrorMessage(
+          response,
+        ),
+      );
+    }
+
+    return getResponseData<MedicinePackReference>(
+      response,
+    );
   },
 
   async parseMedicineScan({
@@ -237,22 +350,33 @@ export const medicineScanApi = {
     detectedText: string;
     ocrConfidence?: number;
   }): Promise<ParsedMedicineScan> {
-    const headers = await getAuthHeaders();
+    const headers =
+      await getAuthHeaders();
 
-    const response = await fetch(`${API_BASE_URL}/patient/medicine-scan/parse`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        detectedText,
-        ocrConfidence,
-      }),
-    });
+    const response =
+      await fetch(
+        `${API_BASE_URL}/patient/medicine-scan/parse`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            detectedText,
+            ocrConfidence,
+          }),
+        },
+      );
 
     if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
+      throw new Error(
+        await getErrorMessage(
+          response,
+        ),
+      );
     }
 
-    return getResponseData<ParsedMedicineScan>(response);
+    return getResponseData<ParsedMedicineScan>(
+      response,
+    );
   },
 
   async parsePrescriptionScan({
@@ -262,24 +386,32 @@ export const medicineScanApi = {
     detectedText: string;
     ocrConfidence?: number;
   }): Promise<ParsedPrescriptionScan> {
-    const headers = await getAuthHeaders();
+    const headers =
+      await getAuthHeaders();
 
-    const response = await fetch(
-      `${API_BASE_URL}/patient/medicine-scan/prescription/parse`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          detectedText,
-          ocrConfidence,
-        }),
-      }
-    );
+    const response =
+      await fetch(
+        `${API_BASE_URL}/patient/medicine-scan/prescription/parse`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            detectedText,
+            ocrConfidence,
+          }),
+        },
+      );
 
     if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
+      throw new Error(
+        await getErrorMessage(
+          response,
+        ),
+      );
     }
 
-    return getResponseData<ParsedPrescriptionScan>(response);
+    return getResponseData<ParsedPrescriptionScan>(
+      response,
+    );
   },
 };
