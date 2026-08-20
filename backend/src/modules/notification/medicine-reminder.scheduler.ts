@@ -12,7 +12,8 @@ type UniqueNotificationInput = {
   priority: "NORMAL" | "HIGH" | "CRITICAL";
   entityType: string;
   entityId: string;
-  patientPreferenceKey: ReminderNotificationPreferenceKey;
+  patientPreferenceKey?: ReminderNotificationPreferenceKey;
+  targetScreen?: string;
   data: Record<string, unknown>;
 };
 
@@ -43,9 +44,7 @@ const getScheduledDateTime = (date: Date, timeOfDay: string) => {
   const [hourText, minuteText] = timeOfDay.split(":");
   const hour = Number(hourText);
   const minute = Number(minuteText);
-
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-
   const scheduledFor = new Date(date);
   scheduledFor.setHours(hour, minute, 0, 0);
   return scheduledFor;
@@ -55,26 +54,18 @@ const isReminderActiveOnDate = (reminder: { startDate: Date; endDate: Date | nul
   const targetDate = getStartOfDay(date);
   const startDate = getStartOfDay(reminder.startDate);
   const endDate = reminder.endDate ? getStartOfDay(reminder.endDate) : null;
-
   if (startDate > targetDate) return false;
   if (endDate && endDate < targetDate) return false;
   return true;
 };
 
-const isEligiblePatient = (patient: any) => {
-  return patient?.role === "PATIENT" && patient.isEmailVerified === true && (patient.accountStatus === "ACTIVE" || patient.accountStatus === "APPROVED");
-};
+const isEligiblePatient = (patient: any) => patient?.role === "PATIENT" && patient.isEmailVerified === true && (patient.accountStatus === "ACTIVE" || patient.accountStatus === "APPROVED");
+const isEligibleCaregiver = (caregiver: any) => caregiver?.role === "CAREGIVER" && caregiver.isEmailVerified === true && (caregiver.accountStatus === "ACTIVE" || caregiver.accountStatus === "APPROVED");
 
 const getReminderPreferences = async (patientId: string, cache: Map<string, any>) => {
   const cached = cache.get(patientId);
   if (cached) return cached;
-
-  const preferences = await prisma.patientReminderPreference.upsert({
-    where: { patientId },
-    create: { patientId },
-    update: {},
-  });
-
+  const preferences = await prisma.patientReminderPreference.upsert({ where: { patientId }, create: { patientId }, update: {} });
   cache.set(patientId, preferences);
   return preferences;
 };
@@ -85,7 +76,6 @@ const sendUniqueNotification = async (input: UniqueNotificationInput) => {
       where: { userId: input.userId, type: input.type, entityType: input.entityType, entityId: input.entityId },
       select: { id: true },
     });
-
     if (existingNotification) return existingNotification;
 
     return notificationService.createAndSend({
@@ -96,7 +86,7 @@ const sendUniqueNotification = async (input: UniqueNotificationInput) => {
       priority: input.priority,
       entityType: input.entityType,
       entityId: input.entityId,
-      targetScreen: "PatientMedicines",
+      targetScreen: input.targetScreen || "PatientMedicines",
       patientPreferenceKey: input.patientPreferenceKey,
       data: input.data,
     });
@@ -111,9 +101,7 @@ const getDoseLogInclude = {
     include: {
       medicine: {
         include: {
-          patient: {
-            select: { id: true, fullName: true, role: true, accountStatus: true, isEmailVerified: true },
-          },
+          patient: { select: { id: true, fullName: true, role: true, accountStatus: true, isEmailVerified: true } },
         },
       },
     },
@@ -134,24 +122,48 @@ const buildNotificationData = (doseLog: any, source: string) => ({
   source,
 });
 
+const notifyLinkedCaregiversOfMissedDose = async (doseLog: any, missedAt: Date) => {
+  const relationships = await prisma.patientCaregiverRelationship.findMany({
+    where: { patientId: doseLog.patientId, status: "ACTIVE" },
+    select: {
+      id: true,
+      caregiver: { select: { id: true, role: true, accountStatus: true, isEmailVerified: true } },
+    },
+  });
+
+  const eligibleRelationships = relationships.filter(item => isEligibleCaregiver(item.caregiver));
+  if (!eligibleRelationships.length) return;
+
+  await Promise.all(
+    eligibleRelationships.map(relationship =>
+      sendUniqueNotification({
+        userId: relationship.caregiver.id,
+        type: "MISSED_DOSE_ALERT",
+        title: "Missed medicine dose",
+        body: `${doseLog.reminder.medicine.patient.fullName} missed ${doseLog.reminder.medicine.name} (${doseLog.reminder.medicine.dose}).`,
+        priority: "HIGH",
+        entityType: "CAREGIVER_MEDICINE_DOSE_LOG",
+        entityId: doseLog.id,
+        targetScreen: "CaregiverPatientMedications",
+        data: {
+          ...buildNotificationData(doseLog, "CAREGIVER_MISSED_DOSE_SCHEDULER"),
+          caregiverRelationshipId: relationship.id,
+          missedAt: missedAt.toISOString(),
+          recipientRole: "CAREGIVER",
+        },
+      }),
+    ),
+  );
+};
+
 const createTodayDoseLogsAndSendDueNotifications = async (now: Date) => {
   const dayStart = getStartOfDay(now);
   const dayEnd = getEndOfDay(now);
 
   const reminders = await prisma.medicineReminder.findMany({
-    where: {
-      isActive: true,
-      startDate: { lt: dayEnd },
-      OR: [{ endDate: null }, { endDate: { gte: dayStart } }],
-    },
+    where: { isActive: true, startDate: { lt: dayEnd }, OR: [{ endDate: null }, { endDate: { gte: dayStart } }] },
     include: {
-      medicine: {
-        include: {
-          patient: {
-            select: { id: true, fullName: true, role: true, accountStatus: true, isEmailVerified: true },
-          },
-        },
-      },
+      medicine: { include: { patient: { select: { id: true, fullName: true, role: true, accountStatus: true, isEmailVerified: true } } } },
     },
     take: MAX_BATCH_SIZE,
   });
@@ -159,7 +171,6 @@ const createTodayDoseLogsAndSendDueNotifications = async (now: Date) => {
   for (const reminder of reminders) {
     try {
       if (!reminder.medicine.isActive || !isEligiblePatient(reminder.medicine.patient) || !isReminderActiveOnDate(reminder, dayStart)) continue;
-
       const scheduledFor = getScheduledDateTime(dayStart, reminder.timeOfDay);
       if (!scheduledFor || scheduledFor > now) continue;
 
@@ -171,7 +182,6 @@ const createTodayDoseLogsAndSendDueNotifications = async (now: Date) => {
       });
 
       if (doseLog.status !== "PENDING") continue;
-
       const elapsedMs = now.getTime() - scheduledFor.getTime();
       if (elapsedMs < 0 || elapsedMs > DUE_NOTIFICATION_LOOKBACK_MS) continue;
 
@@ -194,10 +204,7 @@ const createTodayDoseLogsAndSendDueNotifications = async (now: Date) => {
 
 const markOverdueDoseLogsMissed = async (now: Date, preferenceCache: Map<string, any>) => {
   const doseLogs = await prisma.medicineDoseLog.findMany({
-    where: {
-      status: { in: ["PENDING", "SNOOZED"] },
-      scheduledFor: { gte: new Date(now.getTime() - DOSE_LOG_LOOKBACK_MS), lte: now },
-    },
+    where: { status: { in: ["PENDING", "SNOOZED"] }, scheduledFor: { gte: new Date(now.getTime() - DOSE_LOG_LOOKBACK_MS), lte: now } },
     include: getDoseLogInclude,
     orderBy: { scheduledFor: "asc" },
     take: MAX_BATCH_SIZE,
@@ -209,19 +216,16 @@ const markOverdueDoseLogsMissed = async (now: Date, preferenceCache: Map<string,
 
       const effectiveDueAt = doseLog.status === "SNOOZED" && doseLog.snoozedUntil ? doseLog.snoozedUntil : doseLog.scheduledFor;
       const missedAt = new Date(effectiveDueAt.getTime() + MISSED_DOSE_GRACE_MS);
-
       if (now < missedAt) continue;
 
-      const updateResult = await prisma.medicineDoseLog.updateMany({
-        where: { id: doseLog.id, status: doseLog.status },
-        data: { status: "MISSED" },
-      });
-
+      const updateResult = await prisma.medicineDoseLog.updateMany({ where: { id: doseLog.id, status: doseLog.status }, data: { status: "MISSED" } });
       if (updateResult.count === 0) continue;
 
       const updatedDoseLog = { ...doseLog, status: "MISSED" };
-      const reminderPreferences = await getReminderPreferences(doseLog.patientId, preferenceCache);
 
+      await notifyLinkedCaregiversOfMissedDose(updatedDoseLog, missedAt);
+
+      const reminderPreferences = await getReminderPreferences(doseLog.patientId, preferenceCache);
       if (!reminderPreferences.missedDoseReminder) continue;
 
       await sendUniqueNotification({
@@ -243,10 +247,7 @@ const markOverdueDoseLogsMissed = async (now: Date, preferenceCache: Map<string,
 
 const sendSnoozedReminderNotifications = async (now: Date) => {
   const doseLogs = await prisma.medicineDoseLog.findMany({
-    where: {
-      status: "SNOOZED",
-      snoozedUntil: { gte: new Date(now.getTime() - DOSE_LOG_LOOKBACK_MS), lte: now },
-    },
+    where: { status: "SNOOZED", snoozedUntil: { gte: new Date(now.getTime() - DOSE_LOG_LOOKBACK_MS), lte: now } },
     include: getDoseLogInclude,
     orderBy: { snoozedUntil: "asc" },
     take: MAX_BATCH_SIZE,
@@ -275,10 +276,7 @@ const sendSnoozedReminderNotifications = async (now: Date) => {
 
 const sendRepeatedMissedDoseNotifications = async (now: Date, preferenceCache: Map<string, any>) => {
   const doseLogs = await prisma.medicineDoseLog.findMany({
-    where: {
-      status: "MISSED",
-      scheduledFor: { gte: new Date(now.getTime() - REPEATED_MISSED_LOOKBACK_MS), lte: now },
-    },
+    where: { status: "MISSED", scheduledFor: { gte: new Date(now.getTime() - REPEATED_MISSED_LOOKBACK_MS), lte: now } },
     include: getDoseLogInclude,
     orderBy: { scheduledFor: "asc" },
     take: MAX_BATCH_SIZE,
@@ -289,7 +287,6 @@ const sendRepeatedMissedDoseNotifications = async (now: Date, preferenceCache: M
       if (!doseLog.reminder.isActive || !doseLog.reminder.medicine.isActive || !isEligiblePatient(doseLog.reminder.medicine.patient)) continue;
 
       const reminderPreferences = await getReminderPreferences(doseLog.patientId, preferenceCache);
-
       if (!reminderPreferences.missedDoseReminder || !reminderPreferences.repeatMissedDoseAlert) continue;
 
       const repeatIntervalMinutes = Math.min(Math.max(reminderPreferences.repeatIntervalMinutes || 30, 5), 1440);
@@ -297,7 +294,6 @@ const sendRepeatedMissedDoseNotifications = async (now: Date, preferenceCache: M
       const missedAt = new Date(effectiveDueAt.getTime() + MISSED_DOSE_GRACE_MS);
       const elapsedAfterMissedMs = now.getTime() - missedAt.getTime();
       const repeatNumber = Math.min(Math.floor(elapsedAfterMissedMs / (repeatIntervalMinutes * 60_000)), MAX_REPEATED_MISSED_ALERTS);
-
       if (repeatNumber < 1) continue;
 
       await sendUniqueNotification({
@@ -309,12 +305,7 @@ const sendRepeatedMissedDoseNotifications = async (now: Date, preferenceCache: M
         entityType: "MEDICINE_DOSE_LOG_REPEAT",
         entityId: `${doseLog.id}:repeat:${repeatNumber}`,
         patientPreferenceKey: "missedDoseAlerts",
-        data: {
-          ...buildNotificationData(doseLog, "REPEATED_MISSED_DOSE_SCHEDULER"),
-          missedAt: missedAt.toISOString(),
-          repeatNumber,
-          repeatIntervalMinutes,
-        },
+        data: { ...buildNotificationData(doseLog, "REPEATED_MISSED_DOSE_SCHEDULER"), missedAt: missedAt.toISOString(), repeatNumber, repeatIntervalMinutes },
       });
     } catch (error) {
       console.warn(`Unable to process repeated missed dose log ${doseLog.id}:`, error instanceof Error ? error.message : error);
@@ -343,17 +334,14 @@ export const runMedicineReminderSchedulerNow = async () => {
 
 export const startMedicineReminderScheduler = () => {
   if (schedulerTimer) return;
-
   console.log("Medicine reminder scheduler started.");
   void runMedicineReminderSchedulerNow();
-
   schedulerTimer = setInterval(() => void runMedicineReminderSchedulerNow(), SCHEDULER_INTERVAL_MS);
   schedulerTimer.unref();
 };
 
 export const stopMedicineReminderScheduler = () => {
   if (!schedulerTimer) return;
-
   clearInterval(schedulerTimer);
   schedulerTimer = null;
   console.log("Medicine reminder scheduler stopped.");
