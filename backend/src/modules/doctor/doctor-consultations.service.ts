@@ -14,6 +14,7 @@ import type {
 import type { DoctorConsultationsQueryInput } from "./doctor-consultations.validation.js";
 
 type CreateNotificationInput = Parameters<typeof notificationService.createAndSend>[0];
+type CaregiverConsultationEvent = "ACCEPTED" | "REJECTED" | "COMPLETED";
 
 const consultationInclude = {
   patient: { select: { id: true, fullName: true, email: true } },
@@ -29,10 +30,7 @@ const ensureApprovedDoctor = async (doctorId: string) => {
   if (!doctor) throw new AppError("Doctor not found", 404);
   if (doctor.role !== "DOCTOR") throw new AppError("Only doctors can access this resource", 403);
   if (!doctor.isEmailVerified) throw new AppError("Please verify your email first", 403);
-
-  if (doctor.accountStatus !== "ACTIVE" && doctor.accountStatus !== "APPROVED") {
-    throw new AppError("Doctor account is not approved yet", 403);
-  }
+  if (doctor.accountStatus !== "ACTIVE" && doctor.accountStatus !== "APPROVED") throw new AppError("Doctor account is not approved yet", 403);
 
   return doctor;
 };
@@ -44,7 +42,6 @@ const ensurePatientAssignment = async (doctorId: string, patientId: string) => {
   });
 
   if (!assignment) throw new AppError("You are not assigned to this patient", 403);
-
   return assignment;
 };
 
@@ -67,12 +64,11 @@ const formatConsultation = (consultation: any): DoctorConsultationResponse => ({
   canJoinCall: canJoinConsultation(consultation.status),
 });
 
-const buildDoctorMeeting = (consultation: any, doctor: { id: string; fullName: string; email: string }) => {
-  return jitsiService.createMeetingConfig({
+const buildDoctorMeeting = (consultation: any, doctor: { id: string; fullName: string; email: string }) =>
+  jitsiService.createMeetingConfig({
     roomName: consultation.jaasRoomName,
     user: { id: doctor.id, name: doctor.fullName, email: doctor.email, role: "DOCTOR", moderator: true },
   });
-};
 
 const getConsultationForDoctor = async (doctorId: string, consultationId: string) => {
   await ensureApprovedDoctor(doctorId);
@@ -85,7 +81,6 @@ const getConsultationForDoctor = async (doctorId: string, consultationId: string
   if (!consultation) throw new AppError("Consultation not found", 404);
 
   await ensurePatientAssignment(doctorId, consultation.patientId);
-
   return consultation;
 };
 
@@ -114,10 +109,99 @@ const sendPatientConsultationNotification = async (input: CreateNotificationInpu
 
     await notificationService.createAndSend(input);
   } catch (error) {
-    console.warn(
-      `Unable to send ${input.type} notification for consultation ${input.entityId || "unknown"}:`,
-      error instanceof Error ? error.message : error
+    console.warn(`Unable to send ${input.type} notification for consultation ${input.entityId || "unknown"}:`, error instanceof Error ? error.message : error);
+  }
+};
+
+const getCaregiverConsultationContent = (event: CaregiverConsultationEvent, patientName: string, doctorName: string): Pick<CreateNotificationInput, "type" | "title" | "body" | "priority"> => {
+  switch (event) {
+    case "ACCEPTED":
+      return {
+        type: "CONSULTATION_ACCEPTED",
+        title: "Patient consultation accepted",
+        body: `${doctorName} accepted ${patientName}'s consultation request.`,
+        priority: "HIGH",
+      };
+    case "REJECTED":
+      return {
+        type: "CONSULTATION_REJECTED",
+        title: "Patient consultation declined",
+        body: `${doctorName} could not accept ${patientName}'s consultation request.`,
+        priority: "HIGH",
+      };
+    case "COMPLETED":
+      return {
+        type: "CONSULTATION_COMPLETED",
+        title: "Patient consultation completed",
+        body: `${patientName}'s consultation with ${doctorName} has been completed.`,
+        priority: "NORMAL",
+      };
+  }
+};
+
+const notifyLinkedCaregiversOfConsultation = async (consultation: any, event: CaregiverConsultationEvent) => {
+  try {
+    if (!consultation.patientId || !consultation.patient) return;
+
+    const relationships = await prisma.patientCaregiverRelationship.findMany({
+      where: {
+        patientId: consultation.patientId,
+        status: "ACTIVE",
+        caregiver: { is: { role: "CAREGIVER", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+      },
+      select: { id: true, caregiver: { select: { id: true, fullName: true } } },
+    });
+
+    if (!relationships.length) return;
+
+    const doctorName = getDoctorDisplayName(consultation.doctor?.fullName || consultation.doctorName || "Assigned doctor");
+    const content = getCaregiverConsultationContent(event, consultation.patient.fullName, doctorName);
+
+    await Promise.all(
+      relationships.map(async relationship => {
+        try {
+          const existingNotification = await prisma.userNotification.findFirst({
+            where: {
+              userId: relationship.caregiver.id,
+              type: content.type,
+              entityType: "CAREGIVER_CONSULTATION",
+              entityId: consultation.id,
+            },
+            select: { id: true },
+          });
+
+          if (existingNotification) return;
+
+          await notificationService.createAndSend({
+            userId: relationship.caregiver.id,
+            ...content,
+            entityType: "CAREGIVER_CONSULTATION",
+            entityId: consultation.id,
+            targetScreen: "CaregiverConsultations",
+            data: {
+              source: "CAREGIVER_CONSULTATION_UPDATE",
+              recipientRole: "CAREGIVER",
+              caregiverRelationshipId: relationship.id,
+              consultationId: consultation.id,
+              patientId: consultation.patientId,
+              patientName: consultation.patient.fullName,
+              doctorId: consultation.doctorId,
+              doctorName,
+              consultationType: consultation.type,
+              consultationStatus: consultation.status,
+              preferredAt: consultation.preferredAt?.toISOString() || null,
+              initiatorType: consultation.initiatorType || null,
+              initiatedByUserId: consultation.initiatedByUserId || null,
+              safetyAlertId: consultation.safetyAlertId || null,
+            },
+          });
+        } catch (error) {
+          console.warn(`Unable to notify caregiver ${relationship.caregiver.id} about consultation ${consultation.id}:`, error instanceof Error ? error.message : error);
+        }
+      }),
     );
+  } catch (error) {
+    console.warn(`Unable to process caregiver notifications for consultation ${consultation.id}:`, error instanceof Error ? error.message : error);
   }
 };
 
@@ -144,17 +228,11 @@ export const doctorConsultationsService = {
     return { consultation: formatConsultation(consultation) };
   },
 
-  async acceptConsultation(
-    doctorId: string,
-    consultationId: string,
-    input: DoctorConsultationActionInput
-  ): Promise<DoctorConsultationActionResponse> {
+  async acceptConsultation(doctorId: string, consultationId: string, input: DoctorConsultationActionInput): Promise<DoctorConsultationActionResponse> {
     const doctor = await ensureApprovedDoctor(doctorId);
     const consultation = await getConsultationForDoctor(doctorId, consultationId);
 
-    if (consultation.status !== "PENDING") {
-      throw new AppError("Only pending consultations can be accepted", 400);
-    }
+    if (consultation.status !== "PENDING") throw new AppError("Only pending consultations can be accepted", 400);
 
     const cleanedNotes = getCleanNotes(input);
 
@@ -194,14 +272,12 @@ export const doctorConsultationsService = {
       },
     });
 
+    await notifyLinkedCaregiversOfConsultation(updatedConsultation, "ACCEPTED");
+
     return { consultation: formatConsultation(updatedConsultation) };
   },
 
-  async rejectConsultation(
-    doctorId: string,
-    consultationId: string,
-    input: DoctorConsultationActionInput
-  ): Promise<DoctorConsultationActionResponse> {
+  async rejectConsultation(doctorId: string, consultationId: string, input: DoctorConsultationActionInput): Promise<DoctorConsultationActionResponse> {
     const doctor = await ensureApprovedDoctor(doctorId);
     const consultation = await getConsultationForDoctor(doctorId, consultationId);
 
@@ -249,21 +325,15 @@ export const doctorConsultationsService = {
       },
     });
 
+    await notifyLinkedCaregiversOfConsultation(updatedConsultation, "REJECTED");
+
     return { consultation: formatConsultation(updatedConsultation) };
   },
 
-  async completeConsultation(
-    doctorId: string,
-    consultationId: string,
-    input: DoctorConsultationActionInput
-  ): Promise<DoctorConsultationActionResponse> {
+  async completeConsultation(doctorId: string, consultationId: string, input: DoctorConsultationActionInput): Promise<DoctorConsultationActionResponse> {
     const consultation = await getConsultationForDoctor(doctorId, consultationId);
 
-    if (
-      consultation.status !== "ACCEPTED" &&
-      consultation.status !== "IN_PROGRESS" &&
-      consultation.status !== "COMPLETED"
-    ) {
+    if (consultation.status !== "ACCEPTED" && consultation.status !== "IN_PROGRESS" && consultation.status !== "COMPLETED") {
       throw new AppError("Only accepted or in-progress consultations can be completed", 400);
     }
 
@@ -318,6 +388,8 @@ export const doctorConsultationsService = {
       },
     });
 
+    await notifyLinkedCaregiversOfConsultation(updatedConsultation, "COMPLETED");
+
     return { consultation: formatConsultation(updatedConsultation) };
   },
 
@@ -325,21 +397,10 @@ export const doctorConsultationsService = {
     const doctor = await ensureApprovedDoctor(doctorId);
     const consultation = await getConsultationForDoctor(doctorId, consultationId);
 
-    if (consultation.status === "PENDING") {
-      throw new AppError("Accept this consultation before joining the call", 400);
-    }
-
-    if (consultation.status === "REJECTED") {
-      throw new AppError("Rejected consultation cannot be joined", 400);
-    }
-
-    if (consultation.status === "CANCELLED") {
-      throw new AppError("Cancelled consultation cannot be joined", 400);
-    }
-
-    if (consultation.status === "COMPLETED") {
-      throw new AppError("Completed consultation cannot be joined", 400);
-    }
+    if (consultation.status === "PENDING") throw new AppError("Accept this consultation before joining the call", 400);
+    if (consultation.status === "REJECTED") throw new AppError("Rejected consultation cannot be joined", 400);
+    if (consultation.status === "CANCELLED") throw new AppError("Cancelled consultation cannot be joined", 400);
+    if (consultation.status === "COMPLETED") throw new AppError("Completed consultation cannot be joined", 400);
 
     const updatedConsultation = consultation.status === "ACCEPTED"
       ? await prisma.consultation.update({
