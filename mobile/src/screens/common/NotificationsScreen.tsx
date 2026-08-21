@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Bell, BellRing, Building2, CheckCheck, ChevronLeft, ChevronRight, CircleAlert, Clock3, FileCheck2, FileText, HeartPulse, Pill, RefreshCw, ShieldAlert, Stethoscope, UserRound, Video } from "lucide-react-native";
 
 import { useLanguage } from "../../context/LanguageContext";
-import { notificationApi, type UserNotification } from "../../services/notificationApi";
+import { getCaregiverNotificationSender, notificationApi, type UserNotification } from "../../services/notificationApi";
 import { notificationEvents } from "../../services/notificationEvents";
 import { openNotificationTarget } from "../../services/notificationNavigation";
 import type { RootStackParamList } from "../../types/navigation";
@@ -24,6 +24,7 @@ const SUCCESS = "#42B883";
 const SUCCESS_LIGHT = "#EAF8F2";
 const WARNING = "#F6A545";
 const WARNING_LIGHT = "#FFF3E2";
+const WARNING_DARK = "#8A520E";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
 const PAGE_LIMIT = 20;
@@ -37,18 +38,9 @@ const elevate = (level: 1 | 2 = 1) => ({
 });
 
 const getTone = (notification: UserNotification) => {
-  if (notification.priority === "CRITICAL" || notification.type.includes("SAFETY") || notification.type === "CRITICAL_VITAL_DETECTED") {
-    return { background: DANGER_LIGHT, color: DANGER };
-  }
-
-  if (notification.priority === "HIGH" || notification.type.includes("CONSULTATION") || notification.type.includes("REVIEW")) {
-    return { background: WARNING_LIGHT, color: WARNING };
-  }
-
-  if (notification.type.includes("APPROVED") || notification.type.includes("READY") || notification.type.includes("DELIVERED") || notification.type.includes("RESOLVED")) {
-    return { background: SUCCESS_LIGHT, color: SUCCESS };
-  }
-
+  if (notification.priority === "CRITICAL" || notification.type.includes("SAFETY") || notification.type === "CRITICAL_VITAL_DETECTED") return { background: DANGER_LIGHT, color: DANGER };
+  if (notification.priority === "HIGH" || notification.type.includes("CONSULTATION") || notification.type.includes("REVIEW")) return { background: WARNING_LIGHT, color: WARNING };
+  if (notification.type.includes("APPROVED") || notification.type.includes("READY") || notification.type.includes("DELIVERED") || notification.type.includes("RESOLVED")) return { background: SUCCESS_LIGHT, color: SUCCESS };
   return { background: PRIMARY_LIGHT, color: PRIMARY };
 };
 
@@ -125,10 +117,12 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
       setIsLoadingMore(true);
       const nextPage = page + 1;
       const result = await notificationApi.listNotifications(nextPage, PAGE_LIMIT, unreadOnly);
+
       setNotifications(current => {
         const knownIds = new Set(current.map(item => item.id));
         return [...current, ...result.notifications.filter(item => !knownIds.has(item.id))];
       });
+
       setUnreadCount(result.unreadCount);
       setPage(nextPage);
       setTotalPages(result.pagination.totalPages);
@@ -188,6 +182,8 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
 
   const renderNotification = ({ item }: { item: UserNotification }) => {
     const tone = getTone(item);
+    const caregiverSender = getCaregiverNotificationSender(item);
+    const caregiverLabel = caregiverSender?.name ? `Sent by caregiver · ${caregiverSender.name}` : "Sent by caregiver";
 
     return (
       <TouchableOpacity style={[styles.notificationCard, !item.isRead ? styles.notificationCardUnread : undefined]} activeOpacity={0.86} onPress={() => void openNotification(item)}>
@@ -200,6 +196,13 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
           </View>
 
           <Text style={styles.notificationBody} numberOfLines={3}>{item.body}</Text>
+
+          {caregiverSender ? (
+            <View style={styles.caregiverChip}>
+              <UserRound size={12} color={WARNING_DARK} strokeWidth={2.5} />
+              <Text style={styles.caregiverChipText} numberOfLines={1}>{caregiverLabel}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.notificationMetaRow}>
             <Clock3 size={13} color={MUTED} strokeWidth={2.3} />
@@ -249,6 +252,7 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
             <View style={styles.errorIcon}><RefreshCw size={25} color={DANGER} strokeWidth={2.6} /></View>
             <Text style={styles.stateTitle}>{t("notifications.loadErrorTitle")}</Text>
             <Text style={styles.stateText}>{errorMessage}</Text>
+
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.86} onPress={() => void loadNotifications("initial")}>
               <RefreshCw size={17} color={SURFACE} strokeWidth={2.5} />
               <Text style={styles.retryText}>{t("common.tryAgain")}</Text>
@@ -317,10 +321,15 @@ const styles = StyleSheet.create({
   notificationTitleUnread: { fontWeight: "700" },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY, marginLeft: 8, marginTop: 5 },
   notificationBody: { color: MUTED, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 4 },
+
+  caregiverChip: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 27, borderRadius: 8, backgroundColor: WARNING_LIGHT, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", marginTop: 7 },
+  caregiverChipText: { color: WARNING_DARK, fontSize: 9, fontWeight: "700", marginLeft: 5, flexShrink: 1 },
+
   notificationMetaRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   notificationTime: { color: MUTED, fontSize: 10, fontWeight: "600", marginLeft: 5 },
   newChip: { backgroundColor: PRIMARY_LIGHT, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, marginLeft: 8 },
   newChipText: { color: PRIMARY, fontSize: 9, fontWeight: "700" },
+
   stateCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 24, alignItems: "center", marginHorizontal: 16, marginTop: 16, ...elevate(1) },
   errorIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: DANGER_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 11 },
   stateTitle: { color: TEXT, fontSize: 16, fontWeight: "700", textAlign: "center", marginTop: 11 },
