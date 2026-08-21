@@ -21,6 +21,7 @@ export const caregiverReminderPromptService = {
 
     const now = new Date();
     const effectiveDueAt = doseLog.status === "SNOOZED" && doseLog.snoozedUntil ? doseLog.snoozedUntil : doseLog.scheduledFor;
+
     if (doseLog.status === "PENDING" || doseLog.status === "SNOOZED") {
       const timeUntilDue = effectiveDueAt.getTime() - now.getTime();
       if (timeUntilDue > UPCOMING_WINDOW_MS) throw new AppError("A reminder prompt can only be sent when the dose is due within 2 hours", 409);
@@ -43,11 +44,14 @@ export const caregiverReminderPromptService = {
       throw new AppError(`A reminder was recently sent for this dose. Try again in ${retryAfterSeconds} seconds.`, 429);
     }
 
+    const senderName = caregiverName.trim() || "Your caregiver";
+    const medicine = doseLog.reminder.medicine;
+
     const notification = await notificationService.createAndSend({
       userId: patientId,
       type: "MEDICINE_REMINDER_DUE",
-      title: "Caregiver reminder",
-      body: `${caregiverName} has reminded you that your ${doseLog.reminder.medicine.name} (${doseLog.reminder.medicine.dose}) dose is due.`,
+      title: `Reminder from ${senderName}`,
+      body: `${senderName} sent you a reminder to take ${medicine.name} (${medicine.dose}).`,
       priority: "HIGH",
       entityType: "CAREGIVER_MEDICINE_PROMPT",
       entityId: doseLog.id,
@@ -55,14 +59,18 @@ export const caregiverReminderPromptService = {
       patientPreferenceKey: "medicineReminders",
       data: {
         source: "CAREGIVER_MEDICINE_REMINDER",
+        recipientRole: "PATIENT",
+        senderRole: "CAREGIVER",
+        senderId: caregiverId,
+        senderName,
         caregiverId,
-        caregiverName,
+        caregiverName: senderName,
         patientId,
         doseLogId: doseLog.id,
         reminderId: doseLog.reminderId,
-        medicineId: doseLog.reminder.medicine.id,
-        medicineName: doseLog.reminder.medicine.name,
-        medicineDose: doseLog.reminder.medicine.dose,
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        medicineDose: medicine.dose,
         scheduledFor: doseLog.scheduledFor.toISOString(),
         snoozedUntil: doseLog.snoozedUntil?.toISOString() || null,
         doseStatus: doseLog.status,
@@ -71,7 +79,7 @@ export const caregiverReminderPromptService = {
 
     return {
       sent: true,
-      dose: { id: doseLog.id, status: doseLog.status, scheduledFor: doseLog.scheduledFor, medicineName: doseLog.reminder.medicine.name, medicineDose: doseLog.reminder.medicine.dose },
+      dose: { id: doseLog.id, status: doseLog.status, scheduledFor: doseLog.scheduledFor, medicineName: medicine.name, medicineDose: medicine.dose },
       notification: { id: notification.id, createdAt: notification.createdAt },
       cooldownSeconds: PROMPT_COOLDOWN_MS / 1000,
     };

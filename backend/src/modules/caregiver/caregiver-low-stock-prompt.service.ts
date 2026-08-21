@@ -9,16 +9,21 @@ export const caregiverLowStockPromptService = {
   async sendLowStockPrompt(caregiverId: string, patientId: string, medicineId: string) {
     await ensureLinkedPatient(caregiverId, patientId);
 
-    const medicine = await prisma.medicine.findFirst({
-      where: { id: medicineId, patientId, isActive: true },
-      select: { id: true, name: true, dose: true, currentStock: true, stockUnit: true, lowStockThreshold: true },
-    });
+    const [caregiver, medicine] = await Promise.all([
+      prisma.user.findUnique({ where: { id: caregiverId }, select: { id: true, fullName: true } }),
+      prisma.medicine.findFirst({
+        where: { id: medicineId, patientId, isActive: true },
+        select: { id: true, name: true, dose: true, currentStock: true, stockUnit: true, lowStockThreshold: true },
+      }),
+    ]);
 
+    if (!caregiver) throw new AppError("Caregiver account not found", 404);
     if (!medicine) throw new AppError("Medicine not found for this patient", 404);
     if (medicine.currentStock === null || medicine.lowStockThreshold === null) throw new AppError("Stock monitoring is not configured for this medicine", 409);
     if (medicine.currentStock > medicine.lowStockThreshold) throw new AppError("This medicine is not currently low in stock", 409);
 
     const now = new Date();
+
     const recentPrompt = await prisma.userNotification.findFirst({
       where: {
         userId: patientId,
@@ -36,11 +41,13 @@ export const caregiverLowStockPromptService = {
       throw new AppError(`A low-stock reminder was recently sent for this medicine. Try again in ${retryAfterSeconds} seconds.`, 429);
     }
 
+    const senderName = caregiver.fullName.trim() || "Your caregiver";
+
     const notification = await notificationService.createAndSend({
       userId: patientId,
       type: "MEDICINE_REMINDER_DUE",
-      title: "Medicine stock running low",
-      body: `Your ${medicine.name} stock is running low. Your caregiver suggests requesting a refill.`,
+      title: `Stock reminder from ${senderName}`,
+      body: `${senderName} sent you a reminder that your ${medicine.name} stock is running low.`,
       priority: "HIGH",
       entityType: "CAREGIVER_LOW_STOCK_PROMPT",
       entityId: medicine.id,
@@ -48,7 +55,12 @@ export const caregiverLowStockPromptService = {
       patientPreferenceKey: "medicineReminders",
       data: {
         source: "CAREGIVER_LOW_STOCK_PROMPT",
-        caregiverId,
+        recipientRole: "PATIENT",
+        senderRole: "CAREGIVER",
+        senderId: caregiver.id,
+        senderName,
+        caregiverId: caregiver.id,
+        caregiverName: senderName,
         patientId,
         medicineId: medicine.id,
         medicineName: medicine.name,
