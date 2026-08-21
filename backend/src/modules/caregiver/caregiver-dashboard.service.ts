@@ -5,23 +5,44 @@ const getFirstName = (fullName: string) => fullName.trim().split(/\s+/)[0] || fu
 
 export const caregiverDashboardService = {
   async getDashboard(caregiverId: string) {
-    const caregiver = await prisma.user.findUnique({ where: { id: caregiverId }, select: { id: true, fullName: true, email: true, role: true, accountStatus: true } });
+    const caregiver = await prisma.user.findUnique({
+      where: { id: caregiverId },
+      select: { id: true, fullName: true, email: true, role: true, accountStatus: true, isEmailVerified: true },
+    });
+
     if (!caregiver || caregiver.role !== "CAREGIVER") throw new AppError("Caregiver account not found", 404);
+    if (!caregiver.isEmailVerified) throw new AppError("Please verify your email first", 403);
     if (caregiver.accountStatus !== "ACTIVE" && caregiver.accountStatus !== "APPROVED") throw new AppError("Caregiver account is not active", 403);
 
     const relationships = await prisma.patientCaregiverRelationship.findMany({
-      where: { caregiverId, status: "ACTIVE" },
+      where: {
+        caregiverId,
+        status: "ACTIVE",
+        patient: { is: { role: "PATIENT", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+      },
       include: { patient: { select: { id: true, fullName: true, email: true } } },
       orderBy: { approvedAt: "desc" },
     });
 
     const patientIds = relationships.map(item => item.patientId);
+
     if (!patientIds.length) {
       const [notifications, unreadNotifications] = await Promise.all([
-        prisma.userNotification.findMany({ where: { userId: caregiverId }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, type: true, title: true, body: true, priority: true, entityType: true, entityId: true, targetScreen: true, isRead: true, createdAt: true } }),
+        prisma.userNotification.findMany({
+          where: { userId: caregiverId },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: { id: true, type: true, title: true, body: true, priority: true, entityType: true, entityId: true, targetScreen: true, isRead: true, createdAt: true },
+        }),
         prisma.userNotification.count({ where: { userId: caregiverId, isRead: false } }),
       ]);
-      return { caregiver: { id: caregiver.id, fullName: caregiver.fullName, firstName: getFirstName(caregiver.fullName), email: caregiver.email }, summary: { linkedPatients: 0, missedDosesToday: 0, dosesDueSoon: 0, unresolvedSafetyAlerts: 0, criticalVitals: 0, activeConsultations: 0, lowStockMedicines: 0, unreadNotifications }, patients: [], recentNotifications: notifications };
+
+      return {
+        caregiver: { id: caregiver.id, fullName: caregiver.fullName, firstName: getFirstName(caregiver.fullName), email: caregiver.email },
+        summary: { linkedPatients: 0, missedDosesToday: 0, dosesDueSoon: 0, unresolvedSafetyAlerts: 0, criticalVitals: 0, activeConsultations: 0, lowStockMedicines: 0, unreadNotifications },
+        patients: [],
+        recentNotifications: notifications,
+      };
     }
 
     const now = new Date();
@@ -59,7 +80,7 @@ export const caregiverDashboardService = {
         where: { patientId: { in: patientIds }, status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] } },
         orderBy: { updatedAt: "desc" },
         distinct: ["patientId"],
-        select: { id: true, patientId: true, type: true, status: true, reason: true, preferredAt: true, doctorName: true, createdAt: true, updatedAt: true },
+        select: { id: true, patientId: true, type: true, status: true, preferredAt: true, doctorName: true, createdAt: true, updatedAt: true },
       }),
       prisma.medicineOrder.findMany({
         where: { patientId: { in: patientIds } },
@@ -96,7 +117,10 @@ export const caregiverDashboardService = {
         relationshipId: relationship.id,
         linkedAt: relationship.approvedAt,
         patient: { id: relationship.patient.id, fullName: relationship.patient.fullName, email: relationship.patient.email },
-        adherence: { missedToday: missedDosesToday.filter(item => item.patientId === patientId).length, dueSoon: dosesDueSoon.filter(item => item.patientId === patientId).length },
+        adherence: {
+          missedToday: missedDosesToday.filter(item => item.patientId === patientId).length,
+          dueSoon: dosesDueSoon.filter(item => item.patientId === patientId).length,
+        },
         latestVital: vital,
         safetyAlert,
         consultation,

@@ -96,6 +96,7 @@ export const caregiverMedicationService = {
           endDate: reminder.endDate,
           scheduledToday,
           todayStatus,
+          doseLogId: log?.id || null,
           takenAt: log?.takenAt || null,
           snoozedUntil: log?.snoozedUntil || null,
           nextDose: getNextDose(reminder.frequency, reminder.timeOfDay, reminder.startDate, reminder.endDate, now),
