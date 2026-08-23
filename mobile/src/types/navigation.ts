@@ -105,6 +105,9 @@ export type RootStackParamList = {
   CaregiverPatientDetail: { patientId: string; patientName?: string };
   CaregiverMedications: { patientId: string; patientName?: string; medicineId?: string; doseLogId?: string };
   CaregiverSafetyAlertDetail: { patientId: string; patientName?: string; alertId: string };
+  CaregiverPharmacyOrders: { patientId: string; patientName?: string };
+  CaregiverPharmacyOrderDetail: { patientId: string; patientName?: string; orderId: string };
+  CaregiverObservations: { patientId: string; patientName?: string };
 
   PharmacyProfile: undefined;
   PharmacyInventory: undefined;
