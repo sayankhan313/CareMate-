@@ -27,7 +27,7 @@ const WARNING_LIGHT = "#FFF3E2";
 const WARNING_DARK = "#8A520E";
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
-const PAGE_LIMIT = 20;
+const PAGE_LIMIT = 5;
 
 const elevate = (level: 1 | 2 = 1) => ({
   elevation: level === 1 ? 2 : 4,
@@ -74,6 +74,7 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
   const [errorMessage, setErrorMessage] = useState("");
 
   const unreadOnly = filter === "UNREAD";
+  const hasMore = page < totalPages;
 
   const formatCreatedAt = useCallback((value: string) => {
     const date = new Date(value);
@@ -89,6 +90,7 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
 
     const days = Math.floor(hours / 24);
     if (days < 7) return t("notifications.daysAgo", { count: days });
+
     return date.toLocaleDateString(locale, { day: "2-digit", month: "short", year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
   }, [locale, t]);
 
@@ -111,7 +113,7 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
   }, [t, unreadOnly]);
 
   const loadMore = useCallback(async () => {
-    if (isLoading || isRefreshing || isLoadingMore || page >= totalPages) return;
+    if (isLoading || isRefreshing || isLoadingMore || !hasMore) return;
 
     try {
       setIsLoadingMore(true);
@@ -126,12 +128,12 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
       setUnreadCount(result.unreadCount);
       setPage(nextPage);
       setTotalPages(result.pagination.totalPages);
-    } catch {
-      return;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t("notifications.loadErrorText"));
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoading, isLoadingMore, isRefreshing, page, totalPages, unreadOnly]);
+  }, [hasMore, isLoading, isLoadingMore, isRefreshing, page, t, unreadOnly]);
 
   useFocusEffect(useCallback(() => {
     void loadNotifications("initial");
@@ -149,7 +151,15 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
       setIsMarkingAll(true);
       await notificationApi.markAllNotificationsRead();
       setUnreadCount(0);
-      setNotifications(current => unreadOnly ? [] : current.map(item => ({ ...item, isRead: true, readAt: item.readAt || new Date().toISOString() })));
+
+      if (unreadOnly) {
+        setNotifications([]);
+        setPage(1);
+        setTotalPages(1);
+      } else {
+        setNotifications(current => current.map(item => ({ ...item, isRead: true, readAt: item.readAt || new Date().toISOString() })));
+      }
+
       notificationEvents.emitChanged();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t("notifications.markAllError"));
@@ -267,8 +277,6 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
             contentContainerStyle={[styles.listContent, notifications.length === 0 ? styles.emptyListContent : undefined, { paddingBottom: Math.max(insets.bottom + 24, 34) }]}
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadNotifications("refresh")} tintColor={PRIMARY} colors={[PRIMARY]} />}
-            onEndReached={() => void loadMore()}
-            onEndReachedThreshold={0.35}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <View style={styles.emptyIcon}><BellRing size={29} color={PRIMARY} strokeWidth={2.4} /></View>
@@ -276,7 +284,20 @@ export const NotificationsScreen = ({ navigation }: NotificationsScreenProps) =>
                 <Text style={styles.emptyText}>{emptyText}</Text>
               </View>
             }
-            ListFooterComponent={isLoadingMore ? <View style={styles.loadingMore}><ActivityIndicator size="small" color={PRIMARY} /><Text style={styles.loadingMoreText}>{t("notifications.loadingMore")}</Text></View> : null}
+            ListFooterComponent={
+              notifications.length > 0 && hasMore ? (
+                <TouchableOpacity style={[styles.showMoreButton, isLoadingMore ? styles.showMoreButtonDisabled : undefined]} activeOpacity={0.86} onPress={() => void loadMore()} disabled={isLoadingMore}>
+                  {isLoadingMore ? (
+                    <>
+                      <ActivityIndicator size="small" color={PRIMARY} />
+                      <Text style={styles.showMoreLoadingText}>{t("notifications.loadingMore")}</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.showMoreText}>Show more</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null
+            }
           />
         )}
       </View>
@@ -321,15 +342,12 @@ const styles = StyleSheet.create({
   notificationTitleUnread: { fontWeight: "700" },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY, marginLeft: 8, marginTop: 5 },
   notificationBody: { color: MUTED, fontSize: 12, fontWeight: "500", lineHeight: 18, marginTop: 4 },
-
   caregiverChip: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 27, borderRadius: 8, backgroundColor: WARNING_LIGHT, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", marginTop: 7 },
   caregiverChipText: { color: WARNING_DARK, fontSize: 9, fontWeight: "700", marginLeft: 5, flexShrink: 1 },
-
   notificationMetaRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   notificationTime: { color: MUTED, fontSize: 10, fontWeight: "600", marginLeft: 5 },
   newChip: { backgroundColor: PRIMARY_LIGHT, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, marginLeft: 8 },
   newChipText: { color: PRIMARY, fontSize: 9, fontWeight: "700" },
-
   stateCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 24, alignItems: "center", marginHorizontal: 16, marginTop: 16, ...elevate(1) },
   errorIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: DANGER_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 11 },
   stateTitle: { color: TEXT, fontSize: 16, fontWeight: "700", textAlign: "center", marginTop: 11 },
@@ -340,8 +358,10 @@ const styles = StyleSheet.create({
   emptyIcon: { width: 66, height: 66, borderRadius: 18, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   emptyTitle: { color: TEXT, fontSize: 17, fontWeight: "700", textAlign: "center" },
   emptyText: { color: MUTED, fontSize: 13, fontWeight: "500", lineHeight: 19, textAlign: "center", marginTop: 6 },
-  loadingMore: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 16 },
-  loadingMoreText: { color: MUTED, fontSize: 12, fontWeight: "600", marginLeft: 8 },
+  showMoreButton: { minHeight: 48, borderRadius: 14, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", flexDirection: "row", marginTop: 2, marginBottom: 8, ...elevate(1) },
+  showMoreButtonDisabled: { opacity: 0.7 },
+  showMoreText: { color: PRIMARY, fontSize: 14, fontWeight: "700" },
+  showMoreLoadingText: { color: MUTED, fontSize: 12, fontWeight: "600", marginLeft: 8 },
 });
 
 export default NotificationsScreen;

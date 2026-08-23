@@ -21,7 +21,6 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   const medicineId = getDataText(notification, "medicineId");
   const doseLogId = getDataText(notification, "doseLogId") || (entityType === "CAREGIVER_MEDICINE_DOSE_LOG" ? entityId : undefined);
   const alertId = getDataText(notification, "alertId") || (entityType === "SAFETY_ALERT" ? entityId : undefined);
-
   const orderId = getDataText(notification, "orderId") || (entityType === "MEDICINE_ORDER" ? entityId : undefined);
   const evidenceId = getDataText(notification, "evidenceId") || (entityType === "PHARMACY_EXEMPTION_EVIDENCE" ? entityId : undefined);
   const reportId = getDataText(notification, "reportId") || (entityType === "PATIENT_REPORT" ? entityId : undefined);
@@ -45,8 +44,15 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Home" });
   };
 
+  const openCaregiverPatient = () => {
+    if (patientId) return navigation.navigate("CaregiverPatientDetail", { patientId, patientName });
+    return navigation.navigate("CaregiverTabs", { screen: "Patients" });
+  };
+
   if (targetScreen === "Notifications") return fallbackToNotifications ? navigation.navigate("Notifications") : undefined;
 
+  if (targetScreen === "PatientCaregiverAccess") return navigation.navigate("PatientCaregiverAccess");
+  if (targetScreen === "CaregiverPatientDetail") return openCaregiverPatient();
   if (targetScreen === "CaregiverMedications" || targetScreen === "CaregiverPatientMedications") return openCaregiverMedicine();
   if (targetScreen === "CaregiverPatientSafety" || targetScreen === "CaregiverSafety") return openCaregiverSafety();
   if (targetScreen === "CaregiverConsultations" || targetScreen === "CaregiverAppointments") return navigation.navigate("CaregiverTabs", { screen: "Appointments" });
@@ -94,6 +100,9 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (targetScreen === "AdminUsers") return navigation.navigate("AdminTabs", { screen: "Users", params: { status: "ALL" } });
 
   if (recipientRole === "CAREGIVER") {
+    if (type === "CAREGIVER_LINK_APPROVED") return openCaregiverPatient();
+    if (type === "CAREGIVER_LINK_REJECTED" || type === "CAREGIVER_LINK_REVOKED") return navigation.navigate("CaregiverTabs", { screen: "Patients" });
+
     if (["MEDICINE_REMINDER_DUE", "MEDICINE_REMINDER_SNOOZED", "MISSED_DOSE_ALERT", "REPEATED_MISSED_DOSE"].includes(type)) return openCaregiverMedicine();
 
     if (["SAFETY_ALERT_CREATED", "SAFETY_ALERT_ESCALATED", "SAFETY_ALERT_RESOLVED", "CRITICAL_VITAL_DETECTED"].includes(type)) return openCaregiverSafety();
@@ -109,6 +118,8 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Home" });
   }
 
+  if (type === "CAREGIVER_LINK_REQUESTED") return navigation.navigate("PatientCaregiverAccess");
+
   if (type === "NEW_MEDICINE_ORDER") return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
 
   if (["PHARMACY_PAYMENT_RECEIVED", "REFILL_DOCTOR_VERIFICATION_CONFIRMED", "REFILL_DOCTOR_VERIFICATION_REJECTED"].includes(type)) {
@@ -118,13 +129,9 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (["SAFETY_ALERT_CREATED", "SAFETY_ALERT_ESCALATED", "SAFETY_ALERT_RESOLVED"].includes(type)) return navigation.navigate("DoctorTabs", { screen: "Alerts" });
   if (type === "CRITICAL_VITAL_DETECTED") return navigation.navigate("PatientTabs", { screen: "Vitals" });
 
-  if (["EMERGENCY_CONSULTATION_REQUESTED", "MANUAL_CONSULTATION_REQUESTED", "PATIENT_JOINED_CALL"].includes(type)) {
-    return navigation.navigate("DoctorTabs", { screen: "Consultations" });
-  }
+  if (["EMERGENCY_CONSULTATION_REQUESTED", "MANUAL_CONSULTATION_REQUESTED", "PATIENT_JOINED_CALL"].includes(type)) return navigation.navigate("DoctorTabs", { screen: "Consultations" });
 
-  if (["CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED", "CONSULTATION_COMPLETED", "CONSULTATION_CANCELLED"].includes(type)) {
-    return navigation.navigate("PatientTabs", { screen: "Consultations" });
-  }
+  if (["CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED", "CONSULTATION_COMPLETED", "CONSULTATION_CANCELLED"].includes(type)) return navigation.navigate("PatientTabs", { screen: "Consultations" });
 
   if (type === "MEDICINE_REVIEW_REQUESTED") return navigation.navigate("DoctorTabs", { screen: "Reviews" });
   if (["MEDICINE_REVIEW_APPROVED", "MEDICINE_REVIEW_REJECTED"].includes(type)) return navigation.navigate("MedicineUpdates");
