@@ -6,12 +6,9 @@ const getFirstName = (fullName: string) => fullName.trim().split(" ")[0] || full
 
 const formatDateOfBirth = (value?: Date | null) => {
   if (!value) return null;
-
   const day = String(value.getUTCDate()).padStart(2, "0");
   const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-  const year = value.getUTCFullYear();
-
-  return `${day}/${month}/${year}`;
+  return `${day}/${month}/${value.getUTCFullYear()}`;
 };
 
 const formatGender = (value?: string | null) => {
@@ -20,7 +17,6 @@ const formatGender = (value?: string | null) => {
   if (value === "FEMALE") return "Female";
   if (value === "OTHER") return "Other";
   if (value === "PREFER_NOT_TO_SAY") return "Prefer not to say";
-
   return value;
 };
 
@@ -37,10 +33,7 @@ const parseDateOfBirth = (value: string) => {
 const normalizeNullableValue = (value: string | null | undefined) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
-
-  const normalized = value.trim();
-
-  return normalized || null;
+  return value.trim() || null;
 };
 
 const getPatientProfileRecord = async (patientId: string) => {
@@ -70,64 +63,75 @@ const getPatientProfileRecord = async (patientId: string) => {
           emergencyContactPhone: true,
         },
       },
+      patientCaregiverRelationships: {
+        where: {
+          status: "ACTIVE",
+          caregiver: { is: { role: "CAREGIVER", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+        },
+        select: {
+          id: true,
+          approvedAt: true,
+          caregiver: { select: { id: true, fullName: true } },
+        },
+        orderBy: [{ approvedAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+      },
     },
   });
 
   if (!user) throw new AppError("Patient not found", 404);
   if (user.role !== "PATIENT") throw new AppError("Only patients can access this profile", 403);
-
   return user;
 };
 
-const formatProfileResponse = (user: Awaited<ReturnType<typeof getPatientProfileRecord>>) => ({
-  patient: {
-    id: user.id,
-    fullName: user.fullName,
-    firstName: getFirstName(user.fullName),
-    email: user.email,
-    phoneNumber: user.patientProfile?.phoneNumber || null,
-    dateOfBirth: formatDateOfBirth(user.patientProfile?.dateOfBirth),
-    gender: formatGender(user.patientProfile?.gender),
-    healthRecordNumber: user.patientProfile?.healthRecordNumber || null,
-    medicalConditions: user.patientProfile?.medicalConditions || null,
-    allergies: user.patientProfile?.allergies || null,
-    bloodGroup: user.patientProfile?.bloodGroup || null,
-    addressLine: user.patientProfile?.addressLine || null,
-    postcode: user.patientProfile?.postcode || null,
-    emergencyContact: user.patientProfile?.emergencyContact || null,
-    emergencyContactName: user.patientProfile?.emergencyContactName || null,
-    emergencyContactPhone: user.patientProfile?.emergencyContactPhone || null,
-    accountStatus: user.accountStatus,
-    isEmailVerified: user.isEmailVerified,
-    createdAt: user.createdAt,
-  },
+const formatProfileResponse = (user: Awaited<ReturnType<typeof getPatientProfileRecord>>) => {
+  const caregiverRelationship = user.patientCaregiverRelationships[0];
 
-  linkedUsers: {
-    doctor: null,
-    caregiver: null,
-  },
-});
+  return {
+    patient: {
+      id: user.id,
+      fullName: user.fullName,
+      firstName: getFirstName(user.fullName),
+      email: user.email,
+      phoneNumber: user.patientProfile?.phoneNumber || null,
+      dateOfBirth: formatDateOfBirth(user.patientProfile?.dateOfBirth),
+      gender: formatGender(user.patientProfile?.gender),
+      healthRecordNumber: user.patientProfile?.healthRecordNumber || null,
+      medicalConditions: user.patientProfile?.medicalConditions || null,
+      allergies: user.patientProfile?.allergies || null,
+      bloodGroup: user.patientProfile?.bloodGroup || null,
+      addressLine: user.patientProfile?.addressLine || null,
+      postcode: user.patientProfile?.postcode || null,
+      emergencyContact: user.patientProfile?.emergencyContact || null,
+      emergencyContactName: user.patientProfile?.emergencyContactName || null,
+      emergencyContactPhone: user.patientProfile?.emergencyContactPhone || null,
+      accountStatus: user.accountStatus,
+      isEmailVerified: user.isEmailVerified,
+      createdAt: user.createdAt,
+    },
+    linkedUsers: {
+      doctor: null,
+      caregiver: caregiverRelationship
+        ? {
+            id: caregiverRelationship.caregiver.id,
+            fullName: caregiverRelationship.caregiver.fullName,
+            relationship: "ACTIVE",
+          }
+        : null,
+    },
+  };
+};
 
 export const profileService = {
   async getPatientProfile(patientId: string) {
     const user = await getPatientProfileRecord(patientId);
-
     return formatProfileResponse(user);
   },
 
   async updatePatientProfile(patientId: string, input: UpdatePatientProfileInput) {
     const existingUser = await prisma.user.findUnique({
       where: { id: patientId },
-      select: {
-        id: true,
-        role: true,
-        patientProfile: {
-          select: {
-            id: true,
-            emergencyContact: true,
-          },
-        },
-      },
+      select: { id: true, role: true, patientProfile: { select: { id: true, emergencyContact: true } } },
     });
 
     if (!existingUser) throw new AppError("Patient not found", 404);
@@ -136,10 +140,7 @@ export const profileService = {
 
     if (input.healthRecordNumber) {
       const duplicateRecord = await prisma.patientProfile.findFirst({
-        where: {
-          healthRecordNumber: input.healthRecordNumber,
-          userId: { not: patientId },
-        },
+        where: { healthRecordNumber: input.healthRecordNumber, userId: { not: patientId } },
         select: { id: true },
       });
 
@@ -152,13 +153,8 @@ export const profileService = {
         : existingUser.patientProfile.emergencyContact;
 
     try {
-      await prisma.$transaction(async (tx) => {
-        if (input.fullName !== undefined) {
-          await tx.user.update({
-            where: { id: patientId },
-            data: { fullName: input.fullName },
-          });
-        }
+      await prisma.$transaction(async tx => {
+        if (input.fullName !== undefined) await tx.user.update({ where: { id: patientId }, data: { fullName: input.fullName } });
 
         await tx.patientProfile.update({
           where: { userId: patientId },
@@ -184,7 +180,6 @@ export const profileService = {
     }
 
     const updatedUser = await getPatientProfileRecord(patientId);
-
     return formatProfileResponse(updatedUser);
   },
 };
