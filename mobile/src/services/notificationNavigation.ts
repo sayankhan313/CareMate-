@@ -39,6 +39,12 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Safety" });
   };
 
+  const openCaregiverPharmacyOrder = () => {
+    if (patientId && orderId) return navigation.navigate("CaregiverPharmacyOrderDetail", { patientId, patientName, orderId });
+    if (patientId) return navigation.navigate("CaregiverPharmacyOrders", { patientId, patientName });
+    return navigation.navigate("CaregiverTabs", { screen: "Home" });
+  };
+
   if (targetScreen === "Notifications") return fallbackToNotifications ? navigation.navigate("Notifications") : undefined;
 
   if (targetScreen === "CaregiverMedications" || targetScreen === "CaregiverPatientMedications") return openCaregiverMedicine();
@@ -46,11 +52,7 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (targetScreen === "CaregiverConsultations" || targetScreen === "CaregiverAppointments") return navigation.navigate("CaregiverTabs", { screen: "Appointments" });
   if (targetScreen === "CaregiverPatients") return navigation.navigate("CaregiverTabs", { screen: "Patients" });
   if (targetScreen === "CaregiverDashboard") return navigation.navigate("CaregiverTabs", { screen: "Home" });
-
-  if (targetScreen === "CaregiverPharmacyOrders") {
-    if (patientId) return navigation.navigate("CaregiverPatientDetail", { patientId, patientName });
-    return navigation.navigate("CaregiverTabs", { screen: "Home" });
-  }
+  if (targetScreen === "CaregiverPharmacyOrders" || targetScreen === "CaregiverPharmacyOrderDetail") return openCaregiverPharmacyOrder();
 
   if (targetScreen === "PharmacyDashboard") {
     if (orderId) return navigation.navigate("PharmacyOrderDetail", { orderId });
@@ -100,9 +102,8 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
       return navigation.navigate("CaregiverTabs", { screen: "Appointments" });
     }
 
-    if (["ORDER_RECEIVED", "ORDER_ACCEPTED", "ORDER_REJECTED", "ORDER_PREPARING", "ORDER_READY", "ORDER_OUT_FOR_DELIVERY", "ORDER_DELIVERED", "ORDER_COLLECTED", "ORDER_DELAYED", "ORDER_OUT_OF_STOCK", "ORDER_CANCELLED"].includes(type)) {
-      if (patientId) return navigation.navigate("CaregiverPatientDetail", { patientId, patientName });
-      return navigation.navigate("CaregiverTabs", { screen: "Home" });
+    if (["ORDER_RECEIVED", "ORDER_ACCEPTED", "ORDER_REJECTED", "ORDER_PREPARING", "ORDER_READY", "ORDER_OUT_FOR_DELIVERY", "ORDER_DELIVERED", "ORDER_COLLECTED", "ORDER_DELAYED", "ORDER_OUT_OF_STOCK", "ORDER_CANCELLED", "PHARMACY_PAYMENT_RECEIVED"].includes(type)) {
+      return openCaregiverPharmacyOrder();
     }
 
     return navigation.navigate("CaregiverTabs", { screen: "Home" });
