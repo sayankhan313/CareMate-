@@ -1,18 +1,20 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
+import { notificationService } from "../notification/notification.service.js";
 import type { CaregiverLinkRequestInput } from "./caregiver-relationship.validation.js";
+
+type NotificationInput = Parameters<typeof notificationService.createAndSend>[0];
 
 const ensureCaregiver = async (caregiverId: string) => {
   const caregiver = await prisma.user.findUnique({
     where: { id: caregiverId },
-    select: { id: true, role: true, accountStatus: true, isEmailVerified: true },
+    select: { id: true, fullName: true, email: true, role: true, accountStatus: true, isEmailVerified: true },
   });
 
   if (!caregiver) throw new AppError("Caregiver account not found", 404);
   if (caregiver.role !== "CAREGIVER") throw new AppError("Only caregivers can access this resource", 403);
   if (!caregiver.isEmailVerified) throw new AppError("Please verify your email first", 403);
   if (caregiver.accountStatus !== "ACTIVE" && caregiver.accountStatus !== "APPROVED") throw new AppError("Caregiver account is not active", 403);
-
   return caregiver;
 };
 
@@ -26,12 +28,19 @@ const getAvailablePatient = async (email: string) => {
   return patient;
 };
 
-const isPrismaErrorCode = (error: unknown, code: string) =>
-  Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === code);
+const isPrismaErrorCode = (error: unknown, code: string) => Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === code);
+
+const safeSendNotification = async (input: NotificationInput) => {
+  try {
+    await notificationService.createAndSend(input);
+  } catch (error) {
+    console.warn(`Unable to send ${input.type} notification:`, error instanceof Error ? error.message : error);
+  }
+};
 
 export const caregiverRelationshipService = {
   async requestLink(caregiverId: string, input: CaregiverLinkRequestInput) {
-    await ensureCaregiver(caregiverId);
+    const caregiver = await ensureCaregiver(caregiverId);
     const patient = await getAvailablePatient(input.patientEmail);
 
     const existing = await prisma.patientCaregiverRelationship.findUnique({
@@ -67,6 +76,27 @@ export const caregiverRelationshipService = {
         throw error;
       }
     }
+
+    await safeSendNotification({
+      userId: patient.id,
+      type: "CAREGIVER_LINK_REQUESTED",
+      title: "Caregiver access request",
+      body: `${caregiver.fullName} wants to connect with you as your caregiver.`,
+      priority: "HIGH",
+      entityType: "PATIENT_CAREGIVER_RELATIONSHIP",
+      entityId: relationship.id,
+      targetScreen: "PatientCaregiverAccess",
+      data: {
+        relationshipId: relationship.id,
+        patientId: patient.id,
+        patientName: patient.fullName,
+        caregiverId: caregiver.id,
+        caregiverName: caregiver.fullName,
+        recipientRole: "PATIENT",
+        relationshipStatus: "PENDING",
+        source: "CAREGIVER_LINK_REQUEST",
+      },
+    });
 
     return { relationship, patient: { id: patient.id, fullName: patient.fullName, email: patient.email } };
   },
