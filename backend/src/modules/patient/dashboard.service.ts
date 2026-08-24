@@ -1,77 +1,44 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/AppError.js";
 
-
 const getStartOfDay = (date: Date) => {
   const start = new Date(date);
-
   start.setHours(0, 0, 0, 0);
-
   return start;
 };
 
 const addDays = (date: Date, days: number) => {
   const nextDate = new Date(date);
-
   nextDate.setDate(nextDate.getDate() + days);
-
   return nextDate;
 };
 
 const getScheduledDateTimeForDate = (date: Date, timeOfDay: string) => {
   const [hourText, minuteText] = timeOfDay.split(":");
-
   const scheduledFor = new Date(date);
-
   scheduledFor.setHours(Number(hourText), Number(minuteText), 0, 0);
-
   return scheduledFor;
 };
 
 const isReminderActiveOnDate = (reminder: any, date: Date) => {
   const reminderStartDate = getStartOfDay(reminder.startDate);
-  const reminderEndDate = reminder.endDate
-    ? getStartOfDay(reminder.endDate)
-    : null;
-
+  const reminderEndDate = reminder.endDate ? getStartOfDay(reminder.endDate) : null;
   const targetDate = getStartOfDay(date);
-
-  if (reminderStartDate > targetDate) {
-    return false;
-  }
-
-  if (reminderEndDate && reminderEndDate < targetDate) {
-    return false;
-  }
-
+  if (reminderStartDate > targetDate) return false;
+  if (reminderEndDate && reminderEndDate < targetDate) return false;
   return true;
 };
 
-const getFirstName = (fullName: string) => {
-  const firstName = fullName.trim().split(" ")[0];
-
-  return firstName || fullName;
-};
+const getFirstName = (fullName: string) => fullName.trim().split(" ")[0] || fullName;
 
 const getStatusLabel = (status?: string | null) => {
-  if (status === "STABLE") {
-    return "Stable";
-  }
-
-  if (status === "WARNING") {
-    return "Warning";
-  }
-
-  if (status === "CRITICAL") {
-    return "Critical";
-  }
-
+  if (status === "STABLE") return "Stable";
+  if (status === "WARNING") return "Warning";
+  if (status === "CRITICAL") return "Critical";
   return "No Data";
 };
 
-const hasBloodPressure = (reading: any) => {
-  return reading?.bpSystolic !== null && reading?.bpDiastolic !== null;
-};
+const hasBloodPressure = (reading: any) => reading?.bpSystolic !== null && reading?.bpDiastolic !== null;
 
 const formatHealthStatus = (reading: any) => {
   if (!reading) {
@@ -96,9 +63,7 @@ const formatHealthStatus = (reading: any) => {
     label: getStatusLabel(reading.status),
     heartRate: reading.heartRate,
     spo2: reading.spo2,
-    bloodPressure: hasBloodPressure(reading)
-      ? `${reading.bpSystolic}/${reading.bpDiastolic}`
-      : null,
+    bloodPressure: hasBloodPressure(reading) ? `${reading.bpSystolic}/${reading.bpDiastolic}` : null,
     bpSystolic: reading.bpSystolic,
     bpDiastolic: reading.bpDiastolic,
     glucose: reading.glucose,
@@ -111,196 +76,120 @@ const formatHealthStatus = (reading: any) => {
 
 const getNextMedicineGroup = async (patientId: string) => {
   const todayStart = getStartOfDay(new Date());
-  const rangeEnd = addDays(todayStart, 7);
+  const tomorrowStart = addDays(todayStart, 1);
   const now = new Date();
 
   const medicines = await prisma.medicine.findMany({
-    where: {
-      patientId,
-      isActive: true,
-    },
+    where: { patientId, isActive: true },
     include: {
       reminders: {
         where: {
           isActive: true,
-          startDate: {
-            lt: rangeEnd,
-          },
-          OR: [
-            {
-              endDate: null,
-            },
-            {
-              endDate: {
-                gte: todayStart,
-              },
-            },
-          ],
+          startDate: { lt: tomorrowStart },
+          OR: [{ endDate: null }, { endDate: { gte: todayStart } }],
         },
         include: {
           doseLogs: {
             where: {
               patientId,
-              scheduledFor: {
-                gte: todayStart,
-                lt: rangeEnd,
-              },
+              scheduledFor: { gte: todayStart, lt: tomorrowStart },
             },
           },
         },
-        orderBy: {
-          timeOfDay: "asc",
-        },
+        orderBy: { timeOfDay: "asc" },
       },
     },
   });
 
-  const upcomingItems = medicines.flatMap((medicine) => {
-    return medicine.reminders.flatMap((reminder) => {
-      const items = [];
+  const upcomingItems = medicines.flatMap(medicine =>
+    medicine.reminders.flatMap(reminder => {
+      if (!isReminderActiveOnDate(reminder, todayStart)) return [];
 
-      for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
-        const targetDate = addDays(todayStart, dayOffset);
+      const scheduledFor = getScheduledDateTimeForDate(todayStart, reminder.timeOfDay);
+      const doseLog = reminder.doseLogs.find(log => log.scheduledFor.getTime() === scheduledFor.getTime());
 
-        if (!isReminderActiveOnDate(reminder, targetDate)) {
-          continue;
-        }
+      if (doseLog?.status === "TAKEN") return [];
 
-        const scheduledFor = getScheduledDateTimeForDate(
-          targetDate,
-          reminder.timeOfDay
-        );
+      const effectiveScheduledFor =
+        doseLog?.status === "SNOOZED" && doseLog.snoozedUntil
+          ? doseLog.snoozedUntil
+          : scheduledFor;
 
-        const doseLog = reminder.doseLogs.find((log) => {
-          return log.scheduledFor.getTime() === scheduledFor.getTime();
-        });
+      if (effectiveScheduledFor < now) return [];
 
-        if (doseLog?.status === "TAKEN") {
-          continue;
-        }
+      return [{
+        medicineId: medicine.id,
+        reminderId: reminder.id,
+        name: medicine.name,
+        dose: medicine.dose,
+        instructions: medicine.instructions,
+        timeOfDay: reminder.timeOfDay,
+        scheduledFor: effectiveScheduledFor,
+        originalScheduledFor: scheduledFor,
+        status: doseLog?.status || "PENDING",
+        takenAt: doseLog?.takenAt || null,
+        snoozedUntil: doseLog?.snoozedUntil || null,
+      }];
+    })
+  );
 
-        const effectiveScheduledFor =
-          doseLog?.status === "SNOOZED" && doseLog.snoozedUntil
-            ? doseLog.snoozedUntil
-            : scheduledFor;
-
-        if (effectiveScheduledFor < now) {
-          continue;
-        }
-
-        items.push({
-          medicineId: medicine.id,
-          reminderId: reminder.id,
-          name: medicine.name,
-          dose: medicine.dose,
-          instructions: medicine.instructions,
-          timeOfDay: reminder.timeOfDay,
-          scheduledFor: effectiveScheduledFor,
-          originalScheduledFor: scheduledFor,
-          status: doseLog?.status || "PENDING",
-          takenAt: doseLog?.takenAt || null,
-          snoozedUntil: doseLog?.snoozedUntil || null,
-        });
-      }
-
-      return items;
-    });
-  });
-
-  const sortedUpcomingItems = upcomingItems.sort((first, second) => {
-    return first.scheduledFor.getTime() - second.scheduledFor.getTime();
-  });
-
+  const sortedUpcomingItems = upcomingItems.sort((first, second) => first.scheduledFor.getTime() - second.scheduledFor.getTime());
   const firstUpcomingItem = sortedUpcomingItems[0];
-
-  if (!firstUpcomingItem) {
-    return null;
-  }
+  if (!firstUpcomingItem) return null;
 
   const nextScheduledTime = firstUpcomingItem.scheduledFor.getTime();
-
-  const medicinesAtNextTime = sortedUpcomingItems.filter((item) => {
-    return item.scheduledFor.getTime() === nextScheduledTime;
-  });
+  const medicinesAtNextTime = sortedUpcomingItems.filter(item => item.scheduledFor.getTime() === nextScheduledTime);
 
   return {
     timeOfDay: firstUpcomingItem.timeOfDay,
     scheduledFor: firstUpcomingItem.scheduledFor,
     count: medicinesAtNextTime.length,
-    medicines: medicinesAtNextTime.map((item) => {
-      return {
-        medicineId: item.medicineId,
-        reminderId: item.reminderId,
-        name: item.name,
-        dose: item.dose,
-        instructions: item.instructions,
-        timeOfDay: item.timeOfDay,
-        scheduledFor: item.scheduledFor,
-        originalScheduledFor: item.originalScheduledFor,
-        status: item.status,
-        takenAt: item.takenAt,
-        snoozedUntil: item.snoozedUntil,
-      };
-    }),
+    medicines: medicinesAtNextTime.map(item => ({
+      medicineId: item.medicineId,
+      reminderId: item.reminderId,
+      name: item.name,
+      dose: item.dose,
+      instructions: item.instructions,
+      timeOfDay: item.timeOfDay,
+      scheduledFor: item.scheduledFor,
+      originalScheduledFor: item.originalScheduledFor,
+      status: item.status,
+      takenAt: item.takenAt,
+      snoozedUntil: item.snoozedUntil,
+    })),
   };
 };
 
-const getOrderSteps = (status: string) => {
-  return {
-    received: ["RECEIVED", "PREPARING", "READY", "DELIVERED"].includes(status),
-    preparing: ["PREPARING", "READY", "DELIVERED"].includes(status),
-    ready: ["READY", "DELIVERED"].includes(status),
-  };
-};
+const getOrderSteps = (status: string) => ({
+  received: ["RECEIVED", "PREPARING", "READY", "DELIVERED"].includes(status),
+  preparing: ["PREPARING", "READY", "DELIVERED"].includes(status),
+  ready: ["READY", "DELIVERED"].includes(status),
+});
 
 export const dashboardService = {
   async getDashboard(patientId: string) {
     const user = await prisma.user.findUnique({
-      where: {
-        id: patientId,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-      },
+      where: { id: patientId },
+      select: { id: true, fullName: true, email: true },
     });
 
-    if (!user) {
-      throw new AppError("Patient not found", 404);
-    }
+    if (!user) throw new AppError("Patient not found", 404);
 
-    const [latestVitalReading, nextMedicineGroup, latestDoctorNote, latestOrder] =
-      await Promise.all([
-        prisma.patientVitalReading.findFirst({
-          where: {
-            patientId,
-          },
-          orderBy: {
-            recordedAt: "desc",
-          },
-        }),
-
-        getNextMedicineGroup(patientId),
-
-        prisma.patientDoctorNote.findFirst({
-          where: {
-            patientId,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        }),
-
-        prisma.medicineOrder.findFirst({
-          where: {
-            patientId,
-          },
-          orderBy: {
-            updatedAt: "desc",
-          },
-        }),
-      ]);
+    const [latestVitalReading, nextMedicineGroup, latestDoctorNote, latestOrder] = await Promise.all([
+      prisma.patientVitalReading.findFirst({
+        where: { patientId },
+        orderBy: { recordedAt: "desc" },
+      }),
+      getNextMedicineGroup(patientId),
+      prisma.patientDoctorNote.findFirst({
+        where: { patientId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.medicineOrder.findFirst({
+        where: { patientId },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
 
     return {
       patient: {
@@ -309,26 +198,13 @@ export const dashboardService = {
         firstName: getFirstName(user.fullName),
         email: user.email,
       },
-
       healthStatus: formatHealthStatus(latestVitalReading),
-
       nextMedicineGroup,
-
       latestDoctorNote: latestDoctorNote
-        ? {
-            id: latestDoctorNote.id,
-            note: latestDoctorNote.note,
-            createdAt: latestDoctorNote.createdAt,
-          }
+        ? { id: latestDoctorNote.id, note: latestDoctorNote.note, createdAt: latestDoctorNote.createdAt }
         : null,
-
       medicineOrder: latestOrder
-        ? {
-            id: latestOrder.id,
-            status: latestOrder.status,
-            steps: getOrderSteps(latestOrder.status),
-            updatedAt: latestOrder.updatedAt,
-          }
+        ? { id: latestOrder.id, status: latestOrder.status, steps: getOrderSteps(latestOrder.status), updatedAt: latestOrder.updatedAt }
         : null,
     };
   },

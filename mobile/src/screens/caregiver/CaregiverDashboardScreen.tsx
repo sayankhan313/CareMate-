@@ -157,6 +157,35 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
   const openSafety = () => navigation.navigate("Safety");
   const openAppointments = () => navigation.navigate("Appointments");
 
+  const openPatientMedicines = (patient: CaregiverDashboardPatient) => {
+    openRootScreen("CaregiverMedications", { patientId: patient.patient.id, patientName: patient.patient.fullName });
+  };
+
+  const openMedicines = () => {
+    const patients = dashboard?.patients || [];
+    if (patients.length === 1) {
+      openPatientMedicines(patients[0]);
+      return;
+    }
+    openPatients();
+  };
+
+  const openLowStock = () => {
+    const lowStockPatients = dashboard?.patients.filter(patient => patient.lowStock.count > 0) || [];
+
+    if (lowStockPatients.length === 1) {
+      openPatientMedicines(lowStockPatients[0]);
+      return;
+    }
+
+    if (dashboard?.patients.length === 1) {
+      openPatientMedicines(dashboard.patients[0]);
+      return;
+    }
+
+    openPatients();
+  };
+
   const needsAttention = useMemo(() => {
     return dashboard?.patients.filter(patient => patient.adherence.missedToday > 0 || patient.latestVital?.status === "CRITICAL" || Boolean(patient.safetyAlert) || patient.lowStock.count > 0) || [];
   }, [dashboard?.patients]);
@@ -247,10 +276,10 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsContent} style={styles.quickActions}>
                 <QuickAction title="Patients" icon={<UsersRound size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} badge={dashboard.summary.linkedPatients} onPress={openPatients} />
+                <QuickAction title="Medicines" icon={<Pill size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} onPress={openMedicines} />
                 <QuickAction title="Safety" icon={<ShieldAlert size={23} color={DANGER} strokeWidth={2.5} />} badge={dashboard.summary.unresolvedSafetyAlerts} danger onPress={openSafety} />
                 <QuickAction title="Appointments" icon={<CalendarDays size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} badge={dashboard.summary.activeConsultations} onPress={openAppointments} />
-                <QuickAction title="Due soon" icon={<Clock3 size={23} color={WARNING} strokeWidth={2.5} />} badge={dashboard.summary.dosesDueSoon} onPress={openPatients} />
-                <QuickAction title="Low stock" icon={<Pill size={23} color={WARNING} strokeWidth={2.5} />} badge={dashboard.summary.lowStockMedicines} onPress={openPatients} />
+                <QuickAction title="Low stock" icon={<PackageCheck size={23} color={WARNING} strokeWidth={2.5} />} badge={dashboard.summary.lowStockMedicines} onPress={openLowStock} />
               </ScrollView>
 
               <SectionHeader title="Needs attention" subtitle="Important updates" action="Safety" onPress={openSafety} />

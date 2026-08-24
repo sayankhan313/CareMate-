@@ -22,6 +22,9 @@ const scheduledDateTime = (date: Date, timeOfDay: string) => {
 
 const isActiveOnDate = (startDate: Date, endDate: Date | null, date: Date) => startDate <= endOfDay(date) && (!endDate || endDate >= startOfDay(date));
 
+const getEffectiveLowStockThreshold = (lowStockThreshold?: number | null, doseQuantity?: number | null) =>
+  lowStockThreshold ?? Math.max((doseQuantity || 1) * 3, 1);
+
 const getNextDose = (frequency: string, timeOfDay: string, startDate: Date, endDate: Date | null, now: Date) => {
   if (frequency === "AS_NEEDED") return null;
 
@@ -103,7 +106,8 @@ export const caregiverMedicationService = {
         };
       });
 
-      const lowStock = medicine.currentStock !== null && medicine.lowStockThreshold !== null && medicine.currentStock <= medicine.lowStockThreshold;
+      const lowStockThreshold = getEffectiveLowStockThreshold(medicine.lowStockThreshold, medicine.doseQuantity);
+      const lowStock = medicine.currentStock !== null && medicine.currentStock <= lowStockThreshold;
 
       return {
         id: medicine.id,
@@ -112,7 +116,7 @@ export const caregiverMedicationService = {
         doseQuantity: medicine.doseQuantity,
         doseUnit: medicine.doseUnit,
         instructions: medicine.instructions,
-        stock: { currentStock: medicine.currentStock, stockUnit: medicine.stockUnit, lowStockThreshold: medicine.lowStockThreshold, lowStock },
+        stock: { currentStock: medicine.currentStock, stockUnit: medicine.stockUnit, lowStockThreshold, lowStock },
         reminders,
       };
     });

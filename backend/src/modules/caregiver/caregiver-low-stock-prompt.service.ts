@@ -5,6 +5,8 @@ import { ensureLinkedPatient } from "./caregiver-patients.service.js";
 
 const LOW_STOCK_PROMPT_COOLDOWN_MS = 12 * 60 * 60_000;
 
+const getEffectiveLowStockThreshold = (lowStockThreshold?: number | null, doseQuantity?: number | null) => lowStockThreshold ?? Math.max((doseQuantity || 1) * 3, 1);
+
 export const caregiverLowStockPromptService = {
   async sendLowStockPrompt(caregiverId: string, patientId: string, medicineId: string) {
     await ensureLinkedPatient(caregiverId, patientId);
@@ -13,14 +15,16 @@ export const caregiverLowStockPromptService = {
       prisma.user.findUnique({ where: { id: caregiverId }, select: { id: true, fullName: true } }),
       prisma.medicine.findFirst({
         where: { id: medicineId, patientId, isActive: true },
-        select: { id: true, name: true, dose: true, currentStock: true, stockUnit: true, lowStockThreshold: true },
+        select: { id: true, name: true, dose: true, doseQuantity: true, currentStock: true, stockUnit: true, lowStockThreshold: true },
       }),
     ]);
 
     if (!caregiver) throw new AppError("Caregiver account not found", 404);
     if (!medicine) throw new AppError("Medicine not found for this patient", 404);
-    if (medicine.currentStock === null || medicine.lowStockThreshold === null) throw new AppError("Stock monitoring is not configured for this medicine", 409);
-    if (medicine.currentStock > medicine.lowStockThreshold) throw new AppError("This medicine is not currently low in stock", 409);
+    if (medicine.currentStock === null) throw new AppError("Stock monitoring is not configured for this medicine", 409);
+
+    const lowStockThreshold = getEffectiveLowStockThreshold(medicine.lowStockThreshold, medicine.doseQuantity);
+    if (medicine.currentStock > lowStockThreshold) throw new AppError("This medicine is not currently low in stock", 409);
 
     const now = new Date();
 
@@ -67,7 +71,7 @@ export const caregiverLowStockPromptService = {
         medicineDose: medicine.dose,
         currentStock: medicine.currentStock,
         stockUnit: medicine.stockUnit,
-        lowStockThreshold: medicine.lowStockThreshold,
+        lowStockThreshold,
       },
     });
 
