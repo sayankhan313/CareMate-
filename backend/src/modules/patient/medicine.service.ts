@@ -389,6 +389,111 @@ const getSelectedTimes = (
   ].sort();
 };
 
+const getDefaultLowStockThreshold = (
+  doseQuantity?: number | null,
+) => Math.max((doseQuantity || 1) * 3, 1);
+
+const getEffectiveLowStockThreshold = (
+  lowStockThreshold?: number | null,
+  doseQuantity?: number | null,
+) => lowStockThreshold ?? getDefaultLowStockThreshold(doseQuantity);
+
+const isLowStockLevel = (
+  currentStock?: number | null,
+  lowStockThreshold?: number | null,
+  doseQuantity?: number | null,
+) =>
+  currentStock !== null &&
+  currentStock !== undefined &&
+  currentStock <= getEffectiveLowStockThreshold(lowStockThreshold, doseQuantity);
+
+const notifyMedicineLowStock = async (
+  patientId: string,
+  medicine: {
+    id: string;
+    name: string;
+    dose: string;
+    currentStock: number;
+    stockUnit: string | null;
+    lowStockThreshold: number;
+  },
+) => {
+  try {
+    const [patient, relationships] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: patientId },
+        select: { id: true, fullName: true },
+      }),
+      prisma.patientCaregiverRelationship.findMany({
+        where: { patientId, status: "ACTIVE" },
+        select: { caregiverId: true },
+      }),
+    ]);
+
+    if (!patient) return;
+
+    const isOutOfStock = medicine.currentStock === 0;
+    const stockText = `${medicine.currentStock} ${medicine.stockUnit || "units"} remaining`;
+
+    await notificationService.createAndSend({
+      userId: patientId,
+      type: "MEDICINE_LOW_STOCK",
+      title: isOutOfStock ? "Medicine stock empty" : "Medicine stock running low",
+      body: isOutOfStock
+        ? `${medicine.name} is out of stock. Request more medicine when needed.`
+        : `${medicine.name} is running low · ${stockText}.`,
+      priority: "HIGH",
+      entityType: "MEDICINE_LOW_STOCK",
+      entityId: medicine.id,
+      targetScreen: "PatientMedicines",
+      patientPreferenceKey: "medicineReminders",
+      data: {
+        source: "MEDICINE_LOW_STOCK",
+        recipientRole: "PATIENT",
+        patientId,
+        medicineId: medicine.id,
+        medicineName: medicine.name,
+        medicineDose: medicine.dose,
+        currentStock: medicine.currentStock,
+        stockUnit: medicine.stockUnit,
+        lowStockThreshold: medicine.lowStockThreshold,
+      },
+    });
+
+    await Promise.all(
+      relationships.map(({ caregiverId }) =>
+        notificationService.createAndSend({
+          userId: caregiverId,
+          type: "MEDICINE_LOW_STOCK",
+          title: isOutOfStock ? `${patient.fullName}'s medicine is out of stock` : `${patient.fullName}'s medicine stock is low`,
+          body: isOutOfStock ? `${medicine.name} is out of stock.` : `${medicine.name} is running low · ${stockText}.`,
+          priority: "HIGH",
+          entityType: "MEDICINE_LOW_STOCK",
+          entityId: medicine.id,
+          targetScreen: "CaregiverPatientDetail",
+          data: {
+            source: "MEDICINE_LOW_STOCK",
+            recipientRole: "CAREGIVER",
+            patientId,
+            patientName: patient.fullName,
+            medicineId: medicine.id,
+            medicineName: medicine.name,
+            medicineDose: medicine.dose,
+            currentStock: medicine.currentStock,
+            stockUnit: medicine.stockUnit,
+            lowStockThreshold: medicine.lowStockThreshold,
+          },
+        }),
+      ),
+    );
+  } catch (error) {
+    console.warn(
+      `Unable to send low-stock notification for medicine ${medicine.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+};
+
 const getCreateStockData = (
   data: CreateMedicineInput,
 ) => {
@@ -407,8 +512,10 @@ const getCreateStockData = (
         null,
 
       lowStockThreshold:
-        data.lowStockThreshold ??
-        null,
+        getEffectiveLowStockThreshold(
+          data.lowStockThreshold,
+          data.doseQuantity,
+        ),
     };
   }
 
@@ -429,8 +536,10 @@ const getCreateStockData = (
         null,
 
       lowStockThreshold:
-        data.lowStockThreshold ??
-        null,
+        getEffectiveLowStockThreshold(
+          data.lowStockThreshold,
+          data.doseQuantity,
+        ),
     };
   }
 
@@ -463,14 +572,15 @@ const shouldActivateReminderForStock =
       | null
       | undefined,
   ) => {
-    if (
-      hasMedicineOnHand ===
-      false
-    ) {
+    if (hasMedicineOnHand !== true) {
       return false;
     }
 
-    if (currentStock === 0) {
+    if (
+      currentStock === null ||
+      currentStock === undefined ||
+      currentStock <= 0
+    ) {
       return false;
     }
 
@@ -975,8 +1085,10 @@ const formatReviewRequest = (
                 .stockUnit,
 
             lowStockThreshold:
-              request.medicine
-                .lowStockThreshold,
+              getEffectiveLowStockThreshold(
+                request.medicine.lowStockThreshold,
+                request.medicine.doseQuantity,
+              ),
 
             frequency:
               reminder?.frequency ||
@@ -1048,15 +1160,17 @@ const formatMedicine = (
       medicine.stockUnit,
 
     lowStockThreshold:
-      medicine.lowStockThreshold,
+      getEffectiveLowStockThreshold(
+        medicine.lowStockThreshold,
+        medicine.doseQuantity,
+      ),
 
     isLowStock:
-      medicine.currentStock !==
-        null &&
-      medicine.lowStockThreshold !==
-        null &&
-      medicine.currentStock <=
+      isLowStockLevel(
+        medicine.currentStock,
         medicine.lowStockThreshold,
+        medicine.doseQuantity,
+      ),
 
     createdAt:
       medicine.createdAt,
@@ -1393,12 +1507,15 @@ export const medicineService =
           data,
         );
 
-      const remindersActive =
+      const medicineCanBeActive =
         !requestingReview &&
         shouldActivateReminderForStock(
           stockData.hasMedicineOnHand,
           stockData.currentStock,
         );
+
+      const remindersActive =
+        medicineCanBeActive;
 
       const result =
         await prisma.$transaction(
@@ -1432,7 +1549,7 @@ export const medicineService =
                       "MANUAL",
 
                     isActive:
-                      !requestingReview,
+                      medicineCanBeActive,
 
                     ...stockData,
 
@@ -1609,9 +1726,31 @@ export const medicineService =
         );
       }
 
-      return formatMedicine(
-        result.medicine,
-      );
+      const formattedMedicine =
+        formatMedicine(
+          result.medicine,
+        );
+
+      if (
+        formattedMedicine.isActive &&
+        formattedMedicine.currentStock !== null &&
+        formattedMedicine.currentStock !== undefined &&
+        formattedMedicine.isLowStock
+      ) {
+        await notifyMedicineLowStock(
+          patientId,
+          {
+            id: formattedMedicine.id,
+            name: formattedMedicine.name,
+            dose: formattedMedicine.dose,
+            currentStock: formattedMedicine.currentStock,
+            stockUnit: formattedMedicine.stockUnit,
+            lowStockThreshold: formattedMedicine.lowStockThreshold,
+          },
+        );
+      }
+
+      return formattedMedicine;
     },
 
     async listMedicines(
@@ -1901,15 +2040,17 @@ export const medicineService =
                       medicine.stockUnit,
 
                     lowStockThreshold:
-                      medicine.lowStockThreshold,
+                      getEffectiveLowStockThreshold(
+                        medicine.lowStockThreshold,
+                        medicine.doseQuantity,
+                      ),
 
                     isLowStock:
-                      medicine.currentStock !==
-                        null &&
-                      medicine.lowStockThreshold !==
-                        null &&
-                      medicine.currentStock <=
+                      isLowStockLevel(
+                        medicine.currentStock,
                         medicine.lowStockThreshold,
+                        medicine.doseQuantity,
+                      ),
                   });
                 }
 
@@ -2030,11 +2171,57 @@ export const medicineService =
             ? data.currentStock
             : medicine.currentStock;
 
+      const nextDoseQuantity =
+        data.doseQuantity ??
+        medicine.doseQuantity ??
+        1;
+
+      const nextLowStockThreshold =
+        getEffectiveLowStockThreshold(
+          data.lowStockThreshold !== undefined
+            ? data.lowStockThreshold
+            : medicine.lowStockThreshold,
+          nextDoseQuantity,
+        );
+
+      const wasLowStock =
+        isLowStockLevel(
+          medicine.currentStock,
+          medicine.lowStockThreshold,
+          medicine.doseQuantity,
+        );
+
       const stockAllowsReminder =
         shouldActivateReminderForStock(
           nextHasMedicineOnHand,
           nextCurrentStock,
         );
+
+      const stockDataChanged =
+        data.hasMedicineOnHand !==
+          undefined ||
+        data.currentStock !==
+          undefined;
+
+      const hasAdditionReviewHistory =
+        medicine.reviewRequests.some(
+          (request: any) =>
+            request.requestType ===
+            "ADD",
+        );
+
+      const shouldActivateMedicineFromStock =
+        !medicine.isActive &&
+        stockDataChanged &&
+        !hasAdditionReviewHistory &&
+        stockAllowsReminder;
+
+      const requestedActiveState =
+        data.isActive === true
+          ? medicine.isActive ||
+            (!hasAdditionReviewHistory &&
+              stockAllowsReminder)
+          : data.isActive;
 
       const reviewRequestId =
         await prisma.$transaction(
@@ -2111,10 +2298,12 @@ export const medicineService =
                     : {}),
 
                   ...(data.lowStockThreshold !==
-                  undefined
+                    undefined ||
+                  medicine.lowStockThreshold ===
+                    null
                     ? {
                         lowStockThreshold:
-                          data.lowStockThreshold,
+                          nextLowStockThreshold,
                       }
                     : {}),
 
@@ -2127,9 +2316,14 @@ export const medicineService =
                         undefined
                       ? {
                           isActive:
-                            data.isActive,
+                            requestedActiveState,
                         }
-                      : {}),
+                      : shouldActivateMedicineFromStock
+                        ? {
+                            isActive:
+                              true,
+                          }
+                        : {}),
                 },
               },
             );
@@ -2182,10 +2376,8 @@ export const medicineService =
                       reviewNote:
                         null,
                     }
-                  : data.hasMedicineOnHand !==
-                      undefined ||
-                    data.currentStock !==
-                      undefined
+                  : stockDataChanged &&
+                    !hasAdditionReviewHistory
                     ? {
                         isActive:
                           stockAllowsReminder,
@@ -2270,10 +2462,33 @@ export const medicineService =
         );
       }
 
-      return medicineService.getMedicineById(
-        patientId,
-        medicineId,
-      );
+      const updatedMedicine =
+        await medicineService.getMedicineById(
+          patientId,
+          medicineId,
+        );
+
+      if (
+        !wasLowStock &&
+        updatedMedicine.isActive &&
+        updatedMedicine.currentStock !== null &&
+        updatedMedicine.currentStock !== undefined &&
+        updatedMedicine.isLowStock
+      ) {
+        await notifyMedicineLowStock(
+          patientId,
+          {
+            id: updatedMedicine.id,
+            name: updatedMedicine.name,
+            dose: updatedMedicine.dose,
+            currentStock: updatedMedicine.currentStock,
+            stockUnit: updatedMedicine.stockUnit,
+            lowStockThreshold: updatedMedicine.lowStockThreshold,
+          },
+        );
+      }
+
+      return updatedMedicine;
     },
 
     async deleteMedicine(
@@ -2567,10 +2782,16 @@ export const medicineService =
 
       if (
         request.medicine
-          .hasMedicineOnHand ===
-          false ||
+          .hasMedicineOnHand !==
+          true ||
         request.medicine
-          .currentStock === 0
+          .currentStock ===
+          null ||
+        request.medicine
+          .currentStock ===
+          undefined ||
+        request.medicine
+          .currentStock <= 0
       ) {
         throw new AppError(
           "This medicine has been clinically approved, but it has not yet been supplied by your pharmacy. Wait until the pharmacy order is delivered or collected before adding it to your active medicines.",
@@ -3002,6 +3223,19 @@ export const medicineService =
               medicineStock.currentStock !==
               null;
 
+            const effectiveLowStockThreshold =
+              getEffectiveLowStockThreshold(
+                medicineStock.lowStockThreshold,
+                medicineStock.doseQuantity,
+              );
+
+            const wasLowStock =
+              isLowStockLevel(
+                medicineStock.currentStock,
+                medicineStock.lowStockThreshold,
+                medicineStock.doseQuantity,
+              );
+
             const doseQuantity =
               Math.max(
                 medicineStock
@@ -3189,14 +3423,48 @@ export const medicineService =
               }
             }
 
+            const currentStock =
+              updatedStock.currentStock;
+
+            const isLowStock =
+              isLowStockLevel(
+                currentStock,
+                effectiveLowStockThreshold,
+                updatedStock.doseQuantity,
+              );
+
             return {
               doseLog,
-              stock:
-                updatedStock,
+              stock: {
+                ...updatedStock,
+                lowStockThreshold:
+                  effectiveLowStockThreshold,
+              },
               doseQuantity,
+              becameLowStock:
+                !alreadyTaken &&
+                !wasLowStock &&
+                isLowStock,
             };
           },
         );
+
+      if (
+        result.becameLowStock &&
+        result.stock.currentStock !== null
+      ) {
+        await notifyMedicineLowStock(
+          patientId,
+          {
+            id: reminder.medicine.id,
+            name: reminder.medicine.name,
+            dose: reminder.medicine.dose,
+            currentStock: result.stock.currentStock,
+            stockUnit: result.stock.stockUnit,
+            lowStockThreshold: result.stock.lowStockThreshold,
+          },
+        );
+      }
 
       return {
         message:
@@ -3238,16 +3506,11 @@ export const medicineService =
               .lowStockThreshold,
 
           isLowStock:
-            result.stock
-              .currentStock !==
-              null &&
-            result.stock
-              .lowStockThreshold !==
-              null &&
-            result.stock
-              .currentStock <=
-              result.stock
-                .lowStockThreshold,
+            isLowStockLevel(
+              result.stock.currentStock,
+              result.stock.lowStockThreshold,
+              result.stock.doseQuantity,
+            ),
         },
       };
     },

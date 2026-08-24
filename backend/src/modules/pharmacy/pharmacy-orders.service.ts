@@ -4,6 +4,11 @@ import { AppError } from "../../utils/AppError.js";
 import { notificationService } from "../notification/notification.service.js";
 import type { SendNotificationInput } from "../notification/notification.types.js";
 import { ensureApprovedPharmacy } from "./pharmacy-access.service.js";
+import {
+  consumeOrderInventoryReservations,
+  ensureOrderInventoryReadyForFulfilment,
+  releaseOrderInventoryReservations,
+} from "./pharmacy-inventory-match.service.js";
 import type {
   PharmacyOrderListItem,
   PharmacyOrdersResponse,
@@ -12,11 +17,6 @@ import type {
   PharmacyOrderStatusUpdateInput,
   PharmacyOrderStatusUpdateTarget,
 } from "./pharmacy-orders.types.js";
-import {
-  consumeOrderInventoryReservations,
-  ensureOrderInventoryReadyForFulfilment,
-  releaseOrderInventoryReservations,
-} from "./pharmacy-inventory-match.service.js";
 
 export const pharmacyOrderListInclude = {
   patient: { select: { id: true, fullName: true } },
@@ -62,50 +62,14 @@ const allowedStatusTransitions: Record<PharmacyOrderStatus, PharmacyOrderStatusU
   CANCELLED: [],
 };
 
-const fulfilmentStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "ACCEPTED",
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  "COLLECTED",
-]);
+const fulfilmentStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["ACCEPTED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "COLLECTED"]);
+const medicineReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["OUT_FOR_DELIVERY", "DELIVERED", "COLLECTED"]);
+const exceptionStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["REJECTED", "DELAYED", "OUT_OF_STOCK", "CANCELLED"]);
+const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["PREPARING", "READY", "OUT_FOR_DELIVERY"]);
+const inventoryReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["REJECTED", "OUT_OF_STOCK", "CANCELLED"]);
+const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>(["DELIVERED", "COLLECTED"]);
 
-const medicineReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  "COLLECTED",
-]);
-
-const exceptionStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "REJECTED",
-  "DELAYED",
-  "OUT_OF_STOCK",
-  "CANCELLED",
-]);
-
-const inventoryReservationRequiredStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "PREPARING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-]);
-
-const inventoryReleaseStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "REJECTED",
-  "OUT_OF_STOCK",
-  "CANCELLED",
-]);
-
-const inventoryConsumeStatuses = new Set<PharmacyOrderStatusUpdateTarget>([
-  "DELIVERED",
-  "COLLECTED",
-]);
-
-const addDispensedMedicineToPatientStock = async (
-  tx: Prisma.TransactionClient,
-  patientId: string,
-  orderId: string,
-) => {
+const addDispensedMedicineToPatientStock = async (tx: Prisma.TransactionClient, patientId: string, orderId: string) => {
   const items = await tx.medicineOrderItem.findMany({
     where: { orderId, medicineId: { not: null }, dispensedQuantity: { gt: 0 } },
     select: { medicineId: true, dispensedQuantity: true, dispensedUnit: true },
@@ -131,10 +95,7 @@ const addDispensedMedicineToPatientStock = async (
     });
 
     if (medicine.isActive) {
-      await tx.medicineReminder.updateMany({
-        where: { medicineId: medicine.id },
-        data: { isActive: true },
-      });
+      await tx.medicineReminder.updateMany({ where: { medicineId: medicine.id }, data: { isActive: true } });
     }
   }
 };
@@ -149,10 +110,7 @@ type OrderPaymentReleaseState = {
 const isMedicineReleasePaymentSatisfied = (payment: OrderPaymentReleaseState) =>
   payment?.status === "PAID" || payment?.status === "NOT_REQUIRED";
 
-const ensureMedicineReleasePaymentSatisfied = (
-  status: PharmacyOrderStatusUpdateTarget,
-  payment: OrderPaymentReleaseState,
-) => {
+const ensureMedicineReleasePaymentSatisfied = (status: PharmacyOrderStatusUpdateTarget, payment: OrderPaymentReleaseState) => {
   if (!medicineReleaseStatuses.has(status)) return;
   if (isMedicineReleasePaymentSatisfied(payment)) return;
 
@@ -175,8 +133,7 @@ const ensureMedicineReleasePaymentSatisfied = (
   throw new AppError("Medicine cannot leave the pharmacy until the patient's prescription charge exemption is verified.", 409);
 };
 
-export const getAllowedPharmacyOrderStatuses = (status: PharmacyOrderStatus) =>
-  allowedStatusTransitions[status] || [];
+export const getAllowedPharmacyOrderStatuses = (status: PharmacyOrderStatus) => allowedStatusTransitions[status] || [];
 
 const getAllowedStatusesForPayment = (status: PharmacyOrderStatus, payment: OrderPaymentReleaseState) => {
   const allowed = getAllowedPharmacyOrderStatuses(status);
@@ -224,9 +181,7 @@ const getTimestampUpdate = (
   }
 };
 
-const getOrderNotificationContent = (
-  status: PharmacyOrderStatusUpdateTarget,
-): Pick<SendNotificationInput, "type" | "title" | "body" | "priority"> => {
+const getOrderNotificationContent = (status: PharmacyOrderStatusUpdateTarget): Pick<SendNotificationInput, "type" | "title" | "body" | "priority"> => {
   switch (status) {
     case "ACCEPTED":
       return { type: "ORDER_ACCEPTED", title: "Pharmacy order accepted", body: "Your pharmacy has accepted your medicine order.", priority: "NORMAL" };
@@ -248,6 +203,36 @@ const getOrderNotificationContent = (
       return { type: "ORDER_OUT_OF_STOCK", title: "Medicine currently unavailable", body: "Your pharmacy has reported that stock required for your order is currently unavailable.", priority: "HIGH" };
     case "CANCELLED":
       return { type: "ORDER_CANCELLED", title: "Pharmacy order cancelled", body: "Your pharmacy order has been cancelled. Open CareMate+ for details.", priority: "HIGH" };
+  }
+};
+
+const getCaregiverOrderNotificationContent = (
+  status: PharmacyOrderStatusUpdateTarget,
+  patientName: string,
+): Pick<SendNotificationInput, "type" | "title" | "body" | "priority"> => {
+  const base = getOrderNotificationContent(status);
+
+  switch (status) {
+    case "ACCEPTED":
+      return { ...base, title: "Patient pharmacy order accepted", body: `${patientName}'s pharmacy order has been accepted.` };
+    case "REJECTED":
+      return { ...base, title: "Patient pharmacy order declined", body: `${patientName}'s pharmacy order could not be accepted.` };
+    case "PREPARING":
+      return { ...base, title: "Patient medicine being prepared", body: `${patientName}'s medicine order is now being prepared.` };
+    case "READY":
+      return { ...base, title: "Patient medicine ready", body: `${patientName}'s medicine order is ready for the next fulfilment step.` };
+    case "OUT_FOR_DELIVERY":
+      return { ...base, title: "Patient medicine out for delivery", body: `${patientName}'s medicine order is out for delivery.` };
+    case "DELIVERED":
+      return { ...base, title: "Patient medicine delivered", body: `${patientName}'s medicine order has been marked as delivered.` };
+    case "COLLECTED":
+      return { ...base, title: "Patient medicine collected", body: `${patientName}'s medicine order has been marked as collected.` };
+    case "DELAYED":
+      return { ...base, title: "Patient pharmacy order delayed", body: `${patientName}'s pharmacy order has been delayed.` };
+    case "OUT_OF_STOCK":
+      return { ...base, title: "Patient medicine unavailable", body: `Stock required for ${patientName}'s pharmacy order is currently unavailable.` };
+    case "CANCELLED":
+      return { ...base, title: "Patient pharmacy order cancelled", body: `${patientName}'s pharmacy order has been cancelled.` };
   }
 };
 
@@ -280,6 +265,79 @@ const sendOrderStatusNotification = async ({
     });
   } catch (error) {
     console.warn(`Unable to notify patient about pharmacy order ${orderId}:`, error instanceof Error ? error.message : error);
+  }
+};
+
+const notifyLinkedCaregiversOfOrderStatus = async ({
+  patientId,
+  orderId,
+  orderNumber,
+  status,
+}: {
+  patientId: string;
+  orderId: string;
+  orderNumber: string | null;
+  status: PharmacyOrderStatusUpdateTarget;
+}) => {
+  try {
+    const [patient, relationships] = await Promise.all([
+      prisma.user.findFirst({
+        where: { id: patientId, role: "PATIENT" },
+        select: { id: true, fullName: true },
+      }),
+      prisma.patientCaregiverRelationship.findMany({
+        where: {
+          patientId,
+          status: "ACTIVE",
+          caregiver: { is: { role: "CAREGIVER", isEmailVerified: true, accountStatus: { in: ["ACTIVE", "APPROVED"] } } },
+        },
+        select: { id: true, caregiver: { select: { id: true, fullName: true } } },
+      }),
+    ]);
+
+    if (!patient || !relationships.length) return;
+
+    const content = getCaregiverOrderNotificationContent(status, patient.fullName);
+
+    await Promise.all(
+      relationships.map(async relationship => {
+        try {
+          const existingNotification = await prisma.userNotification.findFirst({
+            where: {
+              userId: relationship.caregiver.id,
+              type: content.type,
+              entityType: "CAREGIVER_MEDICINE_ORDER",
+              entityId: orderId,
+            },
+            select: { id: true },
+          });
+
+          if (existingNotification) return;
+
+          await notificationService.createAndSend({
+            userId: relationship.caregiver.id,
+            ...content,
+            entityType: "CAREGIVER_MEDICINE_ORDER",
+            entityId: orderId,
+            targetScreen: "CaregiverPharmacyOrders",
+            data: {
+              source: "CAREGIVER_PHARMACY_ORDER_STATUS",
+              recipientRole: "CAREGIVER",
+              caregiverRelationshipId: relationship.id,
+              patientId: patient.id,
+              patientName: patient.fullName,
+              orderId,
+              orderNumber,
+              status,
+            },
+          });
+        } catch (error) {
+          console.warn(`Unable to notify caregiver ${relationship.caregiver.id} about pharmacy order ${orderId}:`, error instanceof Error ? error.message : error);
+        }
+      }),
+    );
+  } catch (error) {
+    console.warn(`Unable to process caregiver notifications for pharmacy order ${orderId}:`, error instanceof Error ? error.message : error);
   }
 };
 
@@ -583,9 +641,7 @@ export const pharmacyOrdersService = {
         data: { fulfilmentAllowed: true },
       });
 
-      if (changed.count === 0) {
-        throw new AppError("Order verification changed elsewhere. Please refresh and try again.", 409);
-      }
+      if (changed.count === 0) throw new AppError("Order verification changed elsewhere. Please refresh and try again.", 409);
 
       await tx.patientPrescriptionSubmission.update({
         where: { id: order.patientSubmission!.id },
@@ -634,10 +690,7 @@ export const pharmacyOrdersService = {
     });
 
     if (!order) throw new AppError("Order not found for this pharmacy", 404);
-
-    if (order.status === input.status) {
-      throw new AppError(`Order is already ${input.status.toLowerCase().replace(/_/g, " ")}`, 409);
-    }
+    if (order.status === input.status) throw new AppError(`Order is already ${input.status.toLowerCase().replace(/_/g, " ")}`, 409);
 
     const allowed = getAllowedPharmacyOrderStatuses(order.status);
 
@@ -778,6 +831,13 @@ export const pharmacyOrdersService = {
       medicineName: order.medicineName,
       status: input.status,
       reason,
+    });
+
+    await notifyLinkedCaregiversOfOrderStatus({
+      patientId: order.patientId,
+      orderId,
+      orderNumber: order.orderNumber,
+      status: input.status,
     });
 
     return {

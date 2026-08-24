@@ -4,6 +4,17 @@ import { tokenStorage } from "./tokenStorage";
 export type NotificationPriority = "NORMAL" | "HIGH" | "CRITICAL";
 export type NotificationPushStatus = "PENDING" | "SENT" | "PARTIAL" | "FAILED" | "SKIPPED";
 
+export type NotificationData = Record<string, unknown> & {
+  source?: string | null;
+  recipientRole?: string | null;
+  senderRole?: string | null;
+  senderId?: string | null;
+  senderName?: string | null;
+  caregiverId?: string | null;
+  caregiverName?: string | null;
+  initiatorType?: string | null;
+};
+
 export type UserNotification = {
   id: string;
   type: string;
@@ -13,7 +24,7 @@ export type UserNotification = {
   entityType?: string | null;
   entityId?: string | null;
   targetScreen?: string | null;
-  data?: Record<string, unknown> | null;
+  data?: NotificationData | null;
   isRead: boolean;
   readAt?: string | null;
   pushStatus: NotificationPushStatus;
@@ -27,6 +38,12 @@ export type NotificationListData = {
   notifications: UserNotification[];
   unreadCount: number;
   pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export type CaregiverNotificationSender = {
+  role: "CAREGIVER";
+  id?: string;
+  name?: string;
 };
 
 type ApiResponse<T> = { success: boolean; message: string; data: T };
@@ -57,6 +74,32 @@ const readResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok || !result?.success) throw new Error(getErrorMessage(result));
   if (result.data === undefined || result.data === null) throw new Error("The server returned empty notification data.");
   return result.data as T;
+};
+
+const getText = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+export const getCaregiverNotificationSender = (notification: Pick<UserNotification, "targetScreen" | "data">): CaregiverNotificationSender | null => {
+  const data = notification.data;
+  if (!data) return null;
+
+  const recipientRole = getText(data.recipientRole);
+  if (recipientRole && recipientRole !== "PATIENT") return null;
+
+  const senderRole = getText(data.senderRole);
+  const initiatorType = getText(data.initiatorType);
+  const source = getText(data.source) || "";
+  const targetScreen = getText(notification.targetScreen) || "";
+
+  const caregiverTriggered = senderRole === "CAREGIVER" || initiatorType === "CAREGIVER" || source.startsWith("CAREGIVER_");
+  const patientFacing = recipientRole === "PATIENT" || targetScreen.startsWith("Patient") || targetScreen === "Consultations";
+
+  if (!caregiverTriggered || !patientFacing) return null;
+
+  return {
+    role: "CAREGIVER",
+    id: getText(data.senderId) || getText(data.caregiverId),
+    name: getText(data.senderName) || getText(data.caregiverName),
+  };
 };
 
 export const notificationApi = {

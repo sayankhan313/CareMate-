@@ -143,13 +143,17 @@ export const FCMInitializer = () => {
 
       const notificationId = typeof message.data?.notificationId === "string" ? message.data.notificationId : null;
 
-      if (notificationId) {
-        try {
-          await notificationApi.markNotificationRead(notificationId);
-          notificationEvents.emitChanged();
-        } catch (error) {
-          if (__DEV__) console.warn("Unable to mark opened notification as read:", error instanceof Error ? error.message : error);
-        }
+      if (!notificationId) {
+        if (__DEV__) console.warn("Blocked FCM deep link because notification ownership could not be verified.");
+        return;
+      }
+
+      try {
+        await notificationApi.markNotificationRead(notificationId);
+        notificationEvents.emitChanged();
+      } catch (error) {
+        if (__DEV__) console.warn("Blocked notification navigation because this notification does not belong to the current user:", error instanceof Error ? error.message : error);
+        return;
       }
 
       navigateFromMessage(message);

@@ -229,6 +229,11 @@ enum SafetyAlertStatus {
   RESOLVED
 }
 
+enum SafetyAlertDoctorEscalationSource {
+  INITIAL_SAFETY_RESPONSE
+  CAREGIVER_RETRY
+}
+
 enum ConsultationType {
   EMERGENCY
   MANUAL
@@ -243,6 +248,12 @@ enum ConsultationStatus {
   CANCELLED
 }
 
+enum ConsultationInitiatorType {
+  PATIENT
+  CAREGIVER
+  SAFETY_RESPONSE
+}
+
 enum MedicineSafetyLevel {
   STANDARD
   DOCTOR_REVIEW_RECOMMENDED
@@ -251,6 +262,23 @@ enum MedicineSafetyLevel {
 enum PatientDoctorAssignmentStatus {
   ACTIVE
   INACTIVE
+}
+
+enum PatientCaregiverRelationshipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  REVOKED
+}
+
+enum CaregiverObservationCategory {
+  GENERAL
+  ROUTINE
+  APPETITE
+  SLEEP
+  MOBILITY
+  MOOD
+  MEDICATION_SUPPORT
 }
 
 enum DoctorAssignmentType {
@@ -365,6 +393,7 @@ enum NotificationType {
   PRIMARY_DOCTOR_CHANGED
   MEDICINE_REMINDER_DUE
   MEDICINE_REMINDER_SNOOZED
+  MEDICINE_LOW_STOCK
   MISSED_DOSE_ALERT
   REPEATED_MISSED_DOSE
   NEW_MEDICINE_ORDER
@@ -385,6 +414,10 @@ enum NotificationType {
   REFILL_DOCTOR_VERIFICATION_REQUESTED
   REFILL_DOCTOR_VERIFICATION_CONFIRMED
   REFILL_DOCTOR_VERIFICATION_REJECTED
+  CAREGIVER_LINK_REQUESTED
+  CAREGIVER_LINK_APPROVED
+  CAREGIVER_LINK_REJECTED
+  CAREGIVER_LINK_REVOKED
 }
 
 model User {
@@ -439,13 +472,20 @@ model User {
   pharmacyExemptionClaims                  PrescriptionExemptionClaim[]       @relation("PharmacyExemptionClaims")
   pharmacyVerifiedExemptionClaims          PrescriptionExemptionClaim[]       @relation("PharmacyVerifiedExemptionClaims")
 
-  patientSafetyAlerts SafetyAlert[] @relation("PatientSafetyAlerts")
-  doctorSafetyAlerts  SafetyAlert[] @relation("DoctorSafetyAlerts")
+  patientSafetyAlerts             SafetyAlert[]                 @relation("PatientSafetyAlerts")
+  doctorSafetyAlerts              SafetyAlert[]                 @relation("DoctorSafetyAlerts")
+  safetyAlertDoctorEscalations    SafetyAlertDoctorEscalation[] @relation("SafetyAlertEscalationDoctor")
+  triggeredSafetyAlertEscalations SafetyAlertDoctorEscalation[] @relation("SafetyAlertEscalationTriggeredBy")
 
-  patientConsultations     Consultation[]            @relation("PatientConsultations")
-  doctorConsultations      Consultation[]            @relation("DoctorConsultations")
-  patientDoctorAssignments PatientDoctorAssignment[] @relation("PatientDoctorAssignments")
-  doctorPatientAssignments PatientDoctorAssignment[] @relation("DoctorPatientAssignments")
+  patientConsultations          Consultation[]                 @relation("PatientConsultations")
+  doctorConsultations           Consultation[]                 @relation("DoctorConsultations")
+  initiatedConsultations        Consultation[]                 @relation("ConsultationInitiator")
+  patientDoctorAssignments      PatientDoctorAssignment[]      @relation("PatientDoctorAssignments")
+  doctorPatientAssignments      PatientDoctorAssignment[]      @relation("DoctorPatientAssignments")
+  patientCaregiverRelationships PatientCaregiverRelationship[] @relation("PatientCaregiverRelationshipsAsPatient")
+  caregiverPatientRelationships PatientCaregiverRelationship[] @relation("PatientCaregiverRelationshipsAsCaregiver")
+  patientCaregiverObservations  CaregiverObservation[]         @relation("PatientCaregiverObservations")
+  caregiverObservations         CaregiverObservation[]         @relation("CaregiverObservations")
 
   medicineReviewAssignments MedicineReminder[] @relation("MedicineReviewDoctor")
   medicineReviewDecisions   MedicineReminder[] @relation("MedicineReviewedByDoctor")
@@ -780,6 +820,48 @@ model PatientDoctorAssignment {
   @@index([patientId, status])
   @@index([doctorId, status])
   @@index([patientId, assignmentType])
+}
+
+model PatientCaregiverRelationship {
+  id          String                             @id @default(uuid())
+  patientId   String
+  caregiverId String
+  status      PatientCaregiverRelationshipStatus @default(PENDING)
+  requestedAt DateTime                           @default(now())
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime                           @default(now())
+  updatedAt   DateTime                           @updatedAt
+
+  patient   User @relation("PatientCaregiverRelationshipsAsPatient", fields: [patientId], references: [id], onDelete: Cascade)
+  caregiver User @relation("PatientCaregiverRelationshipsAsCaregiver", fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, caregiverId])
+  @@index([patientId])
+  @@index([caregiverId])
+  @@index([patientId, status])
+  @@index([caregiverId, status])
+}
+
+model CaregiverObservation {
+  id          String                       @id @default(uuid())
+  patientId   String
+  caregiverId String
+  category    CaregiverObservationCategory @default(GENERAL)
+  observation String
+  observedAt  DateTime                     @default(now())
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
+
+  patient   User @relation("PatientCaregiverObservations", fields: [patientId], references: [id], onDelete: Cascade)
+  caregiver User @relation("CaregiverObservations", fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([caregiverId])
+  @@index([patientId, caregiverId])
+  @@index([observedAt])
+  @@index([createdAt])
 }
 
 model Prescription {
@@ -1374,10 +1456,11 @@ model SafetyAlert {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  patient      User                 @relation("PatientSafetyAlerts", fields: [patientId], references: [id], onDelete: Cascade)
-  doctor       User?                @relation("DoctorSafetyAlerts", fields: [doctorId], references: [id], onDelete: SetNull)
-  vitalReading PatientVitalReading? @relation(fields: [vitalReadingId], references: [id], onDelete: SetNull)
-  consultation Consultation?
+  patient           User                          @relation("PatientSafetyAlerts", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor            User?                         @relation("DoctorSafetyAlerts", fields: [doctorId], references: [id], onDelete: SetNull)
+  vitalReading      PatientVitalReading?          @relation(fields: [vitalReadingId], references: [id], onDelete: SetNull)
+  consultation      Consultation?
+  doctorEscalations SafetyAlertDoctorEscalation[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -1386,14 +1469,38 @@ model SafetyAlert {
   @@index([createdAt])
 }
 
-model Consultation {
-  id            String  @id @default(uuid())
-  patientId     String
-  doctorId      String?
-  safetyAlertId String? @unique
+model SafetyAlertDoctorEscalation {
+  id                String                            @id @default(uuid())
+  safetyAlertId     String
+  doctorId          String?
+  triggeredByUserId String?
+  source            SafetyAlertDoctorEscalationSource
+  sequenceNumber    Int
+  notifiedAt        DateTime?
+  createdAt         DateTime                          @default(now())
 
-  type   ConsultationType
-  status ConsultationStatus @default(PENDING)
+  safetyAlert SafetyAlert @relation(fields: [safetyAlertId], references: [id], onDelete: Cascade)
+  doctor      User?       @relation("SafetyAlertEscalationDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
+  triggeredBy User?       @relation("SafetyAlertEscalationTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([safetyAlertId, doctorId])
+  @@unique([safetyAlertId, sequenceNumber])
+  @@index([safetyAlertId])
+  @@index([doctorId])
+  @@index([triggeredByUserId])
+  @@index([createdAt])
+}
+
+model Consultation {
+  id                String  @id @default(uuid())
+  patientId         String
+  doctorId          String?
+  safetyAlertId     String? @unique
+  initiatedByUserId String?
+
+  type          ConsultationType
+  status        ConsultationStatus         @default(PENDING)
+  initiatorType ConsultationInitiatorType?
 
   reason        String
   preferredAt   DateTime?
@@ -1414,10 +1521,13 @@ model Consultation {
 
   patient     User         @relation("PatientConsultations", fields: [patientId], references: [id], onDelete: Cascade)
   doctor      User?        @relation("DoctorConsultations", fields: [doctorId], references: [id], onDelete: SetNull)
+  initiatedBy User?        @relation("ConsultationInitiator", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
   safetyAlert SafetyAlert? @relation(fields: [safetyAlertId], references: [id], onDelete: SetNull)
 
   @@index([patientId])
   @@index([doctorId])
+  @@index([initiatedByUserId])
+  @@index([initiatorType])
   @@index([status])
   @@index([type])
   @@index([createdAt])

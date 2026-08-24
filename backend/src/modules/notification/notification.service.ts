@@ -19,6 +19,14 @@ const INVALID_TOKEN_ERROR_CODES = new Set([
   "messaging/registration-token-not-registered",
 ]);
 
+const GLOBAL_CAREGIVER_NOTIFICATION_TYPES = new Set([
+  "SYSTEM_TEST",
+  "ACCOUNT_APPROVED",
+  "ACCOUNT_REJECTED",
+  "ACCOUNT_SUSPENDED",
+  "ACCOUNT_REACTIVATED",
+]);
+
 const notificationSelect = {
   id: true,
   type: true,
@@ -60,6 +68,54 @@ const sanitizeJson = (value?: Record<string, unknown>): Prisma.InputJsonValue | 
   }
 };
 
+const getJsonText = (data: Prisma.JsonValue | null, key: string) => {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+  const value = (data as Record<string, Prisma.JsonValue>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+};
+
+const cleanupCaregiverNotifications = async (userId: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user || user.role !== "CAREGIVER") return;
+
+  const [relationships, notifications] = await Promise.all([
+    prisma.patientCaregiverRelationship.findMany({
+      where: { caregiverId: userId, status: { in: ["ACTIVE", "REJECTED"] } },
+      select: { id: true, patientId: true, status: true },
+    }),
+    prisma.userNotification.findMany({
+      where: { userId },
+      select: { id: true, type: true, entityId: true, data: true },
+    }),
+  ]);
+
+  const activePatientIds = new Set(relationships.filter(item => item.status === "ACTIVE").map(item => item.patientId));
+  const rejectedRelationshipIds = new Set(relationships.filter(item => item.status === "REJECTED").map(item => item.id));
+
+  const staleNotificationIds = notifications
+    .filter(notification => {
+      if (GLOBAL_CAREGIVER_NOTIFICATION_TYPES.has(notification.type)) return false;
+
+      if (notification.type === "CAREGIVER_LINK_REJECTED") {
+        return !notification.entityId || !rejectedRelationshipIds.has(notification.entityId);
+      }
+
+      if (notification.type === "CAREGIVER_LINK_REVOKED") return true;
+
+      const patientId = getJsonText(notification.data, "patientId");
+      if (!patientId) return true;
+
+      return !activePatientIds.has(patientId);
+    })
+    .map(notification => notification.id);
+
+  if (staleNotificationIds.length === 0) return;
+
+  await prisma.userNotification.deleteMany({
+    where: { id: { in: staleNotificationIds }, userId },
+  });
+};
+
 const toFcmData = (notificationId: string, input: SendNotificationInput) => {
   const result: Record<string, string> = {
     notificationId,
@@ -92,11 +148,7 @@ const toFcmData = (notificationId: string, input: SendNotificationInput) => {
 const getPushPermission = async (input: SendNotificationInput) => {
   if (input.forcePush) return { allowed: true, reason: null };
 
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: { role: true },
-  });
-
+  const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
   if (!user) throw new AppError("Notification recipient was not found.", 404);
   if (user.role !== "PATIENT") return { allowed: true, reason: null };
 
@@ -106,9 +158,7 @@ const getPushPermission = async (input: SendNotificationInput) => {
     update: {},
   });
 
-  if (!preferences.pushNotifications) {
-    return { allowed: false, reason: "PUSH_NOTIFICATIONS_DISABLED" };
-  }
+  if (!preferences.pushNotifications) return { allowed: false, reason: "PUSH_NOTIFICATIONS_DISABLED" };
 
   if (input.patientPreferenceKey && !preferences[input.patientPreferenceKey]) {
     return { allowed: false, reason: `PREFERENCE_DISABLED:${input.patientPreferenceKey}` };
@@ -117,13 +167,8 @@ const getPushPermission = async (input: SendNotificationInput) => {
   return { allowed: true, reason: null };
 };
 
-
 const getPushDisplayContent = async (input: SendNotificationInput) => {
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: { role: true },
-  });
-
+  const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
   if (!user) throw new AppError("Notification recipient was not found.", 404);
   if (user.role !== "PATIENT") return { title: input.title, body: input.body };
 
@@ -136,12 +181,8 @@ const getPushDisplayContent = async (input: SendNotificationInput) => {
 
   if (!privacy.hideSensitiveNotificationContent) return { title: input.title, body: input.body };
 
-  return {
-    title: "CareMate+ update",
-    body: "Open CareMate+ to view this notification.",
-  };
+  return { title: "CareMate+ update", body: "Open CareMate+ to view this notification." };
 };
-
 
 const REMINDER_NOTIFICATION_TYPES = new Set([
   "MEDICINE_REMINDER_DUE",
@@ -156,14 +197,12 @@ const getNotificationPresentation = async (input: SendNotificationInput) => {
   const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
   if (user?.role !== "PATIENT") return { soundEnabled: true, vibrationEnabled: true };
 
-  const preferences = await prisma.patientReminderPreference.upsert({
+  return prisma.patientReminderPreference.upsert({
     where: { patientId: input.userId },
     create: { patientId: input.userId },
     update: {},
     select: { soundEnabled: true, vibrationEnabled: true },
   });
-
-  return preferences;
 };
 
 const updateFailedBatch = async (notificationId: string, reason: string) => {
@@ -179,11 +218,7 @@ const updateFailedBatch = async (notificationId: string, reason: string) => {
   ]);
 };
 
-const saveBatchResult = async (
-  notificationId: string,
-  tokens: { id: string; token: string }[],
-  response: BatchResponse,
-) => {
+const saveBatchResult = async (notificationId: string, tokens: { id: string; token: string }[], response: BatchResponse) => {
   const now = new Date();
   const invalidTokenIds: string[] = [];
 
@@ -194,17 +229,8 @@ const saveBatchResult = async (
 
       if (item.success) {
         await prisma.notificationDelivery.update({
-          where: {
-            notificationId_deviceTokenId: {
-              notificationId,
-              deviceTokenId: deviceToken.id,
-            },
-          },
-          data: {
-            status: "SENT",
-            firebaseMessageId: item.messageId,
-            sentAt: now,
-          },
+          where: { notificationId_deviceTokenId: { notificationId, deviceTokenId: deviceToken.id } },
+          data: { status: "SENT", firebaseMessageId: item.messageId, sentAt: now },
         });
         return;
       }
@@ -215,26 +241,14 @@ const saveBatchResult = async (
       if (INVALID_TOKEN_ERROR_CODES.has(failureCode)) invalidTokenIds.push(deviceToken.id);
 
       await prisma.notificationDelivery.update({
-        where: {
-          notificationId_deviceTokenId: {
-            notificationId,
-            deviceTokenId: deviceToken.id,
-          },
-        },
-        data: {
-          status: "FAILED",
-          failureCode,
-          failureReason,
-        },
+        where: { notificationId_deviceTokenId: { notificationId, deviceTokenId: deviceToken.id } },
+        data: { status: "FAILED", failureCode, failureReason },
       });
     }),
   );
 
   if (invalidTokenIds.length > 0) {
-    await prisma.deviceToken.updateMany({
-      where: { id: { in: invalidTokenIds } },
-      data: { isActive: false },
-    });
+    await prisma.deviceToken.updateMany({ where: { id: { in: invalidTokenIds } }, data: { isActive: false } });
   }
 
   const pushStatus = response.successCount === tokens.length ? "SENT" : response.successCount > 0 ? "PARTIAL" : "FAILED";
@@ -242,15 +256,10 @@ const saveBatchResult = async (
 
   return prisma.userNotification.update({
     where: { id: notificationId },
-    data: {
-      pushStatus,
-      sentAt: response.successCount > 0 ? now : null,
-      failureReason,
-    },
+    data: { pushStatus, sentAt: response.successCount > 0 ? now : null, failureReason },
     select: notificationSelect,
   });
 };
-
 
 const notificationPreferenceSelect = {
   medicineReminders: true,
@@ -305,7 +314,6 @@ const getOrCreatePatientPreferences = async (patientId: string) => {
 };
 
 export const notificationService = {
-
   async getPatientPreferences(patientId: string) {
     return getOrCreatePatientPreferences(patientId);
   },
@@ -386,10 +394,13 @@ export const notificationService = {
   },
 
   async listNotifications(userId: string, input: NotificationListInput) {
+    await cleanupCaregiverNotifications(userId);
+
     const where = {
       userId,
       ...(input.unreadOnly ? { isRead: false } : {}),
     };
+
     const skip = (input.page - 1) * input.limit;
 
     const [notifications, total, unreadCount] = await prisma.$transaction([
@@ -417,11 +428,14 @@ export const notificationService = {
   },
 
   async getUnreadCount(userId: string) {
+    await cleanupCaregiverNotifications(userId);
     const unreadCount = await prisma.userNotification.count({ where: { userId, isRead: false } });
     return { unreadCount };
   },
 
   async markNotificationRead(userId: string, notificationId: string) {
+    await cleanupCaregiverNotifications(userId);
+
     const result = await prisma.userNotification.updateMany({
       where: { id: notificationId, userId },
       data: { isRead: true, readAt: new Date() },
@@ -436,6 +450,8 @@ export const notificationService = {
   },
 
   async markAllNotificationsRead(userId: string) {
+    await cleanupCaregiverNotifications(userId);
+
     const result = await prisma.userNotification.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true, readAt: new Date() },
@@ -446,6 +462,7 @@ export const notificationService = {
 
   async createAndSend(input: SendNotificationInput) {
     const permission = await getPushPermission(input);
+
     const notification = await prisma.userNotification.create({
       data: {
         userId: input.userId,
@@ -481,10 +498,7 @@ export const notificationService = {
     }
 
     await prisma.notificationDelivery.createMany({
-      data: tokens.map(token => ({
-        notificationId: notification.id,
-        deviceTokenId: token.id,
-      })),
+      data: tokens.map(token => ({ notificationId: notification.id, deviceTokenId: token.id })),
     });
 
     try {
@@ -493,10 +507,7 @@ export const notificationService = {
 
       const response = await firebaseMessaging.sendEachForMulticast({
         tokens: tokens.map(token => token.token),
-        notification: {
-          title: pushContent.title,
-          body: pushContent.body,
-        },
+        notification: { title: pushContent.title, body: pushContent.body },
         data: toFcmData(notification.id, input),
         android: {
           priority: input.priority === "NORMAL" || !input.priority ? "normal" : "high",
@@ -508,9 +519,7 @@ export const notificationService = {
         },
         apns: {
           payload: {
-            aps: {
-              sound: presentation.soundEnabled ? "default" : undefined,
-            },
+            aps: { sound: presentation.soundEnabled ? "default" : undefined },
           },
         },
       });
