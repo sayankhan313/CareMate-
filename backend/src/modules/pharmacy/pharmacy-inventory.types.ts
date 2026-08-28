@@ -4,6 +4,8 @@ export type PharmacyInventoryItem = {
   strength: string | null;
   form: string | null;
   stockUnit: string;
+  packSize: number | null;
+  contentUnit: string | null;
   unitPricePence: number;
   quantityInStock: number;
   reservedQuantity: number;
@@ -38,6 +40,8 @@ export type CreatePharmacyInventoryItemInput = {
   strength?: string;
   form?: string;
   stockUnit?: string;
+  packSize?: number;
+  contentUnit?: string;
   unitPricePence?: number;
   quantityInStock?: number;
   lowStockThreshold?: number;
@@ -48,6 +52,8 @@ export type UpdatePharmacyInventoryItemInput = {
   strength?: string | null;
   form?: string | null;
   stockUnit?: string;
+  packSize?: number;
+  contentUnit?: string | null;
   unitPricePence?: number;
   quantityInStock?: number;
   lowStockThreshold?: number;

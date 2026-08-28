@@ -766,6 +766,8 @@ model PharmacyInventoryItem {
   strength          String?
   form              String?
   stockUnit         String   @default("pack")
+  packSize          Int?
+  contentUnit       String?
   unitPricePence    Int      @default(0)
   quantityInStock   Int      @default(0)
   reservedQuantity  Int      @default(0)

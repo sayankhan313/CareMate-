@@ -265,6 +265,8 @@ const buildCandidate = (
     strength: string | null;
     form: string | null;
     stockUnit: string;
+    packSize: number | null;
+    contentUnit: string | null;
     unitPricePence: number;
     quantityInStock: number;
     reservedQuantity: number;
@@ -344,7 +346,10 @@ const buildCandidate = (
     strengthMatch,
     formMatch,
     matchQuality,
-    packageReference: null,
+    packageReference:
+      inventory.packSize && inventory.packSize > 0 && inventory.contentUnit
+        ? { packageUnit: inventory.stockUnit, packSize: inventory.packSize, contentUnit: inventory.contentUnit }
+        : null,
     reasons,
     score,
   };
@@ -623,6 +628,8 @@ export const pharmacyInventoryMatchService = {
         strength: true,
         form: true,
         stockUnit: true,
+        packSize: true,
+        contentUnit: true,
         unitPricePence: true,
         quantityInStock: true,
         reservedQuantity: true,
@@ -655,6 +662,8 @@ export const pharmacyInventoryMatchService = {
 
     const candidatesWithPackaging = await Promise.all(
       candidates.map(async candidate => {
+        if (candidate.packageReference) return candidate;
+
         if (!candidate.strength) {
           return { ...candidate, packageReference: null };
         }
@@ -764,6 +773,8 @@ export const pharmacyInventoryMatchService = {
             strength: true,
             form: true,
             stockUnit: true,
+            packSize: true,
+            contentUnit: true,
             unitPricePence: true,
             quantityInStock: true,
             reservedQuantity: true,
@@ -801,21 +812,43 @@ export const pharmacyInventoryMatchService = {
           throw new AppError("Selected stock form conflicts with the detected/prescribed medicine form.", 409);
         }
 
-        if (!inventory.strength) {
-          throw new AppError("Inventory strength is required to calculate pack contents.", 409);
-        }
+        let dispensing: {
+          medicineName: string;
+          strength: string;
+          packageUnit: string;
+          packages: number;
+          packSize: number;
+          contentUnit: string;
+          dispensedQuantity: number;
+        };
 
-        const dispensing = await pharmacyPackReferenceService.calculateDispensedQuantity({
-          medicineName: inventory.medicineName,
-          strength: inventory.strength,
-          packageQuantity: input.quantity,
-        });
+        if (inventory.packSize && inventory.packSize > 0 && inventory.contentUnit) {
+          dispensing = {
+            medicineName: inventory.medicineName,
+            strength: inventory.strength || sourceStrength || "Not recorded",
+            packageUnit: inventory.stockUnit,
+            packages: input.quantity,
+            packSize: inventory.packSize,
+            contentUnit: inventory.contentUnit,
+            dispensedQuantity: input.quantity * inventory.packSize,
+          };
+        } else {
+          if (!inventory.strength) {
+            throw new AppError("Add the inventory pack size and content unit before matching this medicine.", 409);
+          }
 
-        if (normalizePackageUnit(inventory.stockUnit) !== normalizePackageUnit(dispensing.packageUnit)) {
-          throw new AppError(
-            `Inventory stock unit is '${inventory.stockUnit}', but this medicine reference uses '${dispensing.packageUnit}'. Update the inventory stock unit before continuing.`,
-            409,
-          );
+          dispensing = await pharmacyPackReferenceService.calculateDispensedQuantity({
+            medicineName: inventory.medicineName,
+            strength: inventory.strength,
+            packageQuantity: input.quantity,
+          });
+
+          if (normalizePackageUnit(inventory.stockUnit) !== normalizePackageUnit(dispensing.packageUnit)) {
+            throw new AppError(
+              `Inventory stock unit is '${inventory.stockUnit}', but this medicine reference uses '${dispensing.packageUnit}'. Update the inventory stock unit before continuing.`,
+              409,
+            );
+          }
         }
 
         const oldReservationIsActive =
@@ -912,6 +945,8 @@ export const pharmacyInventoryMatchService = {
                 strength: true,
                 form: true,
                 stockUnit: true,
+                packSize: true,
+                contentUnit: true,
                 unitPricePence: true,
                 quantityInStock: true,
                 reservedQuantity: true,
