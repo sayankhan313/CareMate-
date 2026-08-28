@@ -44,6 +44,8 @@ type InventoryForm = {
   strength: string;
   form: string;
   stockUnit: string;
+  packSize: string;
+  contentUnit: string;
   unitPrice: string;
   quantityInStock: string;
   lowStockThreshold: string;
@@ -92,6 +94,8 @@ const EMPTY_FORM: InventoryForm = {
   strength: "",
   form: "",
   stockUnit: "pack",
+  packSize: "",
+  contentUnit: "",
   unitPrice: "",
   quantityInStock: "0",
   lowStockThreshold: "5",
@@ -231,6 +235,8 @@ export const PharmacyInventoryScreen = () => {
       stockUnit: STOCK_UNITS.includes(normalizeStockUnit(item.stockUnit) as (typeof STOCK_UNITS)[number])
         ? normalizeStockUnit(item.stockUnit)
         : "pack",
+      packSize: item.packSize ? String(item.packSize) : "",
+      contentUnit: item.contentUnit || "",
       unitPrice:
         item.unitPricePence > 0
           ? (item.unitPricePence / 100).toFixed(2)
@@ -279,6 +285,19 @@ export const PharmacyInventoryScreen = () => {
       return;
     }
 
+    const packSize = parseStockNumber(form.packSize);
+    const contentUnit = form.contentUnit.trim().toLowerCase();
+
+    if (packSize === null || packSize < 1) {
+      Alert.alert("Invalid pack size", "Enter how many medicine units are contained in one pharmacy stock unit, for example 28.");
+      return;
+    }
+
+    if (!contentUnit) {
+      Alert.alert("Content unit required", "Enter the unit inside the package, for example tablet, capsule or ml.");
+      return;
+    }
+
     const unitPricePence = parsePricePence(form.unitPrice);
 
     if (unitPricePence === null) {
@@ -316,6 +335,8 @@ export const PharmacyInventoryScreen = () => {
         strength,
         form: form.form.trim() || undefined,
         stockUnit,
+        packSize,
+        contentUnit,
         unitPricePence,
         quantityInStock,
         lowStockThreshold,
@@ -868,6 +889,45 @@ export const PharmacyInventoryScreen = () => {
                 </View>
               </View>
 
+              <View style={styles.packPanel}>
+                <View style={styles.packPanelHeader}>
+                  <PackagePlus size={19} color={PRIMARY_DARK} strokeWidth={2.5} />
+                  <View style={styles.packPanelText}>
+                    <Text style={styles.packPanelTitle}>Pack contents</Text>
+                    <Text style={styles.packPanelSubtitle}>Define what one {form.stockUnit.trim() || "stock unit"} contains.</Text>
+                  </View>
+                </View>
+
+                <View style={styles.formRow}>
+                  <View style={styles.formHalf}>
+                    <FormField
+                      label="Pack size"
+                      value={form.packSize}
+                      placeholder="e.g. 28"
+                      keyboardType="number-pad"
+                      onChangeText={packSize => setForm(current => ({ ...current, packSize: packSize.replace(/[^0-9]/g, "") }))}
+                    />
+                  </View>
+
+                  <View style={styles.formGap} />
+
+                  <View style={styles.formHalf}>
+                    <FormField
+                      label="Content unit"
+                      value={form.contentUnit}
+                      placeholder="e.g. tablet"
+                      onChangeText={contentUnit => setForm(current => ({ ...current, contentUnit }))}
+                    />
+                  </View>
+                </View>
+
+                {parseStockNumber(form.packSize) && form.contentUnit.trim() ? (
+                  <Text style={styles.packExample}>
+                    1 {form.stockUnit.trim() || "unit"} = {parseStockNumber(form.packSize)} {pluralUnit(form.contentUnit.trim().toLowerCase(), parseStockNumber(form.packSize) || 1)}
+                  </Text>
+                ) : null}
+              </View>
+
               <View style={styles.pricePanel}>
                 <View style={styles.pricePanelIcon}>
                   <Banknote
@@ -1090,6 +1150,15 @@ const InventoryCard = ({
           </Text>
         </View>
       </View>
+
+      {item.packSize && item.contentUnit ? (
+        <View style={styles.packSummary}>
+          <PackagePlus size={15} color={BLUE_DARK} strokeWidth={2.4} />
+          <Text style={styles.packSummaryText}>
+            1 {item.stockUnit} = {item.packSize} {pluralUnit(item.contentUnit, item.packSize)}
+          </Text>
+        </View>
+      ) : null}
 
       {item.isActive ? (
         <>
@@ -1683,6 +1752,24 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+  packSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: BLUE_LIGHT,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+
+  packSummaryText: {
+    flex: 1,
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+    marginLeft: 7,
+  },
+
   progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1875,6 +1962,45 @@ const styles = StyleSheet.create({
 
   stockUnitChipTextSelected: {
     color: PRIMARY_DARK,
+  },
+
+  packPanel: {
+    backgroundColor: BLUE_LIGHT,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 12,
+  },
+
+  packPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  packPanelText: {
+    flex: 1,
+    marginLeft: 9,
+  },
+
+  packPanelTitle: {
+    color: BLUE_DARK,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  packPanelSubtitle: {
+    color: MUTED,
+    fontSize: 9,
+    lineHeight: 14,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  packExample: {
+    color: BLUE_DARK,
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: -2,
   },
 
   pricePanel: {
