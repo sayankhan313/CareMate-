@@ -12,6 +12,7 @@ import { doctorAssignmentController } from "./doctor-assignment.controller.js";
 import { medicineController } from "./medicine.controller.js";
 import { medicinePackReferenceController } from "./medicine-pack-reference.controller.js";
 import { medicineReferenceController } from "./medicine-reference.controller.js";
+import { patientCareDiaryController } from "./patient-care-diary.controller.js";
 import { patientCaregiverController } from "./patient-caregiver.controller.js";
 import { patientOrdersController } from "./patient-orders.controller.js";
 import { patientPaymentController } from "./patient-payment.controller.js";
@@ -33,6 +34,12 @@ router.get("/dashboard", dashboardController.getDashboard);
 
 router.get("/profile", profileController.getProfile);
 router.patch("/profile", profileController.updateProfile);
+
+router.post("/care-diary", patientCareDiaryController.createEntry);
+router.get("/care-diary", patientCareDiaryController.listEntries);
+router.get("/care-diary/:entryId", patientCareDiaryController.getEntry);
+router.patch("/care-diary/:entryId", patientCareDiaryController.updateEntry);
+router.delete("/care-diary/:entryId", patientCareDiaryController.deleteEntry);
 
 router.get("/caregiver-links", patientCaregiverController.listRelationships);
 router.patch("/caregiver-links/:relationshipId/approve", patientCaregiverController.approveRelationship);
