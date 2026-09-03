@@ -168,6 +168,22 @@ export type DoctorPatientNote = {
   updatedAt: string;
 };
 
+export type DoctorPatientCareDiaryEntry = {
+  id: string;
+  title: string;
+  note: string;
+  mood: string | null;
+  symptoms: string | null;
+  entryDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DoctorPatientCareDiaryData = {
+  count: number;
+  entries: DoctorPatientCareDiaryEntry[];
+};
+
 export type DoctorPatientDetailData = {
   assignment: {
     id: string;
@@ -236,5 +252,18 @@ export const doctorPatientsApi = {
     if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
 
     return result.data as DoctorPatientDetailData;
+  },
+
+  async getPatientCareDiary(patientId: string) {
+    const response = await fetch(`${API_BASE_URL}/doctor/patients/${patientId}/care-diary`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+
+    const result: ApiResponse<DoctorPatientCareDiaryData> | any = await response.json();
+
+    if (!response.ok || !result.success) throw new Error(getErrorMessage(result));
+
+    return result.data as DoctorPatientCareDiaryData;
   },
 };

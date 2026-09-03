@@ -22,6 +22,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  BookHeart,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -50,6 +51,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import {
   doctorPatientsApi,
+  type DoctorPatientCareDiaryEntry,
   type DoctorPatientDetailData,
   type DoctorPatientDoseLog,
   type DoctorPatientMedicine,
@@ -70,46 +72,31 @@ const TEXT = "#111936";
 const MUTED = "#7A8194";
 const SOFT_PANEL = "#F7F9FF";
 const DIVIDER = "#E4E8F2";
-
 const DOCTOR_PRIMARY = "#0F766E";
 const DOCTOR_SECONDARY = "#14B8A6";
 const DOCTOR_DARK = "#134E4A";
 const DOCTOR_LIGHT = "#E6FFFA";
-
 const SUCCESS = "#42B883";
 const SUCCESS_LIGHT = "#EAF8F2";
 const SUCCESS_DARK = "#167A58";
-
 const WARNING = "#F6A545";
 const WARNING_LIGHT = "#FFF3E2";
 const WARNING_DARK = "#A85A13";
-
 const DANGER = "#EF4D56";
 const DANGER_LIGHT = "#FFEDEE";
 const DANGER_DARK = "#B42318";
-
 const MAX_NOTE_LENGTH = 2000;
 
 const elevate = (level: 1 | 2 | 3 = 2) => {
   const elevation = level === 1 ? 2 : level === 2 ? 4 : 7;
-
-  return {
-    elevation,
-    shadowColor: "#172033",
-    shadowOffset: { width: 0, height: level === 1 ? 2 : 4 },
-    shadowOpacity: level === 1 ? 0.06 : 0.1,
-    shadowRadius: level === 1 ? 4 : 9,
-  };
+  return { elevation, shadowColor: "#172033", shadowOffset: { width: 0, height: level === 1 ? 2 : 4 }, shadowOpacity: level === 1 ? 0.06 : 0.1, shadowRadius: level === 1 ? 4 : 9 };
 };
 
 const getInitials = (name?: string | null) => {
   if (!name) return "P";
-
   const parts = name.trim().split(" ").filter(Boolean);
-
   if (parts.length === 0) return "P";
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
 };
 
@@ -117,10 +104,7 @@ const getAgeText = (dateOfBirth?: string | null) => {
   if (!dateOfBirth) return "Age not set";
 
   const dateMatch = dateOfBirth.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-
-  const birthDate = dateMatch
-    ? new Date(Number(dateMatch[3]), Number(dateMatch[2]) - 1, Number(dateMatch[1]))
-    : new Date(dateOfBirth);
+  const birthDate = dateMatch ? new Date(Number(dateMatch[3]), Number(dateMatch[2]) - 1, Number(dateMatch[1])) : new Date(dateOfBirth);
 
   if (Number.isNaN(birthDate.getTime())) return dateOfBirth;
 
@@ -129,7 +113,6 @@ const getAgeText = (dateOfBirth?: string | null) => {
   const monthDiff = today.getMonth() - birthDate.getMonth();
 
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
-
   return age >= 0 ? `${age} years` : dateOfBirth;
 };
 
@@ -165,39 +148,10 @@ const formatStatus = (value?: string | null) => {
 };
 
 const getVitalTone = (status?: string | null) => {
-  if (status === "CRITICAL") {
-    return {
-      background: DANGER_LIGHT,
-      text: DANGER_DARK,
-      icon: DANGER,
-      label: "Critical",
-    };
-  }
-
-  if (status === "WARNING") {
-    return {
-      background: WARNING_LIGHT,
-      text: WARNING_DARK,
-      icon: WARNING,
-      label: "Warning",
-    };
-  }
-
-  if (status === "STABLE") {
-    return {
-      background: SUCCESS_LIGHT,
-      text: SUCCESS_DARK,
-      icon: SUCCESS,
-      label: "Stable",
-    };
-  }
-
-  return {
-    background: DOCTOR_LIGHT,
-    text: DOCTOR_DARK,
-    icon: DOCTOR_PRIMARY,
-    label: "No vitals",
-  };
+  if (status === "CRITICAL") return { background: DANGER_LIGHT, text: DANGER_DARK, icon: DANGER, label: "Critical" };
+  if (status === "WARNING") return { background: WARNING_LIGHT, text: WARNING_DARK, icon: WARNING, label: "Warning" };
+  if (status === "STABLE") return { background: SUCCESS_LIGHT, text: SUCCESS_DARK, icon: SUCCESS, label: "Stable" };
+  return { background: DOCTOR_LIGHT, text: DOCTOR_DARK, icon: DOCTOR_PRIMARY, label: "No vitals" };
 };
 
 const getHeroGradient = (status?: string | null): [string, string] => {
@@ -215,102 +169,36 @@ const getVitalsCardBackground = (status?: string | null) => {
 };
 
 const getDoseTone = (status?: string | null) => {
-  if (status === "TAKEN") {
-    return {
-      background: SUCCESS_LIGHT,
-      text: SUCCESS_DARK,
-      label: "Taken",
-    };
-  }
-
-  if (status === "MISSED") {
-    return {
-      background: DANGER_LIGHT,
-      text: DANGER_DARK,
-      label: "Missed",
-    };
-  }
-
-  if (status === "SNOOZED") {
-    return {
-      background: WARNING_LIGHT,
-      text: WARNING_DARK,
-      label: "Snoozed",
-    };
-  }
-
-  return {
-    background: DOCTOR_LIGHT,
-    text: DOCTOR_DARK,
-    label: "Pending",
-  };
+  if (status === "TAKEN") return { background: SUCCESS_LIGHT, text: SUCCESS_DARK, label: "Taken" };
+  if (status === "MISSED") return { background: DANGER_LIGHT, text: DANGER_DARK, label: "Missed" };
+  if (status === "SNOOZED") return { background: WARNING_LIGHT, text: WARNING_DARK, label: "Snoozed" };
+  return { background: DOCTOR_LIGHT, text: DOCTOR_DARK, label: "Pending" };
 };
 
 const getPrimaryVital = (vital: DoctorVitalReading | null) => {
-  if (!vital) {
-    return {
-      label: "No recent vitals",
-      value: "--",
-    };
+  if (!vital) return { label: "No recent vitals", value: "--" };
+  if (vital.spo2 !== null && vital.spo2 !== undefined) return { label: "SpO2", value: `${vital.spo2}%` };
+  if (vital.heartRate !== null && vital.heartRate !== undefined) return { label: "Heart rate", value: `${vital.heartRate} bpm` };
+
+  if (vital.bpSystolic !== null && vital.bpSystolic !== undefined && vital.bpDiastolic !== null && vital.bpDiastolic !== undefined) {
+    return { label: "Blood pressure", value: `${vital.bpSystolic}/${vital.bpDiastolic}` };
   }
 
-  if (vital.spo2 !== null && vital.spo2 !== undefined) {
-    return {
-      label: "SpO2",
-      value: `${vital.spo2}%`,
-    };
-  }
-
-  if (vital.heartRate !== null && vital.heartRate !== undefined) {
-    return {
-      label: "Heart rate",
-      value: `${vital.heartRate} bpm`,
-    };
-  }
-
-  if (
-    vital.bpSystolic !== null &&
-    vital.bpSystolic !== undefined &&
-    vital.bpDiastolic !== null &&
-    vital.bpDiastolic !== undefined
-  ) {
-    return {
-      label: "Blood pressure",
-      value: `${vital.bpSystolic}/${vital.bpDiastolic}`,
-    };
-  }
-
-  if (vital.glucose !== null && vital.glucose !== undefined) {
-    return {
-      label: "Glucose",
-      value: `${vital.glucose} mmol/L`,
-    };
-  }
-
-  if (vital.temperature !== null && vital.temperature !== undefined) {
-    return {
-      label: "Temperature",
-      value: `${vital.temperature}°C`,
-    };
-  }
-
-  return {
-    label: "Vitals",
-    value: vital.status,
-  };
+  if (vital.glucose !== null && vital.glucose !== undefined) return { label: "Glucose", value: `${vital.glucose} mmol/L` };
+  if (vital.temperature !== null && vital.temperature !== undefined) return { label: "Temperature", value: `${vital.temperature}°C` };
+  return { label: "Vitals", value: vital.status };
 };
 
 export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDetailScreenProps) => {
   const insets = useSafeAreaInsets();
-
   const patientId = route.params.patientId;
   const fallbackPatientName = route.params.patientName || "Patient";
 
   const [patientDetail, setPatientDetail] = useState<DoctorPatientDetailData | null>(null);
+  const [careDiaryEntries, setCareDiaryEntries] = useState<DoctorPatientCareDiaryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [isNoteModalVisible, setIsNoteModalVisible] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -321,43 +209,36 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
   const canViewMedicines = patientDetail?.privacy.shareMedicinesWithAssignedDoctors ?? true;
   const canViewReports = patientDetail?.privacy.shareReportsWithAssignedDoctors ?? true;
   const latestVitalStatus = canViewVitals ? patientDetail?.latestVital?.status : undefined;
-
   const latestVitalTone = useMemo(() => getVitalTone(latestVitalStatus), [latestVitalStatus]);
   const heroGradient = useMemo(() => getHeroGradient(latestVitalStatus), [latestVitalStatus]);
-  const primaryVital = useMemo(
-    () => canViewVitals
-      ? getPrimaryVital(patientDetail?.latestVital || null)
-      : { label: "Vitals private", value: "Hidden by patient" },
-    [canViewVitals, patientDetail?.latestVital],
-  );
+  const primaryVital = useMemo(() => canViewVitals ? getPrimaryVital(patientDetail?.latestVital || null) : { label: "Vitals private", value: "Hidden by patient" }, [canViewVitals, patientDetail?.latestVital]);
 
   const loadPatientDetail = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     try {
       mode === "initial" ? setIsLoading(true) : setIsRefreshing(true);
       setErrorMessage("");
 
-      const result = await doctorPatientsApi.getPatientDetail(patientId);
-      setPatientDetail(result);
+      const [detailResult, diaryResult] = await Promise.all([
+        doctorPatientsApi.getPatientDetail(patientId),
+        doctorPatientsApi.getPatientCareDiary(patientId),
+      ]);
+
+      setPatientDetail(detailResult);
+      setCareDiaryEntries(diaryResult.entries || []);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load patient detail.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to load patient detail.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, [patientId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadPatientDetail("initial");
-    }, [loadPatientDetail]),
-  );
+  useFocusEffect(useCallback(() => {
+    void loadPatientDetail("initial");
+  }, [loadPatientDetail]));
 
   const openPrescription = () => {
-    navigation.navigate("DoctorPrescription", {
-      patientId,
-      patientName,
-    });
+    navigation.navigate("DoctorPrescription", { patientId, patientName });
   };
 
   const openPatientReports = () => {
@@ -366,16 +247,11 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
       return;
     }
 
-    navigation.navigate("DoctorPatientReports", {
-      patientId,
-      patientName,
-    });
+    navigation.navigate("DoctorPatientReports", { patientId, patientName });
   };
 
   const openSafetyAlert = (alert: DoctorUrgentAlert) => {
-    navigation.navigate("DoctorAlertDetail", {
-      alertId: alert.id,
-    });
+    navigation.navigate("DoctorAlertDetail", { alertId: alert.id });
   };
 
   const joinSafetyAlertCall = async (alert: DoctorUrgentAlert) => {
@@ -393,7 +269,6 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
     try {
       setIsJoiningAlertCall(true);
-
       const result = await doctorConsultationsApi.getDoctorJoinConfig(alert.consultation.id);
 
       navigation.navigate("VideoConsultation", {
@@ -403,8 +278,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
         doctorMeetingUrl: result.doctorMeeting.webUrl,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to join the emergency consultation.";
-      Alert.alert("Unable to join call", message);
+      Alert.alert("Unable to join call", error instanceof Error ? error.message : "Unable to join the emergency consultation.");
     } finally {
       setIsJoiningAlertCall(false);
     }
@@ -431,7 +305,6 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
     try {
       setIsSavingNote(true);
-
       const result = await doctorNotesApi.createNote(patientId, cleanedNote);
 
       const noteForDetail: DoctorPatientNote = {
@@ -441,22 +314,12 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
         updatedAt: result.note.updatedAt,
       };
 
-      setPatientDetail(current => {
-        if (!current) return current;
-
-        return {
-          ...current,
-          latestNotes: [noteForDetail, ...current.latestNotes].slice(0, 3),
-        };
-      });
-
+      setPatientDetail(current => current ? { ...current, latestNotes: [noteForDetail, ...current.latestNotes].slice(0, 3) } : current);
       setIsNoteModalVisible(false);
       setNoteText("");
-
       await loadPatientDetail("refresh");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to save doctor note.";
-      Alert.alert("Unable to save note", message);
+      Alert.alert("Unable to save note", error instanceof Error ? error.message : "Unable to save doctor note.");
     } finally {
       setIsSavingNote(false);
     }
@@ -482,14 +345,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 28, 50) }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void loadPatientDetail("refresh")}
-              tintColor={DOCTOR_PRIMARY}
-              colors={[DOCTOR_PRIMARY]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadPatientDetail("refresh")} tintColor={DOCTOR_PRIMARY} colors={[DOCTOR_PRIMARY]} />}
         >
           {isLoading ? (
             <View style={styles.stateCard}>
@@ -500,10 +356,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
           {!isLoading && errorMessage ? (
             <View style={styles.errorCard}>
-              <View style={styles.errorIcon}>
-                <RefreshCw size={26} color={DANGER} strokeWidth={2.7} />
-              </View>
-
+              <View style={styles.errorIcon}><RefreshCw size={26} color={DANGER} strokeWidth={2.7} /></View>
               <Text style={styles.errorTitle}>Unable to load record</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
 
@@ -516,12 +369,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
           {!isLoading && !errorMessage && patientDetail ? (
             <>
-              <LinearGradient
-                colors={heroGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroCard}
-              >
+              <LinearGradient colors={heroGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
                 <View style={styles.heroTopRow}>
                   <View style={styles.heroAvatar}>
                     <Text style={styles.heroAvatarText}>{getInitials(patientDetail.patient.fullName)}</Text>
@@ -529,10 +377,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
                   <View style={styles.heroTitleBlock}>
                     <Text style={styles.heroName} numberOfLines={1}>{patientDetail.patient.fullName}</Text>
-
-                    <Text style={styles.heroMeta}>
-                      {getAgeText(patientDetail.patient.dateOfBirth)} • {patientDetail.patient.gender || "Gender not set"}
-                    </Text>
+                    <Text style={styles.heroMeta}>{getAgeText(patientDetail.patient.dateOfBirth)} • {patientDetail.patient.gender || "Gender not set"}</Text>
                   </View>
 
                   <View style={styles.heroStatusChip}>
@@ -550,14 +395,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 
                   <View style={styles.heroUpdatedBlock}>
                     <Text style={styles.heroUpdatedLabel}>Last updated</Text>
-
-                    <Text style={styles.heroUpdatedValue}>
-                      {!canViewVitals
-                        ? "Sharing disabled"
-                        : patientDetail.latestVital
-                          ? formatDateTime(patientDetail.latestVital.recordedAt)
-                          : "No vitals yet"}
-                    </Text>
+                    <Text style={styles.heroUpdatedValue}>{!canViewVitals ? "Sharing disabled" : patientDetail.latestVital ? formatDateTime(patientDetail.latestVital.recordedAt) : "No vitals yet"}</Text>
                   </View>
                 </View>
               </LinearGradient>
@@ -577,18 +415,8 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
                 <View style={styles.overviewGrid}>
                   <OverviewStat label="Medicines" value={canViewMedicines ? `${patientDetail.summary.activeMedicineCount}` : "Private"} tone="default" />
                   <OverviewStat label="Today doses" value={canViewMedicines ? `${patientDetail.summary.todayDoseCount}` : "Private"} tone="default" />
-
-                  <OverviewStat
-                    label="Missed"
-                    value={canViewMedicines ? `${patientDetail.summary.missedDoseCount}` : "Private"}
-                    tone={canViewMedicines && patientDetail.summary.missedDoseCount > 0 ? "danger" : canViewMedicines ? "success" : "default"}
-                  />
-
-                  <OverviewStat
-                    label="Reviews"
-                    value={canViewMedicines ? `${patientDetail.summary.pendingMedicineReviews}` : "Private"}
-                    tone={canViewMedicines && patientDetail.summary.pendingMedicineReviews > 0 ? "warning" : canViewMedicines ? "success" : "default"}
-                  />
+                  <OverviewStat label="Missed" value={canViewMedicines ? `${patientDetail.summary.missedDoseCount}` : "Private"} tone={canViewMedicines && patientDetail.summary.missedDoseCount > 0 ? "danger" : canViewMedicines ? "success" : "default"} />
+                  <OverviewStat label="Reviews" value={canViewMedicines ? `${patientDetail.summary.pendingMedicineReviews}` : "Private"} tone={canViewMedicines && patientDetail.summary.pendingMedicineReviews > 0 ? "warning" : canViewMedicines ? "success" : "default"} />
                 </View>
               </View>
 
@@ -599,325 +427,139 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
                     <Text style={styles.patientProfileSubtitle}>Personal and health information saved by this patient</Text>
                   </View>
 
-                  <View style={styles.patientProfileIcon}>
-                    <UserRound size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-                  </View>
+                  <View style={styles.patientProfileIcon}><UserRound size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
                 </View>
 
                 <View style={styles.assignmentBanner}>
                   <ShieldCheck size={17} color={DOCTOR_DARK} strokeWidth={2.5} />
-
-                  <Text style={styles.assignmentBannerText}>
-                    {patientDetail.assignment.assignmentType === "PRIMARY" ? "Primary doctor" : "Specialist doctor"} • Active patient assignment
-                  </Text>
+                  <Text style={styles.assignmentBannerText}>{patientDetail.assignment.assignmentType === "PRIMARY" ? "Primary doctor" : "Specialist doctor"} • Active patient assignment</Text>
                 </View>
 
                 <Text style={styles.profileGroupTitle}>Personal details</Text>
-
-                <ProfileDetailRow
-                  icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Full name"
-                  value={patientDetail.patient.fullName}
-                />
-
-                <ProfileDetailRow
-                  icon={<Mail size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Email"
-                  value={patientDetail.patient.email}
-                />
-
-                <ProfileDetailRow
-                  icon={<Phone size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Phone number"
-                  value={patientDetail.patient.phoneNumber || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<CalendarDays size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Date of birth"
-                  value={patientDetail.patient.dateOfBirth || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<CalendarClock size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Age"
-                  value={patientDetail.patient.dateOfBirth ? getAgeText(patientDetail.patient.dateOfBirth) : "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Gender"
-                  value={patientDetail.patient.gender || "Not added"}
-                  isLast
-                />
+                <ProfileDetailRow icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Full name" value={patientDetail.patient.fullName} />
+                <ProfileDetailRow icon={<Mail size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Email" value={patientDetail.patient.email} />
+                <ProfileDetailRow icon={<Phone size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Phone number" value={patientDetail.patient.phoneNumber || "Not added"} />
+                <ProfileDetailRow icon={<CalendarDays size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Date of birth" value={patientDetail.patient.dateOfBirth || "Not added"} />
+                <ProfileDetailRow icon={<CalendarClock size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Age" value={patientDetail.patient.dateOfBirth ? getAgeText(patientDetail.patient.dateOfBirth) : "Not added"} />
+                <ProfileDetailRow icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Gender" value={patientDetail.patient.gender || "Not added"} isLast />
 
                 <Text style={styles.profileGroupTitle}>Health profile</Text>
-
-                <ProfileDetailRow
-                  icon={<Hash size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Health record number"
-                  value={patientDetail.patient.healthRecordNumber || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<Droplet size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Blood group"
-                  value={patientDetail.patient.bloodGroup || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<HeartPulse size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Medical conditions"
-                  value={patientDetail.patient.medicalConditions || "No medical conditions recorded"}
-                />
-
-                <ProfileDetailRow
-                  icon={<AlertCircle size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Allergies"
-                  value={patientDetail.patient.allergies || "No allergies recorded"}
-                  isLast
-                />
+                <ProfileDetailRow icon={<Hash size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Health record number" value={patientDetail.patient.healthRecordNumber || "Not added"} />
+                <ProfileDetailRow icon={<Droplet size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Blood group" value={patientDetail.patient.bloodGroup || "Not added"} />
+                <ProfileDetailRow icon={<HeartPulse size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Medical conditions" value={patientDetail.patient.medicalConditions || "No medical conditions recorded"} />
+                <ProfileDetailRow icon={<AlertCircle size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Allergies" value={patientDetail.patient.allergies || "No allergies recorded"} isLast />
 
                 <Text style={styles.profileGroupTitle}>Emergency contact</Text>
-
-                <ProfileDetailRow
-                  icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Contact name"
-                  value={patientDetail.patient.emergencyContactName || patientDetail.patient.emergencyContact || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<Phone size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Contact phone"
-                  value={patientDetail.patient.emergencyContactPhone || "Not added"}
-                  isLast
-                />
+                <ProfileDetailRow icon={<UserRound size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Contact name" value={patientDetail.patient.emergencyContactName || patientDetail.patient.emergencyContact || "Not added"} />
+                <ProfileDetailRow icon={<Phone size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Contact phone" value={patientDetail.patient.emergencyContactPhone || "Not added"} isLast />
 
                 <Text style={styles.profileGroupTitle}>Address</Text>
-
-                <ProfileDetailRow
-                  icon={<MapPin size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Address"
-                  value={patientDetail.patient.addressLine || "Not added"}
-                />
-
-                <ProfileDetailRow
-                  icon={<MapPin size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />}
-                  label="Postcode"
-                  value={patientDetail.patient.postcode || "Not added"}
-                  isLast
-                />
+                <ProfileDetailRow icon={<MapPin size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Address" value={patientDetail.patient.addressLine || "Not added"} />
+                <ProfileDetailRow icon={<MapPin size={18} color={DOCTOR_PRIMARY} strokeWidth={2.4} />} label="Postcode" value={patientDetail.patient.postcode || "Not added"} isLast />
               </View>
 
               <TouchableOpacity style={styles.prescriptionAction} activeOpacity={0.86} onPress={openPrescription}>
-                <View style={styles.prescriptionActionIcon}>
-                  <ClipboardList size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
-                </View>
-
+                <View style={styles.prescriptionActionIcon}><ClipboardList size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} /></View>
                 <View style={styles.prescriptionActionTextBlock}>
                   <Text style={styles.prescriptionActionTitle}>Add Prescription</Text>
-                  <Text style={styles.prescriptionActionText}>
-                    Add medicines manually or scan a prescription for this patient.
-                  </Text>
+                  <Text style={styles.prescriptionActionText}>Add medicines manually or scan a prescription for this patient.</Text>
                 </View>
-
                 <ChevronRight size={20} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
               </TouchableOpacity>
 
               {canViewReports ? (
                 <TouchableOpacity style={styles.prescriptionAction} activeOpacity={0.86} onPress={openPatientReports}>
-                  <View style={styles.prescriptionActionIcon}>
-                    <FileText size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
-                  </View>
-
+                  <View style={styles.prescriptionActionIcon}><FileText size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} /></View>
                   <View style={styles.prescriptionActionTextBlock}>
                     <Text style={styles.prescriptionActionTitle}>Medical Reports</Text>
-                    <Text style={styles.prescriptionActionText}>
-                      View protected patient reports, open uploaded files and add clinical review notes.
-                    </Text>
+                    <Text style={styles.prescriptionActionText}>View protected patient reports, open uploaded files and add clinical review notes.</Text>
                   </View>
-
                   <ChevronRight size={20} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
                 </TouchableOpacity>
               ) : (
-                <PrivacyRestrictedCard
-                  title="Medical reports are private"
-                  text="This patient has disabled report sharing with assigned doctors."
-                />
+                <PrivacyRestrictedCard title="Medical reports are private" text="This patient has disabled report sharing with assigned doctors." />
               )}
 
               {patientDetail.activeAlert ? (
-                <SafetyAlertPanel
-                  alert={patientDetail.activeAlert}
-                  isJoining={isJoiningAlertCall}
-                  onView={() => openSafetyAlert(patientDetail.activeAlert!)}
-                  onJoin={() => void joinSafetyAlertCall(patientDetail.activeAlert!)}
-                />
+                <SafetyAlertPanel alert={patientDetail.activeAlert} isJoining={isJoiningAlertCall} onView={() => openSafetyAlert(patientDetail.activeAlert!)} onJoin={() => void joinSafetyAlertCall(patientDetail.activeAlert!)} />
               ) : (
                 <View style={styles.safePanel}>
-                  <View style={styles.safePanelIcon}>
-                    <ShieldCheck size={23} color={SUCCESS} strokeWidth={2.6} />
-                  </View>
-
+                  <View style={styles.safePanelIcon}><ShieldCheck size={23} color={SUCCESS} strokeWidth={2.6} /></View>
                   <View style={styles.safePanelTextBlock}>
                     <Text style={styles.safePanelTitle}>No active alert</Text>
-                    <Text style={styles.safePanelText}>
-                      This patient has no active Safety Response escalation.
-                    </Text>
+                    <Text style={styles.safePanelText}>This patient has no active Safety Response escalation.</Text>
                   </View>
                 </View>
               )}
 
-              <SectionHeader
-                title="Latest Vitals"
-                subtitle="Most recent saved Health Connect or manual reading"
-              />
+              <SectionHeader title="Latest Vitals" subtitle="Most recent saved Health Connect or manual reading" />
 
               {!canViewVitals ? (
-                <PrivacyRestrictedCard
-                  title="Vitals are private"
-                  text="This patient has disabled routine vital sharing with assigned doctors. Safety Response data remains handled separately."
-                />
+                <PrivacyRestrictedCard title="Vitals are private" text="This patient has disabled routine vital sharing with assigned doctors. Safety Response data remains handled separately." />
               ) : patientDetail.latestVital ? (
                 <VitalsCard vital={patientDetail.latestVital} history={patientDetail.vitalsHistory} />
               ) : (
-                <EmptyCard
-                  icon={<HeartPulse size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
-                  title="No vitals yet"
-                  text="Latest readings will appear here when the patient syncs vitals."
-                />
+                <EmptyCard icon={<HeartPulse size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No vitals yet" text="Latest readings will appear here when the patient syncs vitals." />
               )}
 
-              <SectionHeader
-                title="Today’s Dose Activity"
-                subtitle="Taken, missed and snoozed reminders"
-              />
+              <SectionHeader title="Today’s Dose Activity" subtitle="Taken, missed and snoozed reminders" />
 
               {!canViewMedicines ? (
-                <PrivacyRestrictedCard
-                  title="Dose activity is private"
-                  text="This patient has disabled medicine sharing with assigned doctors."
-                />
+                <PrivacyRestrictedCard title="Dose activity is private" text="This patient has disabled medicine sharing with assigned doctors." />
               ) : patientDetail.todayDoseLogs.length > 0 ? (
-                <View style={styles.cardStack}>
-                  {patientDetail.todayDoseLogs.map(doseLog => (
-                    <DoseLogCard key={doseLog.id} doseLog={doseLog} />
-                  ))}
-                </View>
+                <View style={styles.cardStack}>{patientDetail.todayDoseLogs.map(doseLog => <DoseLogCard key={doseLog.id} doseLog={doseLog} />)}</View>
               ) : (
-                <EmptyCard
-                  icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
-                  title="No dose activity today"
-                  text="Medicine reminder activity will appear here."
-                />
+                <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No dose activity today" text="Medicine reminder activity will appear here." />
               )}
 
-              <SectionHeader
-                title="Active Medicines"
-                subtitle="Current medicine plan and review status"
-              />
+              <SectionHeader title="Active Medicines" subtitle="Current medicine plan and review status" />
 
               {!canViewMedicines ? (
-                <PrivacyRestrictedCard
-                  title="Medicines are private"
-                  text="This patient has disabled medicine and reminder sharing with assigned doctors."
-                />
+                <PrivacyRestrictedCard title="Medicines are private" text="This patient has disabled medicine and reminder sharing with assigned doctors." />
               ) : patientDetail.activeMedicines.length > 0 ? (
-                <View style={styles.cardStack}>
-                  {patientDetail.activeMedicines.map(medicine => (
-                    <MedicineCard key={medicine.id} medicine={medicine} />
-                  ))}
-                </View>
+                <View style={styles.cardStack}>{patientDetail.activeMedicines.map(medicine => <MedicineCard key={medicine.id} medicine={medicine} />)}</View>
               ) : (
-                <EmptyCard
-                  icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
-                  title="No active medicines"
-                  text="Medicines will appear here after they are added."
-                />
+                <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No active medicines" text="Medicines will appear here after they are added." />
               )}
 
-              <SectionHeader
-                title="Doctor Notes"
-                subtitle="Your latest notes for this patient"
-                rightAction="Add Note"
-                onPressRight={openNoteModal}
-              />
+              <SectionHeader title="Patient Care Diary" subtitle="Personal health notes recorded by the patient" />
+
+              {careDiaryEntries.length > 0 ? (
+                <View style={styles.cardStack}>
+                  {careDiaryEntries.map(entry => <CareDiaryCard key={entry.id} entry={entry} />)}
+                </View>
+              ) : (
+                <EmptyCard icon={<BookHeart size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No diary entries" text="Patient health notes will appear here when the patient records them." />
+              )}
+
+              <SectionHeader title="Doctor Notes" subtitle="Your latest notes for this patient" rightAction="Add Note" onPressRight={openNoteModal} />
 
               {patientDetail.latestNotes.length > 0 ? (
-                <View style={styles.cardStack}>
-                  {patientDetail.latestNotes.map(note => (
-                    <NoteCard key={note.id} note={note} />
-                  ))}
-                </View>
+                <View style={styles.cardStack}>{patientDetail.latestNotes.map(note => <NoteCard key={note.id} note={note} />)}</View>
               ) : (
-                <EmptyCard
-                  icon={<NotebookPen size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
-                  title="No notes yet"
-                  text="Doctor-specific notes will appear here after you add them."
-                />
+                <EmptyCard icon={<NotebookPen size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No notes yet" text="Doctor-specific notes will appear here after you add them." />
               )}
 
-              <SectionHeader
-                title="Consultations"
-                subtitle="Recent manual and emergency consultations"
-              />
+              <SectionHeader title="Consultations" subtitle="Recent manual and emergency consultations" />
 
               {patientDetail.recentConsultations.length > 0 ? (
-                <View style={styles.cardStack}>
-                  {patientDetail.recentConsultations.map(consultation => (
-                    <ConsultationCard key={consultation.id} consultation={consultation} />
-                  ))}
-                </View>
+                <View style={styles.cardStack}>{patientDetail.recentConsultations.map(consultation => <ConsultationCard key={consultation.id} consultation={consultation} />)}</View>
               ) : (
-                <EmptyCard
-                  icon={<Video size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
-                  title="No consultations yet"
-                  text="Consultation history will appear here."
-                />
+                <EmptyCard icon={<Video size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No consultations yet" text="Consultation history will appear here." />
               )}
             </>
           ) : null}
         </ScrollView>
 
-        <DoctorNoteModal
-          visible={isNoteModalVisible}
-          noteText={noteText}
-          isSaving={isSavingNote}
-          onChangeNote={setNoteText}
-          onCancel={closeNoteModal}
-          onSave={saveDoctorNote}
-        />
+        <DoctorNoteModal visible={isNoteModalVisible} noteText={noteText} isSaving={isSavingNote} onChangeNote={setNoteText} onCancel={closeNoteModal} onSave={saveDoctorNote} />
       </View>
     </SafeAreaView>
   );
 };
 
-const OverviewStat = ({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "default" | "success" | "warning" | "danger";
-}) => {
-  const background =
-    tone === "danger"
-      ? DANGER_LIGHT
-      : tone === "warning"
-        ? WARNING_LIGHT
-        : tone === "success"
-          ? SUCCESS_LIGHT
-          : DOCTOR_LIGHT;
-
-  const color =
-    tone === "danger"
-      ? DANGER_DARK
-      : tone === "warning"
-        ? WARNING_DARK
-        : tone === "success"
-          ? SUCCESS_DARK
-          : DOCTOR_DARK;
+const OverviewStat = ({ label, value, tone }: { label: string; value: string; tone: "default" | "success" | "warning" | "danger" }) => {
+  const background = tone === "danger" ? DANGER_LIGHT : tone === "warning" ? WARNING_LIGHT : tone === "success" ? SUCCESS_LIGHT : DOCTOR_LIGHT;
+  const color = tone === "danger" ? DANGER_DARK : tone === "warning" ? WARNING_DARK : tone === "success" ? SUCCESS_DARK : DOCTOR_DARK;
 
   return (
     <View style={[styles.overviewStatBox, { backgroundColor: background }]}>
@@ -927,17 +569,7 @@ const OverviewStat = ({
   );
 };
 
-const SectionHeader = ({
-  title,
-  subtitle,
-  rightAction,
-  onPressRight,
-}: {
-  title: string;
-  subtitle: string;
-  rightAction?: string;
-  onPressRight?: () => void;
-}) => (
+const SectionHeader = ({ title, subtitle, rightAction, onPressRight }: { title: string; subtitle: string; rightAction?: string; onPressRight?: () => void }) => (
   <View style={styles.sectionHeader}>
     <View style={styles.sectionTitleBlock}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -953,20 +585,9 @@ const SectionHeader = ({
   </View>
 );
 
-const ProfileDetailRow = ({
-  icon,
-  label,
-  value,
-  isLast,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  isLast?: boolean;
-}) => (
+const ProfileDetailRow = ({ icon, label, value, isLast }: { icon: ReactNode; label: string; value: string; isLast?: boolean }) => (
   <View style={[styles.profileDetailRow, isLast ? styles.profileDetailRowLast : undefined]}>
     <View style={styles.profileDetailIcon}>{icon}</View>
-
     <View style={styles.profileDetailText}>
       <Text style={styles.profileDetailLabel}>{label}</Text>
       <Text style={styles.profileDetailValue}>{value}</Text>
@@ -974,14 +595,42 @@ const ProfileDetailRow = ({
   </View>
 );
 
-const DoctorNoteModal = ({
-  visible,
-  noteText,
-  isSaving,
-  onChangeNote,
-  onCancel,
-  onSave,
-}: {
+const CareDiaryCard = ({ entry }: { entry: DoctorPatientCareDiaryEntry }) => (
+  <View style={styles.diaryCard}>
+    <View style={styles.diaryTopRow}>
+      <View style={styles.diaryIconBox}>
+        <BookHeart size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
+      </View>
+
+      <View style={styles.listTextBlock}>
+        <Text style={styles.listTitle}>{entry.title}</Text>
+        <Text style={styles.listSubtitle}>{formatDateTime(entry.entryDate)}</Text>
+      </View>
+
+      <View style={styles.readOnlyBadge}>
+        <Text style={styles.readOnlyBadgeText}>Patient note</Text>
+      </View>
+    </View>
+
+    <Text style={styles.diaryNote}>{entry.note}</Text>
+
+    {entry.mood ? (
+      <View style={styles.diaryDetail}>
+        <Text style={styles.diaryDetailLabel}>Mood / feeling</Text>
+        <Text style={styles.diaryDetailValue}>{entry.mood}</Text>
+      </View>
+    ) : null}
+
+    {entry.symptoms ? (
+      <View style={styles.diaryDetail}>
+        <Text style={styles.diaryDetailLabel}>Symptoms</Text>
+        <Text style={styles.diaryDetailValue}>{entry.symptoms}</Text>
+      </View>
+    ) : null}
+  </View>
+);
+
+const DoctorNoteModal = ({ visible, noteText, isSaving, onChangeNote, onCancel, onSave }: {
   visible: boolean;
   noteText: string;
   isSaving: boolean;
@@ -996,15 +645,10 @@ const DoctorNoteModal = ({
       <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
-            <View style={styles.modalIconBox}>
-              <NotebookPen size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
-            </View>
-
+            <View style={styles.modalIconBox}><NotebookPen size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} /></View>
             <View style={styles.modalTitleBlock}>
               <Text style={styles.modalTitle}>Add Doctor Note</Text>
-              <Text style={styles.modalSubtitle}>
-                This note will be saved under your doctor account.
-              </Text>
+              <Text style={styles.modalSubtitle}>This note will be saved under your doctor account.</Text>
             </View>
           </View>
 
@@ -1023,26 +667,12 @@ const DoctorNoteModal = ({
           <Text style={styles.noteCounter}>{noteText.length}/{MAX_NOTE_LENGTH}</Text>
 
           <View style={styles.modalButtonRow}>
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              activeOpacity={0.86}
-              onPress={onCancel}
-              disabled={isSaving}
-            >
+            <TouchableOpacity style={styles.modalCancelButton} activeOpacity={0.86} onPress={onCancel} disabled={isSaving}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.modalSaveButton, isSaveDisabled ? styles.modalSaveButtonDisabled : undefined]}
-              activeOpacity={0.86}
-              onPress={onSave}
-              disabled={isSaveDisabled}
-            >
-              {isSaving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.modalSaveText}>Save Note</Text>
-              )}
+            <TouchableOpacity style={[styles.modalSaveButton, isSaveDisabled ? styles.modalSaveButtonDisabled : undefined]} activeOpacity={0.86} onPress={onSave} disabled={isSaveDisabled}>
+              {isSaving ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.modalSaveText}>Save Note</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -1051,132 +681,53 @@ const DoctorNoteModal = ({
   );
 };
 
-const SafetyAlertPanel = ({
-  alert,
-  isJoining,
-  onView,
-  onJoin,
-}: {
-  alert: DoctorUrgentAlert;
-  isJoining: boolean;
-  onView: () => void;
-  onJoin: () => void;
-}) => (
+const SafetyAlertPanel = ({ alert, isJoining, onView, onJoin }: { alert: DoctorUrgentAlert; isJoining: boolean; onView: () => void; onJoin: () => void }) => (
   <View style={styles.alertCard}>
     <View style={styles.alertHeader}>
-      <View style={styles.alertIconBox}>
-        <AlertTriangle size={24} color={DANGER} strokeWidth={2.7} />
-      </View>
-
+      <View style={styles.alertIconBox}><AlertTriangle size={24} color={DANGER} strokeWidth={2.7} /></View>
       <View style={styles.alertTitleBlock}>
         <Text style={styles.alertTitle}>Active Safety Alert</Text>
-
-        <Text style={styles.alertSubtitle}>
-          {alert.vitalSummary
-            ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}`
-            : "Critical reading needs review"}
-        </Text>
+        <Text style={styles.alertSubtitle}>{alert.vitalSummary ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}` : "Critical reading needs review"}</Text>
       </View>
-
-      <View style={styles.alertBadge}>
-        <Text style={styles.alertBadgeText}>{alert.status}</Text>
-      </View>
+      <View style={styles.alertBadge}><Text style={styles.alertBadgeText}>{alert.status}</Text></View>
     </View>
 
     <Text style={styles.alertReason}>{alert.reason}</Text>
 
     <View style={styles.alertFooter}>
       <Text style={styles.alertTime}>{formatDateTime(alert.createdAt)}</Text>
-
       <View style={styles.alertActions}>
-        <TouchableOpacity style={styles.alertSecondaryButton} activeOpacity={0.86} onPress={onView}>
-          <Text style={styles.alertSecondaryText}>View</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.alertPrimaryButton, !alert.canJoinCall || isJoining ? styles.alertDisabledButton : undefined]}
-          activeOpacity={0.86}
-          onPress={onJoin}
-          disabled={!alert.canJoinCall || isJoining}
-        >
-          {isJoining ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.alertPrimaryText}>{alert.canJoinCall ? "Join" : "No call"}</Text>
-          )}
+        <TouchableOpacity style={styles.alertSecondaryButton} activeOpacity={0.86} onPress={onView}><Text style={styles.alertSecondaryText}>View</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.alertPrimaryButton, !alert.canJoinCall || isJoining ? styles.alertDisabledButton : undefined]} activeOpacity={0.86} onPress={onJoin} disabled={!alert.canJoinCall || isJoining}>
+          {isJoining ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.alertPrimaryText}>{alert.canJoinCall ? "Join" : "No call"}</Text>}
         </TouchableOpacity>
       </View>
     </View>
   </View>
 );
 
-const VitalsCard = ({
-  vital,
-  history,
-}: {
-  vital: DoctorVitalReading;
-  history: DoctorVitalReading[];
-}) => {
+const VitalsCard = ({ vital, history }: { vital: DoctorVitalReading; history: DoctorVitalReading[] }) => {
   const tone = getVitalTone(vital.status);
   const cardBackground = getVitalsCardBackground(vital.status);
 
   return (
     <View style={[styles.vitalsCard, { backgroundColor: cardBackground }]}>
       <View style={styles.vitalsTopRow}>
-        <View style={[styles.vitalsIconBox, { backgroundColor: SURFACE }]}>
-          <HeartPulse size={24} color={tone.icon} strokeWidth={2.7} />
-        </View>
-
+        <View style={[styles.vitalsIconBox, { backgroundColor: SURFACE }]}><HeartPulse size={24} color={tone.icon} strokeWidth={2.7} /></View>
         <View style={styles.vitalsTitleBlock}>
           <Text style={styles.vitalsTitle}>Latest Reading</Text>
           <Text style={styles.vitalsSubtitle}>{formatDateTime(vital.recordedAt)}</Text>
         </View>
-
-        <View style={[styles.statusBadge, { backgroundColor: SURFACE }]}>
-          <Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text>
-        </View>
+        <View style={[styles.statusBadge, { backgroundColor: SURFACE }]}><Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text></View>
       </View>
 
       <View style={styles.vitalsGrid}>
-        <VitalMetric
-          icon={<HeartPulse size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="Heart rate"
-          value={vital.heartRate !== null ? `${vital.heartRate} bpm` : "--"}
-        />
-
-        <VitalMetric
-          icon={<Droplets size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="SpO2"
-          value={vital.spo2 !== null ? `${vital.spo2}%` : "--"}
-        />
-
-        <VitalMetric
-          icon={<Gauge size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="Blood pressure"
-          value={
-            vital.bpSystolic !== null && vital.bpDiastolic !== null
-              ? `${vital.bpSystolic}/${vital.bpDiastolic}`
-              : "--"
-          }
-        />
-
-        <VitalMetric
-          icon={<Activity size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="Glucose"
-          value={vital.glucose !== null ? `${vital.glucose} mmol/L` : "--"}
-        />
-
-        <VitalMetric
-          icon={<Thermometer size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="Temperature"
-          value={vital.temperature !== null ? `${vital.temperature}°C` : "--"}
-        />
-
-        <VitalMetric
-          icon={<Stethoscope size={19} color={tone.icon} strokeWidth={2.6} />}
-          label="Source"
-          value={vital.deviceSource || vital.source}
-        />
+        <VitalMetric icon={<HeartPulse size={19} color={tone.icon} strokeWidth={2.6} />} label="Heart rate" value={vital.heartRate !== null ? `${vital.heartRate} bpm` : "--"} />
+        <VitalMetric icon={<Droplets size={19} color={tone.icon} strokeWidth={2.6} />} label="SpO2" value={vital.spo2 !== null ? `${vital.spo2}%` : "--"} />
+        <VitalMetric icon={<Gauge size={19} color={tone.icon} strokeWidth={2.6} />} label="Blood pressure" value={vital.bpSystolic !== null && vital.bpDiastolic !== null ? `${vital.bpSystolic}/${vital.bpDiastolic}` : "--"} />
+        <VitalMetric icon={<Activity size={19} color={tone.icon} strokeWidth={2.6} />} label="Glucose" value={vital.glucose !== null ? `${vital.glucose} mmol/L` : "--"} />
+        <VitalMetric icon={<Thermometer size={19} color={tone.icon} strokeWidth={2.6} />} label="Temperature" value={vital.temperature !== null ? `${vital.temperature}°C` : "--"} />
+        <VitalMetric icon={<Stethoscope size={19} color={tone.icon} strokeWidth={2.6} />} label="Source" value={vital.deviceSource || vital.source} />
       </View>
 
       {history.length > 1 ? (
@@ -1186,27 +737,16 @@ const VitalsCard = ({
             <Text style={styles.historySubtitle}>Last {history.length}</Text>
           </View>
 
-          {history.slice(0, 3).map(item => (
-            <VitalHistoryRow key={item.id} vital={item} />
-          ))}
+          {history.slice(0, 3).map(item => <VitalHistoryRow key={item.id} vital={item} />)}
         </View>
       ) : null}
     </View>
   );
 };
 
-const VitalMetric = ({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) => (
+const VitalMetric = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
   <View style={styles.vitalMetricBox}>
     <View style={styles.vitalMetricIcon}>{icon}</View>
-
     <View style={styles.vitalMetricTextBlock}>
       <Text style={styles.vitalMetricLabel}>{label}</Text>
       <Text style={styles.vitalMetricValue} numberOfLines={1}>{value}</Text>
@@ -1221,15 +761,11 @@ const VitalHistoryRow = ({ vital }: { vital: DoctorVitalReading }) => {
   return (
     <View style={styles.historyRow}>
       <View style={[styles.historyDot, { backgroundColor: tone.icon }]} />
-
       <View style={styles.historyTextBlock}>
         <Text style={styles.historyMain}>{primary.label}: {primary.value}</Text>
         <Text style={styles.historyTime}>{formatDateTime(vital.recordedAt)}</Text>
       </View>
-
-      <View style={[styles.historyChip, { backgroundColor: tone.background }]}>
-        <Text style={[styles.historyChipText, { color: tone.text }]}>{tone.label}</Text>
-      </View>
+      <View style={[styles.historyChip, { backgroundColor: tone.background }]}><Text style={[styles.historyChipText, { color: tone.text }]}>{tone.label}</Text></View>
     </View>
   );
 };
@@ -1239,74 +775,48 @@ const DoseLogCard = ({ doseLog }: { doseLog: DoctorPatientDoseLog }) => {
 
   return (
     <View style={styles.listCard}>
-      <View style={styles.listIconBox}>
-        <Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-      </View>
-
+      <View style={styles.listIconBox}><Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
       <View style={styles.listTextBlock}>
         <Text style={styles.listTitle}>{doseLog.medicine.name}</Text>
-        <Text style={styles.listSubtitle}>
-          {doseLog.medicine.dose} • {formatShortTime(doseLog.scheduledFor)}
-        </Text>
+        <Text style={styles.listSubtitle}>{doseLog.medicine.dose} • {formatShortTime(doseLog.scheduledFor)}</Text>
       </View>
-
-      <View style={[styles.statusBadge, { backgroundColor: tone.background }]}>
-        <Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text>
-      </View>
+      <View style={[styles.statusBadge, { backgroundColor: tone.background }]}><Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text></View>
     </View>
   );
 };
 
 const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
-  const pendingReviewCount = medicine.reminders.filter(reminder => {
-    return reminder.sendToDoctorForReview && reminder.reviewStatus === "PENDING";
-  }).length;
+  const pendingReviewCount = medicine.reminders.filter(reminder => reminder.sendToDoctorForReview && reminder.reviewStatus === "PENDING").length;
 
   return (
     <View style={styles.medicineCard}>
       <View style={styles.medicineTopRow}>
-        <View style={styles.listIconBox}>
-          <Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-        </View>
-
+        <View style={styles.listIconBox}><Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
         <View style={styles.listTextBlock}>
           <Text style={styles.listTitle}>{medicine.name}</Text>
           <Text style={styles.listSubtitle}>{medicine.dose}</Text>
         </View>
 
         <View style={[styles.sourceBadge, pendingReviewCount > 0 ? styles.reviewSourceBadge : undefined]}>
-          <Text style={[styles.sourceBadgeText, pendingReviewCount > 0 ? styles.reviewSourceBadgeText : undefined]}>
-            {pendingReviewCount > 0 ? "Review" : formatStatus(medicine.source)}
-          </Text>
+          <Text style={[styles.sourceBadgeText, pendingReviewCount > 0 ? styles.reviewSourceBadgeText : undefined]}>{pendingReviewCount > 0 ? "Review" : formatStatus(medicine.source)}</Text>
         </View>
       </View>
 
-      {medicine.instructions ? (
-        <Text style={styles.medicineInstructions}>{medicine.instructions}</Text>
-      ) : null}
+      {medicine.instructions ? <Text style={styles.medicineInstructions}>{medicine.instructions}</Text> : null}
 
       <View style={styles.reminderStack}>
-        {medicine.reminders.length > 0 ? (
-          medicine.reminders.map(reminder => (
-            <View key={reminder.id} style={styles.reminderRow}>
-              <Clock3 size={15} color={DOCTOR_PRIMARY} strokeWidth={2.4} />
+        {medicine.reminders.length > 0 ? medicine.reminders.map(reminder => (
+          <View key={reminder.id} style={styles.reminderRow}>
+            <Clock3 size={15} color={DOCTOR_PRIMARY} strokeWidth={2.4} />
+            <Text style={styles.reminderText}>{reminder.timeOfDay} • {formatStatus(reminder.frequency)}</Text>
 
-              <Text style={styles.reminderText}>
-                {reminder.timeOfDay} • {formatStatus(reminder.frequency)}
-              </Text>
-
-              {reminder.sendToDoctorForReview ? (
-                <View style={styles.reviewBadge}>
-                  <Text style={styles.reviewBadgeText}>{formatStatus(reminder.reviewStatus)}</Text>
-                </View>
-              ) : (
-                <CheckCircle2 size={16} color={SUCCESS} strokeWidth={2.5} />
-              )}
-            </View>
-          ))
-        ) : (
-          <Text style={styles.noReminderText}>No active reminders</Text>
-        )}
+            {reminder.sendToDoctorForReview ? (
+              <View style={styles.reviewBadge}><Text style={styles.reviewBadgeText}>{formatStatus(reminder.reviewStatus)}</Text></View>
+            ) : (
+              <CheckCircle2 size={16} color={SUCCESS} strokeWidth={2.5} />
+            )}
+          </View>
+        )) : <Text style={styles.noReminderText}>No active reminders</Text>}
       </View>
     </View>
   );
@@ -1315,10 +825,7 @@ const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
 const NoteCard = ({ note }: { note: DoctorPatientNote }) => (
   <View style={styles.noteCard}>
     <View style={styles.noteTopRow}>
-      <View style={styles.noteIconBox}>
-        <NotebookPen size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-      </View>
-
+      <View style={styles.noteIconBox}><NotebookPen size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
       <View style={styles.listTextBlock}>
         <Text style={styles.listTitle}>Doctor note</Text>
         <Text style={styles.listSubtitle}>{formatDateTime(note.createdAt)}</Text>
@@ -1335,21 +842,12 @@ const ConsultationCard = ({ consultation }: { consultation: DoctorUpcomingConsul
   return (
     <View style={styles.listCard}>
       <View style={[styles.listIconBox, isEmergency ? styles.listIconDanger : undefined]}>
-        {isEmergency ? (
-          <AlertTriangle size={21} color={DANGER} strokeWidth={2.6} />
-        ) : (
-          <CalendarClock size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-        )}
+        {isEmergency ? <AlertTriangle size={21} color={DANGER} strokeWidth={2.6} /> : <CalendarClock size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
       </View>
 
       <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>
-          {isEmergency ? "Emergency Consultation" : "Manual Consultation"}
-        </Text>
-
-        <Text style={styles.listSubtitle}>
-          {formatDateTime(consultation.preferredAt || consultation.createdAt)}
-        </Text>
+        <Text style={styles.listTitle}>{isEmergency ? "Emergency Consultation" : "Manual Consultation"}</Text>
+        <Text style={styles.listSubtitle}>{formatDateTime(consultation.preferredAt || consultation.createdAt)}</Text>
       </View>
 
       <ChevronRight size={18} color={MUTED} strokeWidth={2.5} />
@@ -1357,18 +855,9 @@ const ConsultationCard = ({ consultation }: { consultation: DoctorUpcomingConsul
   );
 };
 
-const PrivacyRestrictedCard = ({
-  title,
-  text,
-}: {
-  title: string;
-  text: string;
-}) => (
+const PrivacyRestrictedCard = ({ title, text }: { title: string; text: string }) => (
   <View style={styles.privacyRestrictedCard}>
-    <View style={styles.privacyRestrictedIcon}>
-      <ShieldCheck size={24} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-    </View>
-
+    <View style={styles.privacyRestrictedIcon}><ShieldCheck size={24} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
     <View style={styles.privacyRestrictedTextBlock}>
       <Text style={styles.privacyRestrictedTitle}>{title}</Text>
       <Text style={styles.privacyRestrictedText}>{text}</Text>
@@ -1376,15 +865,7 @@ const PrivacyRestrictedCard = ({
   </View>
 );
 
-const EmptyCard = ({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-}) => (
+const EmptyCard = ({ icon, title, text }: { icon: ReactNode; title: string; text: string }) => (
   <View style={styles.emptyCard}>
     <View style={styles.emptyIcon}>{icon}</View>
     <Text style={styles.emptyTitle}>{title}</Text>
@@ -1395,1093 +876,176 @@ const EmptyCard = ({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: BACKGROUND },
   screen: { flex: 1, backgroundColor: BACKGROUND },
-
-  header: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-    ...elevate(1),
-  },
-
+  header: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14, flexDirection: "row", alignItems: "center" },
+  backButton: { width: 48, height: 48, borderRadius: 15, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", marginRight: 12, ...elevate(1) },
   headerTextBlock: { flex: 1 },
-
-  headerTitle: {
-    color: TEXT,
-    fontSize: 24,
-    fontWeight: "700",
-    letterSpacing: -0.4,
-  },
-
-  headerSubtitle: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
+  headerTitle: { color: TEXT, fontSize: 24, fontWeight: "700", letterSpacing: -0.4 },
+  headerSubtitle: { color: MUTED, fontSize: 13, fontWeight: "600", marginTop: 3 },
   scrollView: { flex: 1 },
-
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-
-  stateCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 22,
-    alignItems: "center",
-    marginTop: 12,
-    ...elevate(1),
-  },
-
-  stateText: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 10,
-  },
-
-  errorCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 22,
-    alignItems: "center",
-    marginTop: 12,
-    ...elevate(1),
-  },
-
-  errorIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: DANGER_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-
-  errorTitle: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-
-  errorText: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 20,
-    textAlign: "center",
-    marginTop: 8,
-  },
-
-  retryButton: {
-    backgroundColor: DOCTOR_PRIMARY,
-    borderRadius: 13,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 16,
-  },
-
-  retryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
-    marginLeft: 8,
-  },
-
-  heroCard: {
-    borderRadius: 18,
-    padding: 18,
-    overflow: "hidden",
-    ...elevate(2),
-  },
-
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  heroAvatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 17,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  heroAvatarText: {
-    color: DOCTOR_PRIMARY,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
+  stateCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 22, alignItems: "center", marginTop: 12, ...elevate(1) },
+  stateText: { color: MUTED, fontSize: 13, fontWeight: "600", marginTop: 10 },
+  errorCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 22, alignItems: "center", marginTop: 12, ...elevate(1) },
+  errorIcon: { width: 58, height: 58, borderRadius: 16, backgroundColor: DANGER_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  errorTitle: { color: TEXT, fontSize: 18, fontWeight: "700", textAlign: "center" },
+  errorText: { color: MUTED, fontSize: 13, fontWeight: "600", lineHeight: 20, textAlign: "center", marginTop: 8 },
+  retryButton: { backgroundColor: DOCTOR_PRIMARY, borderRadius: 13, paddingHorizontal: 18, paddingVertical: 12, flexDirection: "row", alignItems: "center", marginTop: 16 },
+  retryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700", marginLeft: 8 },
+  heroCard: { borderRadius: 18, padding: 18, overflow: "hidden", ...elevate(2) },
+  heroTopRow: { flexDirection: "row", alignItems: "center" },
+  heroAvatar: { width: 58, height: 58, borderRadius: 17, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  heroAvatarText: { color: DOCTOR_PRIMARY, fontSize: 18, fontWeight: "800" },
   heroTitleBlock: { flex: 1 },
-
-  heroName: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-
-  heroMeta: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 4,
-    opacity: 0.88,
-  },
-
-  heroStatusChip: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginLeft: 8,
-  },
-
-  heroStatusText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  heroDivider: {
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.24)",
-    marginVertical: 16,
-  },
-
-  heroVitalsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-
-  heroVitalLabel: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700",
-    opacity: 0.86,
-  },
-
-  heroVitalValue: {
-    color: "#FFFFFF",
-    fontSize: 26,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-
-  heroUpdatedBlock: {
-    alignItems: "flex-end",
-    maxWidth: "48%",
-  },
-
-  heroUpdatedLabel: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-    opacity: 0.82,
-  },
-
-  heroUpdatedValue: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-    textAlign: "right",
-  },
-
-  overviewCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    marginTop: 18,
-    ...elevate(1),
-  },
-
-  overviewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  overviewTitle: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-
-  overviewSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  overviewIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  overviewGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
-  },
-
-  overviewStatBox: {
-    width: "48%",
-    borderRadius: 13,
-    padding: 13,
-  },
-
-  overviewStatValue: {
-    fontSize: 22,
-    fontWeight: "800",
-  },
-
-  overviewStatLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-
-  profilePanel: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    marginTop: 14,
-    ...elevate(1),
-  },
-
-  patientProfileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-
-  patientProfileHeaderText: {
-    flex: 1,
-    paddingRight: 10,
-  },
-
-  patientProfileTitle: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-
-  patientProfileSubtitle: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "500",
-    lineHeight: 16,
-    marginTop: 3,
-  },
-
-  patientProfileIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  assignmentBanner: {
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 12,
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-
-  assignmentBannerText: {
-    color: DOCTOR_DARK,
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 7,
-    flex: 1,
-  },
-
-  profileGroupTitle: {
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 7,
-    marginBottom: 4,
-  },
-
-  profileDetailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: DIVIDER,
-  },
-
-  profileDetailRowLast: {
-    borderBottomWidth: 0,
-    marginBottom: 7,
-  },
-
-  profileDetailIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-
+  heroName: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", letterSpacing: -0.3 },
+  heroMeta: { color: "#FFFFFF", fontSize: 13, fontWeight: "700", marginTop: 4, opacity: 0.88 },
+  heroStatusChip: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, marginLeft: 8 },
+  heroStatusText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.24)", marginVertical: 16 },
+  heroVitalsRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  heroVitalLabel: { color: "#FFFFFF", fontSize: 12, fontWeight: "700", opacity: 0.86 },
+  heroVitalValue: { color: "#FFFFFF", fontSize: 26, fontWeight: "700", marginTop: 3 },
+  heroUpdatedBlock: { alignItems: "flex-end", maxWidth: "48%" },
+  heroUpdatedLabel: { color: "#FFFFFF", fontSize: 11, fontWeight: "700", opacity: 0.82 },
+  heroUpdatedValue: { color: "#FFFFFF", fontSize: 12, fontWeight: "700", marginTop: 4, textAlign: "right" },
+  overviewCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginTop: 18, ...elevate(1) },
+  overviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  overviewTitle: { color: TEXT, fontSize: 17, fontWeight: "700" },
+  overviewSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  overviewIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center" },
+  overviewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  overviewStatBox: { width: "48%", borderRadius: 13, padding: 13 },
+  overviewStatValue: { fontSize: 22, fontWeight: "800" },
+  overviewStatLabel: { fontSize: 12, fontWeight: "700", marginTop: 3 },
+  profilePanel: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginTop: 14, ...elevate(1) },
+  patientProfileHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  patientProfileHeaderText: { flex: 1, paddingRight: 10 },
+  patientProfileTitle: { color: TEXT, fontSize: 17, fontWeight: "700" },
+  patientProfileSubtitle: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 16, marginTop: 3 },
+  patientProfileIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center" },
+  assignmentBanner: { backgroundColor: DOCTOR_LIGHT, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, flexDirection: "row", alignItems: "center", marginBottom: 14 },
+  assignmentBannerText: { color: DOCTOR_DARK, fontSize: 11, fontWeight: "700", marginLeft: 7, flex: 1 },
+  profileGroupTitle: { color: MUTED, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 7, marginBottom: 4 },
+  profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: DIVIDER },
+  profileDetailRowLast: { borderBottomWidth: 0, marginBottom: 7 },
+  profileDetailIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 11 },
   profileDetailText: { flex: 1 },
-
-  profileDetailLabel: {
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: "700",
-  },
-
-  profileDetailValue: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 2,
-  },
-
-  prescriptionAction: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    ...elevate(1),
-  },
-
-  prescriptionActionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  prescriptionActionTextBlock: {
-    flex: 1,
-    paddingRight: 8,
-  },
-
-  prescriptionActionTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  prescriptionActionText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 3,
-  },
-
-  alertCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    marginTop: 14,
-    ...elevate(2),
-  },
-
-  alertHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  alertIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: DANGER_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  profileDetailLabel: { color: MUTED, fontSize: 10, fontWeight: "700" },
+  profileDetailValue: { color: TEXT, fontSize: 13, fontWeight: "600", lineHeight: 18, marginTop: 2 },
+  prescriptionAction: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginTop: 14, flexDirection: "row", alignItems: "center", ...elevate(1) },
+  prescriptionActionIcon: { width: 50, height: 50, borderRadius: 14, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  prescriptionActionTextBlock: { flex: 1, paddingRight: 8 },
+  prescriptionActionTitle: { color: TEXT, fontSize: 15, fontWeight: "700" },
+  prescriptionActionText: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 3 },
+  alertCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginTop: 14, ...elevate(2) },
+  alertHeader: { flexDirection: "row", alignItems: "center" },
+  alertIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: DANGER_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
   alertTitleBlock: { flex: 1 },
-
-  alertTitle: {
-    color: DANGER_DARK,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  alertSubtitle: {
-    color: TEXT,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-
-  alertBadge: {
-    backgroundColor: DANGER_LIGHT,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-
-  alertBadgeText: {
-    color: DANGER_DARK,
-    fontSize: 10,
-    fontWeight: "700",
-  },
-
-  alertReason: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 10,
-  },
-
-  alertFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 13,
-  },
-
-  alertTime: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    flex: 1,
-  },
-
-  alertActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-
-  alertSecondaryButton: {
-    backgroundColor: DANGER_LIGHT,
-    borderRadius: 11,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-
-  alertSecondaryText: {
-    color: DANGER_DARK,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  alertPrimaryButton: {
-    minWidth: 60,
-    minHeight: 36,
-    backgroundColor: DANGER,
-    borderRadius: 11,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
+  alertTitle: { color: DANGER_DARK, fontSize: 15, fontWeight: "700" },
+  alertSubtitle: { color: TEXT, fontSize: 12, fontWeight: "700", marginTop: 3 },
+  alertBadge: { backgroundColor: DANGER_LIGHT, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  alertBadgeText: { color: DANGER_DARK, fontSize: 10, fontWeight: "700" },
+  alertReason: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 10 },
+  alertFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 13 },
+  alertTime: { color: MUTED, fontSize: 11, fontWeight: "600", flex: 1 },
+  alertActions: { flexDirection: "row", gap: 8 },
+  alertSecondaryButton: { backgroundColor: DANGER_LIGHT, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9 },
+  alertSecondaryText: { color: DANGER_DARK, fontSize: 12, fontWeight: "700" },
+  alertPrimaryButton: { minWidth: 60, minHeight: 36, backgroundColor: DANGER, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9, alignItems: "center", justifyContent: "center" },
   alertDisabledButton: { opacity: 0.55 },
-
-  alertPrimaryText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  safePanel: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 14,
-    ...elevate(1),
-  },
-
-  safePanelIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: SUCCESS_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  alertPrimaryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  safePanel: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "center", marginTop: 14, ...elevate(1) },
+  safePanelIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: SUCCESS_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
   safePanelTextBlock: { flex: 1 },
-
-  safePanelTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  safePanelText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 3,
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    marginTop: 22,
-    marginBottom: 10,
-  },
-
+  safePanelTitle: { color: TEXT, fontSize: 15, fontWeight: "700" },
+  safePanelText: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 3 },
+  sectionHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 22, marginBottom: 10 },
   sectionTitleBlock: { flex: 1 },
-
-  sectionTitle: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-
-  sectionSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  sectionActionButton: {
-    backgroundColor: DOCTOR_PRIMARY,
-    borderRadius: 11,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 12,
-  },
-
-  sectionActionText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "800",
-    marginLeft: 5,
-  },
-
-  vitalsCard: {
-    borderRadius: 16,
-    padding: 15,
-    ...elevate(1),
-  },
-
-  vitalsTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  vitalsIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  sectionTitle: { color: TEXT, fontSize: 17, fontWeight: "700" },
+  sectionSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  sectionActionButton: { backgroundColor: DOCTOR_PRIMARY, borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", marginLeft: 12 },
+  sectionActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800", marginLeft: 5 },
+  vitalsCard: { borderRadius: 16, padding: 15, ...elevate(1) },
+  vitalsTopRow: { flexDirection: "row", alignItems: "center" },
+  vitalsIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", marginRight: 12 },
   vitalsTitleBlock: { flex: 1 },
-
-  vitalsTitle: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  vitalsSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginLeft: 8,
-  },
-
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
-
-  vitalsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
-  },
-
-  vitalMetricBox: {
-    width: "48%",
-    backgroundColor: SURFACE,
-    borderRadius: 13,
-    padding: 11,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  vitalMetricIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: SOFT_PANEL,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 9,
-  },
-
+  vitalsTitle: { color: TEXT, fontSize: 15, fontWeight: "700" },
+  vitalsSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, marginLeft: 8 },
+  statusBadgeText: { fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
+  vitalsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  vitalMetricBox: { width: "48%", backgroundColor: SURFACE, borderRadius: 13, padding: 11, flexDirection: "row", alignItems: "center" },
+  vitalMetricIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: SOFT_PANEL, alignItems: "center", justifyContent: "center", marginRight: 9 },
   vitalMetricTextBlock: { flex: 1 },
-
-  vitalMetricLabel: {
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: "700",
-  },
-
-  vitalMetricValue: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-
-  historyPanel: {
-    backgroundColor: "rgba(255,255,255,0.68)",
-    borderRadius: 13,
-    padding: 12,
-    marginTop: 14,
-  },
-
-  historyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-
-  historyTitle: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
-  historySubtitle: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  historyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 7,
-  },
-
-  historyDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    marginRight: 9,
-  },
-
+  vitalMetricLabel: { color: MUTED, fontSize: 10, fontWeight: "700" },
+  vitalMetricValue: { color: TEXT, fontSize: 13, fontWeight: "700", marginTop: 2 },
+  historyPanel: { backgroundColor: "rgba(255,255,255,0.68)", borderRadius: 13, padding: 12, marginTop: 14 },
+  historyHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  historyTitle: { color: TEXT, fontSize: 13, fontWeight: "700" },
+  historySubtitle: { color: MUTED, fontSize: 11, fontWeight: "700" },
+  historyRow: { flexDirection: "row", alignItems: "center", paddingVertical: 7 },
+  historyDot: { width: 9, height: 9, borderRadius: 5, marginRight: 9 },
   historyTextBlock: { flex: 1 },
-
-  historyMain: {
-    color: TEXT,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  historyTime: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-
-  historyChip: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-
-  historyChipText: {
-    fontSize: 9,
-    fontWeight: "800",
-  },
-
+  historyMain: { color: TEXT, fontSize: 12, fontWeight: "700" },
+  historyTime: { color: MUTED, fontSize: 11, fontWeight: "600", marginTop: 2 },
+  historyChip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  historyChipText: { fontSize: 9, fontWeight: "800" },
   cardStack: { gap: 10 },
-
-  listCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    ...elevate(1),
-  },
-
-  listIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  listCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", ...elevate(1) },
+  listIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
   listIconDanger: { backgroundColor: DANGER_LIGHT },
-
   listTextBlock: { flex: 1 },
-
-  listTitle: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  listSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-
-  medicineCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 14,
-    ...elevate(1),
-  },
-
-  medicineTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  sourceBadge: {
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginLeft: 8,
-  },
-
-  sourceBadgeText: {
-    color: DOCTOR_DARK,
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
-
+  listTitle: { color: TEXT, fontSize: 14, fontWeight: "700" },
+  listSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  medicineCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
+  medicineTopRow: { flexDirection: "row", alignItems: "center" },
+  sourceBadge: { backgroundColor: DOCTOR_LIGHT, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, marginLeft: 8 },
+  sourceBadgeText: { color: DOCTOR_DARK, fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
   reviewSourceBadge: { backgroundColor: WARNING_LIGHT },
-
   reviewSourceBadgeText: { color: WARNING_DARK },
+  medicineInstructions: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 10 },
+  reminderStack: { marginTop: 11, gap: 7 },
+  reminderRow: { backgroundColor: SOFT_PANEL, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 9, flexDirection: "row", alignItems: "center" },
+  reminderText: { color: TEXT, fontSize: 12, fontWeight: "700", marginLeft: 7, flex: 1 },
+  reviewBadge: { backgroundColor: WARNING_LIGHT, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
+  reviewBadgeText: { color: WARNING_DARK, fontSize: 9, fontWeight: "700", textTransform: "capitalize" },
+  noReminderText: { color: MUTED, fontSize: 12, fontWeight: "600" },
 
-  medicineInstructions: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 10,
-  },
+  diaryCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
+  diaryTopRow: { flexDirection: "row", alignItems: "center" },
+  diaryIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  readOnlyBadge: { backgroundColor: DOCTOR_LIGHT, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, marginLeft: 8 },
+  readOnlyBadgeText: { color: DOCTOR_DARK, fontSize: 9, fontWeight: "800" },
+  diaryNote: { color: TEXT, fontSize: 13, fontWeight: "600", lineHeight: 20, marginTop: 11 },
+  diaryDetail: { backgroundColor: SOFT_PANEL, borderRadius: 11, padding: 10, marginTop: 9 },
+  diaryDetailLabel: { color: MUTED, fontSize: 9, fontWeight: "800", textTransform: "uppercase" },
+  diaryDetailValue: { color: TEXT, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 3 },
 
-  reminderStack: {
-    marginTop: 11,
-    gap: 7,
-  },
-
-  reminderRow: {
-    backgroundColor: SOFT_PANEL,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  reminderText: {
-    color: TEXT,
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 7,
-    flex: 1,
-  },
-
-  reviewBadge: {
-    backgroundColor: WARNING_LIGHT,
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-  },
-
-  reviewBadgeText: {
-    color: WARNING_DARK,
-    fontSize: 9,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
-
-  noReminderText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  noteCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 14,
-    ...elevate(1),
-  },
-
-  noteTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  noteIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  noteText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 20,
-    marginTop: 10,
-  },
-
-  privacyRestrictedCard: {
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 16,
-    padding: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    ...elevate(1),
-  },
-
-  privacyRestrictedIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: SURFACE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  noteCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
+  noteTopRow: { flexDirection: "row", alignItems: "center" },
+  noteIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  noteText: { color: TEXT, fontSize: 13, fontWeight: "600", lineHeight: 20, marginTop: 10 },
+  privacyRestrictedCard: { backgroundColor: DOCTOR_LIGHT, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "center", ...elevate(1) },
+  privacyRestrictedIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: SURFACE, alignItems: "center", justifyContent: "center", marginRight: 12 },
   privacyRestrictedTextBlock: { flex: 1 },
-
-  privacyRestrictedTitle: {
-    color: DOCTOR_DARK,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  privacyRestrictedText: {
-    color: DOCTOR_DARK,
-    fontSize: 11,
-    fontWeight: "600",
-    lineHeight: 17,
-    marginTop: 4,
-  },
-
-  emptyCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 24,
-    alignItems: "center",
-    ...elevate(1),
-  },
-
-  emptyIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 17,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-
-  emptyTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-
-  emptyText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    textAlign: "center",
-    marginTop: 5,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(17,25,54,0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 18,
-  },
-
-  modalCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 18,
-    padding: 16,
-    ...elevate(3),
-  },
-
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  modalIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: DOCTOR_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
+  privacyRestrictedTitle: { color: DOCTOR_DARK, fontSize: 14, fontWeight: "700" },
+  privacyRestrictedText: { color: DOCTOR_DARK, fontSize: 11, fontWeight: "600", lineHeight: 17, marginTop: 4 },
+  emptyCard: { backgroundColor: SURFACE, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 24, alignItems: "center", ...elevate(1) },
+  emptyIcon: { width: 58, height: 58, borderRadius: 17, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  emptyTitle: { color: TEXT, fontSize: 16, fontWeight: "700", textAlign: "center" },
+  emptyText: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, textAlign: "center", marginTop: 5 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(17,25,54,0.45)", justifyContent: "center", paddingHorizontal: 18 },
+  modalCard: { backgroundColor: SURFACE, borderRadius: 18, padding: 16, ...elevate(3) },
+  modalHeader: { flexDirection: "row", alignItems: "center" },
+  modalIconBox: { width: 50, height: 50, borderRadius: 15, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
   modalTitleBlock: { flex: 1 },
-
-  modalTitle: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  modalSubtitle: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 3,
-  },
-
-  noteInput: {
-    backgroundColor: SOFT_PANEL,
-    borderRadius: 14,
-    minHeight: 150,
-    paddingHorizontal: 13,
-    paddingTop: 13,
-    paddingBottom: 13,
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
-    marginTop: 15,
-  },
-
-  noteCounter: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "right",
-    marginTop: 7,
-  },
-
-  modalButtonRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 15,
-  },
-
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: DOCTOR_LIGHT,
-    borderRadius: 13,
-    paddingVertical: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  modalCancelText: {
-    color: DOCTOR_DARK,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
-  modalSaveButton: {
-    flex: 1,
-    backgroundColor: DOCTOR_PRIMARY,
-    borderRadius: 13,
-    paddingVertical: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
+  modalTitle: { color: TEXT, fontSize: 18, fontWeight: "700" },
+  modalSubtitle: { color: MUTED, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 3 },
+  noteInput: { backgroundColor: SOFT_PANEL, borderRadius: 14, minHeight: 150, paddingHorizontal: 13, paddingTop: 13, paddingBottom: 13, color: TEXT, fontSize: 14, fontWeight: "600", lineHeight: 20, marginTop: 15 },
+  noteCounter: { color: MUTED, fontSize: 11, fontWeight: "700", textAlign: "right", marginTop: 7 },
+  modalButtonRow: { flexDirection: "row", gap: 10, marginTop: 15 },
+  modalCancelButton: { flex: 1, backgroundColor: DOCTOR_LIGHT, borderRadius: 13, paddingVertical: 13, alignItems: "center", justifyContent: "center" },
+  modalCancelText: { color: DOCTOR_DARK, fontSize: 14, fontWeight: "800" },
+  modalSaveButton: { flex: 1, backgroundColor: DOCTOR_PRIMARY, borderRadius: 13, paddingVertical: 13, alignItems: "center", justifyContent: "center" },
   modalSaveButtonDisabled: { opacity: 0.55 },
-
-  modalSaveText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
+  modalSaveText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
 });
-
-
