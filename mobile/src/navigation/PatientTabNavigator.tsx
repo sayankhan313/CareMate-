@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { PatientBottomTabBar } from "../components/patient/PatientBottomTabBar";
 import { useLanguage } from "../context/LanguageContext";
 import ConsultationsScreen from "../screens/patient/ConsultationsScreen";
-import { MedicinesScreen } from "../screens/patient/MedicinesScreen";
+import MedicinesScreen from "../screens/patient/MedicinesScreen";
 import { PatientDashboardScreen } from "../screens/patient/PatientDashboardScreen";
 import { PatientOrdersScreen } from "../screens/patient/PatientOrdersScreen";
 import { VitalsScreen } from "../screens/patient/VitalsScreen";

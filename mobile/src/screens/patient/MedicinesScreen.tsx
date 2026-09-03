@@ -5,7 +5,7 @@ import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/nat
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import Svg, { Circle } from "react-native-svg";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, FileCheck2, Moon, Package, Pill, Plus, ShoppingBag, Sunrise, Sun, Trash2, X } from "lucide-react-native";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, Moon, Package, Pill, Plus, ShoppingBag, Sunrise, Sun, Trash2, X } from "lucide-react-native";
 
 import { LocalizedText as Text } from "../../components/common/LocalizedText";
 import { LocalizedTextInput as TextInput } from "../../components/common/LocalizedTextInput";
@@ -16,7 +16,7 @@ import { patientSettingsApi, type ReminderSettings } from "../../services/patien
 import { tokenStorage } from "../../services/tokenStorage";
 import type { PatientTabParamList, RootStackParamList } from "../../types/navigation";
 
-type Props = CompositeScreenProps<BottomTabScreenProps<PatientTabParamList, "Medicines">, NativeStackScreenProps<RootStackParamList>>;
+type Props = CompositeScreenProps<BottomTabScreenProps<PatientTabParamList, "Medicines">, NativeStackScreenProps<RootStackParamList, "PatientTabs">>;
 
 type MedicineStatus = "PENDING" | "TAKEN" | "MISSED" | "SNOOZED";
 type DateTab = "TODAY" | "TOMORROW" | "WEEK";
@@ -122,7 +122,6 @@ const getDateKeyFromOffset = (offset: number) => {
 
 const normalizeDateKey = (value?: string | null) => {
   if (!value) return "";
-
   const text = String(value).trim();
 
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
@@ -157,10 +156,8 @@ const getAllowedDates = (tab: DateTab) => {
 
 const getTimeMinutes = (time?: string | null) => {
   if (!time) return Number.MAX_SAFE_INTEGER;
-
   const match = /^(\d{1,2}):(\d{2})/.exec(time.trim());
   if (!match) return Number.MAX_SAFE_INTEGER;
-
   return Number(match[1]) * 60 + Number(match[2]);
 };
 
@@ -203,7 +200,6 @@ const getPeriodTone = (period: MedicinePeriod) => {
 
 const getPeriodIcon = (period: MedicinePeriod) => {
   const tone = getPeriodTone(period);
-
   if (period === "Morning") return <Sunrise size={19} color={tone.color} strokeWidth={2.2} />;
   if (period === "Afternoon") return <Sun size={19} color={tone.color} strokeWidth={2.2} />;
   return <Moon size={19} color={tone.color} strokeWidth={2.2} />;
@@ -211,7 +207,6 @@ const getPeriodIcon = (period: MedicinePeriod) => {
 
 const singularUnit = (unit?: string | null) => {
   const value = unit?.trim().toLowerCase() || "dose";
-
   const map: Record<string, string> = {
     tablets: "tablet",
     capsules: "capsule",
@@ -223,7 +218,6 @@ const singularUnit = (unit?: string | null) => {
     bottles: "bottle",
     packs: "pack",
   };
-
   return map[value] || value;
 };
 
@@ -412,6 +406,24 @@ export const MedicinesScreen = ({ navigation }: Props) => {
     await Promise.all([fetchMedicines("refresh"), loadReviewSummary(), loadReminderSettings()]);
   };
 
+  const openPharmacyRequest = (medicineId: string) => {
+    const medicine = trackedMedicines.find(item => item.id === medicineId);
+
+    if (!medicine) {
+      Alert.alert("Medicine unavailable", "Unable to open the pharmacy request for this medicine.");
+      return;
+    }
+
+    navigation.navigate("PharmacyRequest", {
+      medicineId: medicine.id,
+      medicineName: medicine.name,
+      dose: medicine.dose,
+      source: medicine.source,
+      currentStock: medicine.currentStock,
+      stockUnit: medicine.stockUnit,
+    });
+  };
+
   const markTaken = async (reminderId: string, medicineId: string) => {
     if (actionLoadingReminderId) return;
 
@@ -440,12 +452,12 @@ export const MedicinesScreen = ({ navigation }: Props) => {
 
       if (updatedStock?.currentStock === 0) {
         Alert.alert("Medicine stock empty", "This dose was recorded as taken. Future reminders are paused until medicine is available.", [
-          { text: "Request Medicine", onPress: () => navigation.navigate("MedicineStock", { initialRequest: { medicineId } }) },
+          { text: "Request Medicine", onPress: () => openPharmacyRequest(medicineId) },
           { text: "OK" },
         ]);
       } else if (updatedStock?.isLowStock) {
         Alert.alert("Medicine stock running low", `${updatedStock.currentStock} ${updatedStock.stockUnit || "units"} remaining.`, [
-          { text: "Request More", onPress: () => navigation.navigate("MedicineStock", { initialRequest: { medicineId } }) },
+          { text: "Request More", onPress: () => openPharmacyRequest(medicineId) },
           { text: "OK" },
         ]);
       }
@@ -491,10 +503,6 @@ export const MedicinesScreen = ({ navigation }: Props) => {
     }
   };
 
-  const openPharmacyRequest = (medicineId: string) => {
-    navigation.navigate("MedicineStock", { initialRequest: { medicineId } });
-  };
-
   const openRemovalModal = (medicineId: string, medicineName: string) => {
     setRemovalModal({ medicineId, medicineName });
     setRemovalReason("");
@@ -517,6 +525,7 @@ export const MedicinesScreen = ({ navigation }: Props) => {
 
     try {
       setIsSubmittingRemoval(true);
+
       await patientMedicineReviewsApi.requestDeletion(removalModal.medicineId, reason);
 
       setRemovalModal(null);
@@ -536,7 +545,7 @@ export const MedicinesScreen = ({ navigation }: Props) => {
     if (stockAttention.length === 0) return null;
 
     return (
-      <TouchableOpacity style={styles.attentionBanner} onPress={() => navigation.navigate("MedicineStock")} activeOpacity={0.84}>
+      <View style={styles.attentionBanner}>
         <View style={styles.attentionIcon}>
           <AlertTriangle size={23} color={WARNING} strokeWidth={2.6} />
         </View>
@@ -552,9 +561,7 @@ export const MedicinesScreen = ({ navigation }: Props) => {
             {lowStockCount > 0 ? `${lowStockCount} low stock` : ""}
           </Text>
         </View>
-
-        <ChevronRight size={21} color={WARNING} strokeWidth={2.6} />
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -563,14 +570,8 @@ export const MedicinesScreen = ({ navigation }: Props) => {
       <View style={styles.progressTop}>
         <View style={styles.progressTextBlock}>
           <Text style={styles.progressKicker}>MEDICATION PLAN</Text>
-
-          <Text style={styles.progressTitle}>
-            {selectedTab === "TODAY" ? "Today's progress" : selectedTab === "TOMORROW" ? "Tomorrow's plan" : "This week"}
-          </Text>
-
-          <Text style={styles.progressSubtitle}>
-            {summary.totalCount === 0 ? "No scheduled reminders" : `${summary.takenCount} of ${summary.totalCount} doses completed`}
-          </Text>
+          <Text style={styles.progressTitle}>{selectedTab === "TODAY" ? "Today's progress" : selectedTab === "TOMORROW" ? "Tomorrow's plan" : "This week"}</Text>
+          <Text style={styles.progressSubtitle}>{summary.totalCount === 0 ? "No scheduled reminders" : `${summary.takenCount} of ${summary.totalCount} doses completed`}</Text>
         </View>
 
         <ProgressRing summary={summary} />
@@ -618,9 +619,7 @@ export const MedicinesScreen = ({ navigation }: Props) => {
             </View>
           </View>
 
-          <Text style={styles.medicineMeta}>
-            {medicine.instructions?.trim() || `${medicine.frequency.replaceAll("_", " ").toLowerCase()} · ${medicine.timeOfDay}`}
-          </Text>
+          <Text style={styles.medicineMeta}>{medicine.instructions?.trim() || `${medicine.frequency.replaceAll("_", " ").toLowerCase()} · ${medicine.timeOfDay}`}</Text>
 
           {medicine.currentStock !== null && medicine.currentStock !== undefined ? (
             <View style={[styles.stockBadge, noStock ? styles.stockBadgeEmpty : lowStock ? styles.stockBadgeLow : styles.stockBadgeHealthy]}>
@@ -795,19 +794,14 @@ export const MedicinesScreen = ({ navigation }: Props) => {
               </View>
 
               <Text style={styles.emptyTitle}>No scheduled medicines</Text>
-              <Text style={styles.emptyText}>Medicines with no stock are paused and remain available from Medicine Stock.</Text>
+              <Text style={styles.emptyText}>Medicines with no stock are paused until medicine becomes available.</Text>
 
-              {stockAttention.length > 0 ? (
-                <TouchableOpacity style={styles.stockShortcutButton} onPress={() => navigation.navigate("MedicineStock")}>
-                  <Package size={18} color={SURFACE} strokeWidth={2.4} />
-                  <Text style={styles.stockShortcutText}>Open Medicine Stock</Text>
-                </TouchableOpacity>
-              ) : (
+              {stockAttention.length === 0 ? (
                 <TouchableOpacity style={styles.stockShortcutButton} onPress={() => navigation.navigate("AddMedicine")}>
                   <Plus size={18} color={SURFACE} strokeWidth={2.4} />
                   <Text style={styles.stockShortcutText}>Add Medicine</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           ) : (
             <>
@@ -848,26 +842,14 @@ export const MedicinesScreen = ({ navigation }: Props) => {
 
             <Text style={styles.inputLabel}>Why do you want to remove this medicine?</Text>
 
-            <TextInput
-              style={styles.noteInput}
-              value={removalReason}
-              onChangeText={setRemovalReason}
-              placeholder="Enter reason"
-              multiline
-              maxLength={500}
-              textAlignVertical="top"
-            />
+            <TextInput style={styles.noteInput} value={removalReason} onChangeText={setRemovalReason} placeholder="Enter reason" multiline maxLength={500} textAlignVertical="top" />
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={closeRemovalModal}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.removeConfirmButton, isSubmittingRemoval && styles.disabledButton]}
-                disabled={isSubmittingRemoval}
-                onPress={() => void submitRemoval()}
-              >
+              <TouchableOpacity style={[styles.removeConfirmButton, isSubmittingRemoval && styles.disabledButton]} disabled={isSubmittingRemoval} onPress={() => void submitRemoval()}>
                 {isSubmittingRemoval ? (
                   <ActivityIndicator color={SURFACE} />
                 ) : (

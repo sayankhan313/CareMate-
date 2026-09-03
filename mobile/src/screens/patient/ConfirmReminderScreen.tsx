@@ -65,10 +65,12 @@ const passedToday = (time: string) => {
 
   const hour = Number(match[1]);
   const minute = Number(match[2]);
+
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return false;
 
   const scheduled = new Date();
   scheduled.setHours(hour, minute, 0, 0);
+
   return scheduled <= new Date();
 };
 
@@ -79,27 +81,22 @@ const scheduleStart = (start: string, times: string[]) => {
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
+
   return dateText(tomorrow);
 };
 
 const singularUnit = (unit?: string | null) => {
   const value = unit?.trim().toLowerCase() || "";
-  const known: Record<string, string> = {
-    tablets: "tablet",
-    capsules: "capsule",
-    puffs: "puff",
-    doses: "dose",
-    sprays: "spray",
-    sachets: "sachet",
-    packs: "pack",
-  };
+  const known: Record<string, string> = { tablets: "tablet", capsules: "capsule", puffs: "puff", doses: "dose", sprays: "spray", sachets: "sachet", packs: "pack" };
   return known[value] || value;
 };
 
 const displayUnit = (unit: string, quantity: number) => {
   const value = singularUnit(unit);
+
   if (quantity === 1 || ["ml", "g", "mg", "mcg"].includes(value)) return value;
   if (value.endsWith("s")) return value;
+
   return `${value}s`;
 };
 
@@ -111,9 +108,12 @@ const getError = (result: any) => {
   return "Please check the medicine details.";
 };
 
+const resolveCreatedMedicine = (result: any) => result?.data?.medicine || result?.medicine || result?.data || result;
+
 export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
   const { medicineDraft, mode = "CREATE", medicineReviewRequestId } = route.params;
+
   const isResubmit = mode === "RESUBMIT_REVIEW";
   const noStock = !isResubmit && medicineDraft.hasMedicineOnHand === false;
 
@@ -180,9 +180,10 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
     });
 
     const result = await response.json().catch(() => ({}));
+
     if (!response.ok) throw new Error(getError(result));
 
-    return result?.data;
+    return result;
   };
 
   const resubmit = async () => {
@@ -206,8 +207,24 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
     navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "Medicines" } }] });
   };
 
-  const openPharmacyRequest = (medicineId?: string) => {
-    navigation.replace("MedicineStock", medicineId ? { initialRequest: { medicineId } } : undefined);
+  const openPharmacyRequest = (result: any) => {
+    const medicine = resolveCreatedMedicine(result);
+    const medicineId = medicine?.id || result?.medicineId || result?.data?.medicineId;
+    const review = medicine?.latestReviewRequest || result?.reviewRequest || result?.data?.reviewRequest;
+
+    if (!medicineId) throw new Error("Medicine was saved, but the pharmacy request could not be opened.");
+
+    navigation.replace("PharmacyRequest", {
+      medicineId,
+      medicineName: medicine?.name || medicineDraft.name,
+      dose: medicine?.dose || medicineDraft.dose,
+      source: medicine?.source || "PATIENT_ADDED",
+      currentStock: medicine?.currentStock ?? 0,
+      stockUnit: medicine?.stockUnit || medicineDraft.stockUnit || doseUnit,
+      reviewStatus: review?.status || (doctorReview ? "PENDING" : null),
+      reviewRoutingStatus: review?.routingStatus || null,
+      reviewDoctorName: review?.reviewedByDoctor?.fullName || review?.doctor?.fullName || null,
+    });
   };
 
   const save = async () => {
@@ -222,13 +239,14 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
         Alert.alert("Medicine resubmitted", "Your corrected medicine has been sent for review.", [
           { text: "View Updates", onPress: () => navigation.reset({ index: 0, routes: [{ name: "MedicineUpdates" }] }) },
         ]);
+
         return;
       }
 
       const created = await saveNewMedicine();
 
       if (noStock) {
-        openPharmacyRequest(created?.id);
+        openPharmacyRequest(created);
         return;
       }
 
@@ -237,6 +255,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
           { text: "View Updates", onPress: () => navigation.reset({ index: 0, routes: [{ name: "MedicineUpdates" }] }) },
           { text: "Done", onPress: medicines },
         ]);
+
         return;
       }
 
@@ -264,11 +283,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
           </View>
         </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(190, insets.bottom + 175) }]}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: Math.max(190, insets.bottom + 175) }]} showsVerticalScrollIndicator={false}>
           <View style={styles.medicineCard}>
             <View style={styles.medicineIcon}>
               <Pill size={34} color={PRIMARY} strokeWidth={2.6} />
@@ -294,11 +309,8 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 <View style={[styles.statusBadge, medicineDraft.hasMedicineOnHand ? styles.availableBadge : styles.emptyBadge]}>
-                  {medicineDraft.hasMedicineOnHand ? (
-                    <CheckCircle2 size={15} color={SUCCESS_DARK} strokeWidth={2.5} />
-                  ) : (
-                    <AlertTriangle size={15} color={WARNING_DARK} strokeWidth={2.5} />
-                  )}
+                  {medicineDraft.hasMedicineOnHand ? <CheckCircle2 size={15} color={SUCCESS_DARK} strokeWidth={2.5} /> : <AlertTriangle size={15} color={WARNING_DARK} strokeWidth={2.5} />}
+
                   <Text style={[styles.statusText, { color: medicineDraft.hasMedicineOnHand ? SUCCESS_DARK : WARNING_DARK }]}>
                     {medicineDraft.hasMedicineOnHand ? "Available" : "No stock"}
                   </Text>
@@ -315,24 +327,9 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
                     />
                   ) : null}
 
-                  <Detail
-                    icon={<Package size={17} color={SUCCESS} strokeWidth={2.5} />}
-                    label="Total stock"
-                    value={`${stock} ${displayUnit(stockUnit, stock)}`}
-                  />
-
-                  <Detail
-                    icon={<Pill size={17} color={PRIMARY} strokeWidth={2.5} />}
-                    label="Each dose"
-                    value={amountText}
-                  />
-
-                  <Detail
-                    icon={<AlertTriangle size={17} color={WARNING} strokeWidth={2.5} />}
-                    label="Low-stock warning"
-                    value={`${medicineDraft.lowStockThreshold ?? 0} ${displayUnit(stockUnit, medicineDraft.lowStockThreshold ?? 0)}`}
-                    last
-                  />
+                  <Detail icon={<Package size={17} color={SUCCESS} strokeWidth={2.5} />} label="Total stock" value={`${stock} ${displayUnit(stockUnit, stock)}`} />
+                  <Detail icon={<Pill size={17} color={PRIMARY} strokeWidth={2.5} />} label="Each dose" value={amountText} />
+                  <Detail icon={<AlertTriangle size={17} color={WARNING} strokeWidth={2.5} />} label="Low-stock warning" value={`${medicineDraft.lowStockThreshold ?? 0} ${displayUnit(stockUnit, medicineDraft.lowStockThreshold ?? 0)}`} last />
 
                   <View style={styles.stockInfo}>
                     <CheckCircle2 size={17} color={SUCCESS_DARK} strokeWidth={2.5} />
@@ -342,6 +339,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
               ) : (
                 <View style={styles.noStock}>
                   <AlertTriangle size={19} color={WARNING_DARK} strokeWidth={2.5} />
+
                   <View style={{ flex: 1, marginLeft: 9 }}>
                     <Text style={styles.noStockTitle}>Medicine unavailable</Text>
                     <Text style={styles.noStockText}>Reminder stays inactive until stock is available.</Text>
@@ -384,6 +382,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
 
             <View style={styles.reviewText}>
               <Text style={styles.reviewTitle}>{isResubmit ? "Send back to doctor" : "Send to doctor for review"}</Text>
+
               <Text style={styles.reviewSub}>
                 {isResubmit
                   ? "The corrected medicine will be sent back for review."
@@ -409,11 +408,10 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
           {noStock ? (
             <View style={styles.pharmacyPanel}>
               <Package size={20} color={WARNING_DARK} strokeWidth={2.6} />
+
               <View style={{ flex: 1, marginLeft: 9 }}>
                 <Text style={styles.pharmacyTitle}>Request medicine from pharmacy</Text>
-                <Text style={styles.pharmacyText}>
-                  Saving this medicine does not automatically send a pharmacy order. Continue to Medicine Stock and confirm Request from Pharmacy.
-                </Text>
+                <Text style={styles.pharmacyText}>Saving this medicine does not automatically send a pharmacy order. Continue to Pharmacy and review the request before sending.</Text>
               </View>
             </View>
           ) : null}
@@ -433,13 +431,20 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.primaryButton, saving ? styles.disabled : undefined]} onPress={() => void save()} disabled={saving} activeOpacity={0.85}>
-            {saving ? (
-              <ActivityIndicator color={SURFACE} />
-            ) : (
+            {saving ? <ActivityIndicator color={SURFACE} /> : (
               <>
                 {noStock ? <Package size={19} color={SURFACE} strokeWidth={2.6} /> : <Send size={19} color={SURFACE} strokeWidth={2.6} />}
+
                 <Text style={styles.primaryText}>
-                  {isResubmit ? "Resubmit to Doctor" : noStock ? doctorReview ? "Save & Continue to Pharmacy" : "Continue to Pharmacy" : doctorReview ? "Send for Review" : "Save Medicine & Reminder"}
+                  {isResubmit
+                    ? "Resubmit to Doctor"
+                    : noStock
+                      ? doctorReview
+                        ? "Save & Continue to Pharmacy"
+                        : "Continue to Pharmacy"
+                      : doctorReview
+                        ? "Send for Review"
+                        : "Save Medicine & Reminder"}
                 </Text>
               </>
             )}
@@ -453,6 +458,7 @@ export const ConfirmReminderScreen = ({ navigation, route }: Props) => {
 const Detail = ({ icon, label, value, last }: { icon: ReactNode; label: string; value: string; last?: boolean }) => (
   <View style={[styles.detail, last ? styles.detailLast : undefined]}>
     <View style={styles.detailIcon}>{icon}</View>
+
     <View style={{ flex: 1 }}>
       <Text style={styles.detailLabel}>{label}</Text>
       <Text style={styles.detailValue}>{value}</Text>

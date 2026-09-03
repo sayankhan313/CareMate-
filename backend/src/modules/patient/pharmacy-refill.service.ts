@@ -73,6 +73,7 @@ const formatRequestedQuantity = (quantity: number, unit: string) => `${quantity}
 const formatStoredRequestedQuantity = (quantity?: string | null, unit?: string | null) => {
   const value = quantity?.trim() || "";
   const normalizedUnit = normalizeUnit(unit);
+
   if (!value) return normalizedUnit ? `1 ${normalizedUnit}` : "1";
   if (!normalizedUnit) return value;
 
@@ -122,17 +123,20 @@ const getPatientMedicine = async (patientId: string, medicineId: string) => {
   if (!medicine) throw new AppError("Medicine not found", 404);
 
   const latestAddReview = medicine.reviewRequests[0] || null;
-  const inactiveButReviewable = !medicine.isActive && latestAddReview && ["PENDING", "APPROVED", "APPLIED"].includes(latestAddReview.status);
 
-  if (!medicine.isActive && !inactiveButReviewable) {
-    throw new AppError("Medicine is not available for a pharmacy request", 409);
+  if (!medicine.isActive && latestAddReview?.status === "REJECTED") {
+    throw new AppError("This medicine was rejected during review and cannot be requested from the pharmacy.", 409);
   }
 
   return medicine;
 };
 
 const getPatient = async (patientId: string) => {
-  const patient = await prisma.user.findFirst({ where: { id: patientId, role: "PATIENT" }, select: { id: true, fullName: true } });
+  const patient = await prisma.user.findFirst({
+    where: { id: patientId, role: "PATIENT" },
+    select: { id: true, fullName: true },
+  });
+
   if (!patient) throw new AppError("Patient account not found", 404);
   return patient;
 };

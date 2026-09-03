@@ -19,6 +19,7 @@ import { WelcomeScreen } from "../screens/onboarding/WelcomeScreen";
 
 import { AddMedicineScreen } from "../screens/patient/AddMedicineScreen";
 import { ConfirmReminderScreen } from "../screens/patient/ConfirmReminderScreen";
+import PharmacyRequestScreen from "../screens/patient/PharmacyRequestScreen";
 import { ConnectedDeviceScreen } from "../screens/patient/ConnectedDeviceScreen";
 import { SafetyResponseScreen } from "../screens/patient/SafetyResponseScreen";
 import VideoConsultationScreen from "../screens/patient/VideoConsultationScreen";
@@ -36,7 +37,6 @@ import NotificationPreferencesScreen from "../screens/patient/NotificationPrefer
 import { SelectDoctorScreen } from "../screens/patient/SelectDoctorScreen";
 import PatientActiveCallsScreen from "../screens/patient/PatientActiveCallsScreen";
 import MedicineUpdatesScreen from "../screens/patient/MedicineUpdatesScreen";
-import MedicineStockScreen from "../screens/patient/MedicineStockScreen";
 import PatientReportsScreen from "../screens/patient/PatientReportsScreen";
 import PatientUploadReportScreen from "../screens/patient/PatientUploadReportScreen";
 import ReminderSettingsScreen from "../screens/patient/ReminderSettingsScreen";
@@ -124,7 +124,7 @@ const NotificationPreferencesStackScreen = NotificationPreferencesScreen as Comp
 const SelectDoctorStackScreen = SelectDoctorScreen as ComponentType<any>;
 const PatientActiveCallsStackScreen = PatientActiveCallsScreen as ComponentType<any>;
 const MedicineUpdatesStackScreen = MedicineUpdatesScreen as ComponentType<any>;
-const MedicineStockStackScreen = MedicineStockScreen as ComponentType<any>;
+const PharmacyRequestStackScreen = PharmacyRequestScreen as ComponentType<any>;
 const PatientReportsStackScreen = PatientReportsScreen as ComponentType<any>;
 const PatientUploadReportStackScreen = PatientUploadReportScreen as ComponentType<any>;
 
@@ -168,7 +168,7 @@ const SESSION_PREFERENCE_REFRESH_MS = 60_000;
 const PATIENT_SESSION_ROUTES = new Set([
   "PatientTabs", "PatientProfile", "PatientCaregiverAccess", "EditPatientProfile", "MyPharmacies", "PrescriptionPaymentSettings", "NotificationPreferences",
   "ReminderSettings", "SafetyResponseSettings", "LanguageAccessibility", "PrivacySecurity", "SelectDoctor", "PatientActiveCalls", "MedicineUpdates",
-  "MedicineStock", "PatientReports", "PatientUploadReport", "AddMedicine", "ConfirmReminder", "ScanMedicine", "ScanMedicineResult",
+  "PharmacyRequest", "PatientReports", "PatientUploadReport", "AddMedicine", "ConfirmReminder", "ScanMedicine", "ScanMedicineResult",
   "PrescriptionScanResult", "ConnectedDevice", "ManualSafetyResponse", "SafetyResponse", "VideoConsultation", "ConsultationEnded",
 ]);
 
@@ -213,7 +213,9 @@ const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
 
     try {
       const result = await patientSettingsApi.getPrivacySettings();
+
       if (activeTokenRef.current !== token) return;
+
       patientSessionEnabledRef.current = true;
       timeoutMsRef.current = result.settings.sessionTimeoutMinutes * 60_000;
     } catch {
@@ -229,11 +231,13 @@ const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
 
     try {
       await tokenStorage.removeToken();
+
       if (navigationRef.isReady()) navigationRef.resetRoot({ index: 0, routes: [{ name: "Login" }] });
 
       const language = getRuntimeLanguage();
       const title = translateText(language, "common.sessionExpired");
       const message = translateText(language, "common.pleaseLoginAgain");
+
       Alert.alert(title, message);
     } finally {
       signingOutRef.current = false;
@@ -275,6 +279,7 @@ const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
       }
 
       if (tokenChanged) lastActivityAtRef.current = Date.now();
+
       await refreshPrivacySettings(token);
     };
 
@@ -321,10 +326,15 @@ const CriticalVitalWatcher = () => {
     if (lastHandledReadingIdRef.current === lastSyncedReading.id || !navigationRef.isReady()) return;
 
     const currentRoute = navigationRef.getCurrentRoute();
+
     if (currentRoute?.name === "SafetyResponse" || currentRoute?.name === "VideoConsultation" || currentRoute?.name === "ConsultationEnded") return;
 
     lastHandledReadingIdRef.current = lastSyncedReading.id;
-    navigationRef.navigate("SafetyResponse", { vitalReading: lastSyncedReading, triggerSource: "Health Connect Auto Sync" });
+
+    navigationRef.navigate("SafetyResponse", {
+      vitalReading: lastSyncedReading,
+      triggerSource: "Health Connect Auto Sync",
+    });
   }, [lastSyncedReading]);
 
   return null;
@@ -415,7 +425,7 @@ export const AppNavigator = () => (
               <Stack.Screen name="SelectDoctor" component={SelectDoctorStackScreen} />
               <Stack.Screen name="PatientActiveCalls" component={PatientActiveCallsStackScreen} />
               <Stack.Screen name="MedicineUpdates" component={MedicineUpdatesStackScreen} />
-              <Stack.Screen name="MedicineStock" component={MedicineStockStackScreen} />
+              <Stack.Screen name="PharmacyRequest" component={PharmacyRequestStackScreen} />
               <Stack.Screen name="PatientReports" component={PatientReportsStackScreen} />
               <Stack.Screen name="PatientUploadReport" component={PatientUploadReportStackScreen} />
 

@@ -63,7 +63,6 @@ export type MedicineDraft = {
 };
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
-
 export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
 export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
 export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
@@ -142,7 +141,19 @@ export type RootStackParamList = {
   SelectDoctor: undefined;
   PatientActiveCalls: undefined;
   MedicineUpdates: undefined;
-  MedicineStock: { initialRequest?: { medicineId: string } } | undefined;
+
+  PharmacyRequest: {
+    medicineId: string;
+    medicineName: string;
+    dose: string;
+    source: string;
+    currentStock?: number | null;
+    stockUnit?: string | null;
+    reviewStatus?: string | null;
+    reviewRoutingStatus?: string | null;
+    reviewDoctorName?: string | null;
+  };
+
   PatientReports: undefined;
   PatientUploadReport: undefined;
 
