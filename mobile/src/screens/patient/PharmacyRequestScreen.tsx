@@ -135,6 +135,20 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
   const availablePharmacies = useMemo(() => savedPharmacies.filter(pharmacy => pharmacy.isAvailable), [savedPharmacies]);
   const selectedPharmacy = useMemo(() => availablePharmacies.find(pharmacy => pharmacy.id === selectedPharmacyId) || null, [availablePharmacies, selectedPharmacyId]);
 
+  const openPatientMedicines = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "PatientTabs", params: { screen: "Medicines" } }],
+    });
+  };
+
+  const openPatientOrders = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }],
+    });
+  };
+
   const loadDoctors = useCallback(async () => {
     try {
       const result = await doctorAssignmentApi.getAssignedDoctors();
@@ -182,7 +196,10 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
       if (!token) return;
 
       const query = `medicineName=${encodeURIComponent(medicineName)}&strength=${encodeURIComponent(dose)}`;
-      const response = await fetch(`${API_BASE_URL}/patient/medicine-pack-reference?${query}`, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${API_BASE_URL}/patient/medicine-pack-reference?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       const result = await response.json().catch(() => ({}));
       if (!response.ok) return;
 
@@ -199,11 +216,9 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
     void resolveRequestUnit();
   }, [loadDoctors, resolveRequestUnit]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadPharmacies();
-    }, [loadPharmacies]),
-  );
+  useFocusEffect(useCallback(() => {
+    void loadPharmacies();
+  }, [loadPharmacies]));
 
   const selectVerificationPath = (path: PatientRefillVerificationPath) => {
     setVerificationPath(path);
@@ -226,7 +241,12 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
     try {
       setIsPickingEvidence(true);
-      const results = await pick({ allowMultiSelection: false, type: [types.pdf, types.images] });
+
+      const results = await pick({
+        allowMultiSelection: false,
+        type: [types.pdf, types.images],
+      });
+
       const file = results[0];
       if (!file) return;
 
@@ -243,7 +263,12 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
         return;
       }
 
-      setSelectedEvidence({ uri: file.uri, name: file.name || fallbackEvidenceName(mimeType), type: mimeType, size: file.size });
+      setSelectedEvidence({
+        uri: file.uri,
+        name: file.name || fallbackEvidenceName(mimeType),
+        type: mimeType,
+        size: file.size,
+      });
     } catch (error) {
       if (isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED) return;
       Alert.alert("Unable to select file", error instanceof Error ? error.message : "Please try again.");
@@ -269,7 +294,12 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
     }
 
     if (!quantityUnit || isResolvingRequestUnit) {
-      Alert.alert("Package information", isResolvingRequestUnit ? "Please wait while package information is checked." : "Unable to determine the pharmacy package type.");
+      Alert.alert(
+        "Package information",
+        isResolvingRequestUnit
+          ? "Please wait while package information is checked."
+          : "Unable to determine the pharmacy package type.",
+      );
       return;
     }
 
@@ -303,9 +333,18 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
         quantityUnit,
         note: note.trim() || undefined,
         ...(!isCareMatePrescription && !usesExistingMedicineReview && verificationPath ? { verificationPath } : {}),
-        ...(!isCareMatePrescription && !usesExistingMedicineReview && verificationPath === "ASSIGNED_DOCTOR" && selectedDoctorId ? { verificationDoctorId: selectedDoctorId } : {}),
+        ...(!isCareMatePrescription && !usesExistingMedicineReview && verificationPath === "ASSIGNED_DOCTOR" && selectedDoctorId
+          ? { verificationDoctorId: selectedDoctorId }
+          : {}),
         ...(!isCareMatePrescription && !usesExistingMedicineReview && verificationPath === "EXTERNAL_EVIDENCE" && evidenceType && selectedEvidence
-          ? { evidenceType, evidenceFile: { uri: selectedEvidence.uri, name: selectedEvidence.name, type: selectedEvidence.type } }
+          ? {
+              evidenceType,
+              evidenceFile: {
+                uri: selectedEvidence.uri,
+                name: selectedEvidence.name,
+                type: selectedEvidence.type,
+              },
+            }
           : {}),
       });
 
@@ -316,25 +355,33 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
             ? `Sent to ${result.pharmacy.pharmacyName}. Fulfilment remains locked until the existing doctor review is approved.`
             : `Sent to ${result.pharmacy.pharmacyName}. Waiting for doctor confirmation.`,
           [
-            { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
-            { text: "Done", onPress: () => navigation.goBack() },
+            { text: "View Orders", onPress: openPatientOrders },
+            { text: "Done", onPress: openPatientMedicines },
           ],
         );
         return;
       }
 
       if (result.requiresPharmacyVerification) {
-        Alert.alert("Request sent", `Sent to ${result.pharmacy.pharmacyName}. Waiting for pharmacy review.`, [
-          { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
-          { text: "Done", onPress: () => navigation.goBack() },
-        ]);
+        Alert.alert(
+          "Request sent",
+          `Sent to ${result.pharmacy.pharmacyName}. Waiting for pharmacy review.`,
+          [
+            { text: "View Orders", onPress: openPatientOrders },
+            { text: "Done", onPress: openPatientMedicines },
+          ],
+        );
         return;
       }
 
-      Alert.alert("Request sent", `Sent to ${result.pharmacy.pharmacyName}.`, [
-        { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
-        { text: "Done", onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert(
+        "Request sent",
+        `Sent to ${result.pharmacy.pharmacyName}.`,
+        [
+          { text: "View Orders", onPress: openPatientOrders },
+          { text: "Done", onPress: openPatientMedicines },
+        ],
+      );
     } catch (error) {
       Alert.alert("Unable to send request", error instanceof Error ? error.message : "Please try again.");
     } finally {
@@ -359,7 +406,11 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
         </View>
 
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 120, 140) }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 120, 140) }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.medicineCard}>
               <View style={styles.medicineIcon}>
                 <Package size={25} color={PRIMARY} strokeWidth={2.6} />
@@ -383,8 +434,10 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
               ) : pharmacyError ? (
                 <View style={styles.warningPanel}>
                   <AlertTriangle size={18} color={WARNING_DARK} strokeWidth={2.5} />
+
                   <View style={styles.warningContent}>
                     <Text style={styles.warningText}>{pharmacyError}</Text>
+
                     <TouchableOpacity onPress={() => void loadPharmacies()}>
                       <Text style={styles.retryLink}>Try again</Text>
                     </TouchableOpacity>
@@ -393,6 +446,7 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
               ) : !selectedPharmacy ? (
                 <View style={styles.noPharmacyPanel}>
                   <Store size={21} color={WARNING_DARK} strokeWidth={2.5} />
+
                   <View style={styles.noPharmacyText}>
                     <Text style={styles.noPharmacyTitle}>No available pharmacy</Text>
                     <Text style={styles.noPharmacySubtitle}>Save an approved pharmacy before sending a request.</Text>
@@ -411,7 +465,9 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
                     <View style={styles.pharmacyText}>
                       <View style={styles.pharmacyNameRow}>
-                        <Text style={styles.pharmacyName} numberOfLines={1}>{selectedPharmacy.pharmacyName}</Text>
+                        <Text style={styles.pharmacyName} numberOfLines={1}>
+                          {selectedPharmacy.pharmacyName}
+                        </Text>
 
                         {selectedPharmacy.isPrimary ? (
                           <View style={styles.primaryBadge}>
@@ -422,14 +478,18 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
                       <View style={styles.locationRow}>
                         <MapPin size={12} color={MUTED} strokeWidth={2.2} />
-                        <Text style={styles.pharmacyLocation} numberOfLines={1}>{getPharmacyLocation(selectedPharmacy)}</Text>
+                        <Text style={styles.pharmacyLocation} numberOfLines={1}>
+                          {getPharmacyLocation(selectedPharmacy)}
+                        </Text>
                       </View>
                     </View>
 
                     {availablePharmacies.length > 1 ? (
                       <TouchableOpacity style={styles.changeButton} onPress={() => setShowPharmacyChoices(value => !value)}>
                         <Text style={styles.changeText}>Change</Text>
-                        {showPharmacyChoices ? <ChevronUp size={16} color={PRIMARY_DARK} strokeWidth={2.5} /> : <ChevronDown size={16} color={PRIMARY_DARK} strokeWidth={2.5} />}
+                        {showPharmacyChoices
+                          ? <ChevronUp size={16} color={PRIMARY_DARK} strokeWidth={2.5} />
+                          : <ChevronDown size={16} color={PRIMARY_DARK} strokeWidth={2.5} />}
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -440,14 +500,20 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                         const selected = pharmacy.id === selectedPharmacyId;
 
                         return (
-                          <TouchableOpacity key={pharmacy.id} style={[styles.pharmacyOption, selected && styles.pharmacyOptionSelected]} onPress={() => selectPharmacy(pharmacy.id)}>
+                          <TouchableOpacity
+                            key={pharmacy.id}
+                            style={[styles.pharmacyOption, selected && styles.pharmacyOptionSelected]}
+                            onPress={() => selectPharmacy(pharmacy.id)}
+                          >
                             <View style={[styles.pharmacyOptionIcon, selected && styles.pharmacyOptionIconSelected]}>
                               <Store size={18} color={selected ? PRIMARY : PRIMARY_DARK} strokeWidth={2.5} />
                             </View>
 
                             <View style={styles.pharmacyText}>
                               <View style={styles.pharmacyNameRow}>
-                                <Text style={styles.pharmacyOptionName} numberOfLines={1}>{pharmacy.pharmacyName}</Text>
+                                <Text style={styles.pharmacyOptionName} numberOfLines={1}>
+                                  {pharmacy.pharmacyName}
+                                </Text>
 
                                 {pharmacy.isPrimary ? (
                                   <View style={styles.primaryBadge}>
@@ -456,7 +522,9 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                                 ) : null}
                               </View>
 
-                              <Text style={styles.pharmacyOptionLocation} numberOfLines={1}>{getPharmacyLocation(pharmacy)}</Text>
+                              <Text style={styles.pharmacyOptionLocation} numberOfLines={1}>
+                                {getPharmacyLocation(pharmacy)}
+                              </Text>
                             </View>
 
                             <SelectionDot selected={selected} />
@@ -498,7 +566,9 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
                 <View style={styles.panelText}>
                   <Text style={styles.successTitle}>Doctor review approved</Text>
-                  <Text style={styles.successSubtitle}>{reviewDoctorName ? `Reviewed by ${reviewDoctorName}` : "Existing CareMate+ review will be reused"}</Text>
+                  <Text style={styles.successSubtitle}>
+                    {reviewDoctorName ? `Reviewed by ${reviewDoctorName}` : "Existing CareMate+ review will be reused"}
+                  </Text>
                 </View>
               </View>
             ) : (
@@ -506,21 +576,35 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.sectionTitle}>Verification</Text>
                 <Text style={styles.sectionSubtitle}>Choose how this medicine should be verified</Text>
 
-                <TouchableOpacity style={[styles.option, verificationPath === "ASSIGNED_DOCTOR" && styles.optionSelected]} onPress={() => selectVerificationPath("ASSIGNED_DOCTOR")}>
-                  <View style={styles.optionIcon}><Stethoscope size={20} color={PRIMARY} strokeWidth={2.5} /></View>
+                <TouchableOpacity
+                  style={[styles.option, verificationPath === "ASSIGNED_DOCTOR" && styles.optionSelected]}
+                  onPress={() => selectVerificationPath("ASSIGNED_DOCTOR")}
+                >
+                  <View style={styles.optionIcon}>
+                    <Stethoscope size={20} color={PRIMARY} strokeWidth={2.5} />
+                  </View>
+
                   <View style={styles.optionText}>
                     <Text style={styles.optionTitle}>My CareMate+ Doctor</Text>
                     <Text style={styles.optionSubtitle}>Doctor confirmation</Text>
                   </View>
+
                   <SelectionDot selected={verificationPath === "ASSIGNED_DOCTOR"} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.option, verificationPath === "EXTERNAL_EVIDENCE" && styles.optionSelected]} onPress={() => selectVerificationPath("EXTERNAL_EVIDENCE")}>
-                  <View style={styles.optionIcon}><FileText size={20} color={PRIMARY} strokeWidth={2.5} /></View>
+                <TouchableOpacity
+                  style={[styles.option, verificationPath === "EXTERNAL_EVIDENCE" && styles.optionSelected]}
+                  onPress={() => selectVerificationPath("EXTERNAL_EVIDENCE")}
+                >
+                  <View style={styles.optionIcon}>
+                    <FileText size={20} color={PRIMARY} strokeWidth={2.5} />
+                  </View>
+
                   <View style={styles.optionText}>
                     <Text style={styles.optionTitle}>External Source</Text>
                     <Text style={styles.optionSubtitle}>Upload medicine evidence</Text>
                   </View>
+
                   <SelectionDot selected={verificationPath === "EXTERNAL_EVIDENCE"} />
                 </TouchableOpacity>
 
@@ -537,12 +621,20 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                       const selected = selectedDoctorId === assignment.doctor.id;
 
                       return (
-                        <TouchableOpacity key={assignment.assignmentId} style={[styles.doctorOption, selected && styles.optionSelected]} onPress={() => setSelectedDoctorId(assignment.doctor.id)}>
-                          <View style={styles.doctorIcon}><UserRound size={19} color={PRIMARY} strokeWidth={2.5} /></View>
+                        <TouchableOpacity
+                          key={assignment.assignmentId}
+                          style={[styles.doctorOption, selected && styles.optionSelected]}
+                          onPress={() => setSelectedDoctorId(assignment.doctor.id)}
+                        >
+                          <View style={styles.doctorIcon}>
+                            <UserRound size={19} color={PRIMARY} strokeWidth={2.5} />
+                          </View>
+
                           <View style={styles.optionText}>
                             <Text style={styles.optionTitle}>{assignment.doctor.fullName}</Text>
                             <Text style={styles.optionSubtitle}>{assignment.doctor.specialization || "CareMate+ Doctor"}</Text>
                           </View>
+
                           <SelectionDot selected={selected} />
                         </TouchableOpacity>
                       );
@@ -558,11 +650,16 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                       const selected = evidenceType === option.value;
 
                       return (
-                        <TouchableOpacity key={option.value} style={[styles.evidenceOption, selected && styles.optionSelected]} onPress={() => setEvidenceType(option.value)}>
+                        <TouchableOpacity
+                          key={option.value}
+                          style={[styles.evidenceOption, selected && styles.optionSelected]}
+                          onPress={() => setEvidenceType(option.value)}
+                        >
                           <View style={styles.optionText}>
                             <Text style={styles.optionTitle}>{option.label}</Text>
                             <Text style={styles.optionSubtitle}>{option.helper}</Text>
                           </View>
+
                           <SelectionDot selected={selected} />
                         </TouchableOpacity>
                       );
@@ -575,8 +672,15 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                         <FileText size={21} color={PRIMARY} strokeWidth={2.5} />
 
                         <View style={styles.fileText}>
-                          <Text style={styles.fileName} numberOfLines={1}>{selectedEvidence.name}</Text>
-                          <Text style={styles.fileMeta}>{selectedEvidence.size !== null ? `${(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB` : "Selected"}</Text>
+                          <Text style={styles.fileName} numberOfLines={1}>
+                            {selectedEvidence.name}
+                          </Text>
+
+                          <Text style={styles.fileMeta}>
+                            {selectedEvidence.size !== null
+                              ? `${(selectedEvidence.size / (1024 * 1024)).toFixed(2)} MB`
+                              : "Selected"}
+                          </Text>
                         </View>
 
                         <TouchableOpacity style={styles.removeFile} onPress={() => setSelectedEvidence(null)}>
@@ -585,9 +689,12 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
                       </View>
                     ) : (
                       <TouchableOpacity style={styles.uploadButton} disabled={isPickingEvidence} onPress={() => void pickEvidence()}>
-                        {isPickingEvidence ? <ActivityIndicator color={PRIMARY} /> : (
+                        {isPickingEvidence ? (
+                          <ActivityIndicator color={PRIMARY} />
+                        ) : (
                           <>
                             <FileUp size={20} color={PRIMARY} strokeWidth={2.5} />
+
                             <View style={styles.uploadText}>
                               <Text style={styles.uploadTitle}>Upload file</Text>
                               <Text style={styles.uploadSubtitle}>PDF or image · max 8 MB</Text>
@@ -605,7 +712,13 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
               <Text style={styles.sectionTitle}>Request details</Text>
 
               <Text style={styles.label}>Requested quantity</Text>
-              <TextInput style={styles.input} value={quantity} onChangeText={value => setQuantity(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="1" />
+              <TextInput
+                style={styles.input}
+                value={quantity}
+                onChangeText={value => setQuantity(value.replace(/[^0-9]/g, ""))}
+                keyboardType="number-pad"
+                placeholder="1"
+              />
 
               <Text style={styles.label}>Pharmacy package</Text>
 
@@ -614,16 +727,31 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
                 <View style={styles.packageText}>
                   <Text style={styles.packageTitle}>
-                    {isResolvingRequestUnit ? "Checking package type..." : `${quantity || "1"} ${displayPackageUnit(requestUnit, Number.parseInt(quantity || "1", 10) || 1)}`}
+                    {isResolvingRequestUnit
+                      ? "Checking package type..."
+                      : `${quantity || "1"} ${displayPackageUnit(requestUnit, Number.parseInt(quantity || "1", 10) || 1)}`}
                   </Text>
-                  <Text style={styles.packageHelper}>Package type is matched automatically from the medicine reference.</Text>
+
+                  <Text style={styles.packageHelper}>
+                    Package type is matched automatically from the medicine reference.
+                  </Text>
                 </View>
 
-                {isResolvingRequestUnit ? <ActivityIndicator size="small" color={PRIMARY} /> : <CheckCircle2 size={18} color={SUCCESS} strokeWidth={2.5} />}
+                {isResolvingRequestUnit
+                  ? <ActivityIndicator size="small" color={PRIMARY} />
+                  : <CheckCircle2 size={18} color={SUCCESS} strokeWidth={2.5} />}
               </View>
 
               <Text style={styles.label}>Note</Text>
-              <TextInput style={styles.noteInput} value={note} onChangeText={setNote} placeholder="Optional" multiline maxLength={500} textAlignVertical="top" />
+              <TextInput
+                style={styles.noteInput}
+                value={note}
+                onChangeText={setNote}
+                placeholder="Optional"
+                multiline
+                maxLength={500}
+                textAlignVertical="top"
+              />
             </View>
 
             <View style={styles.infoPanel}>
@@ -643,7 +771,9 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
             disabled={isSubmitting || isResolvingRequestUnit || isLoadingPharmacies || !selectedPharmacyId}
             onPress={() => void submit()}
           >
-            {isSubmitting ? <ActivityIndicator color={SURFACE} /> : (
+            {isSubmitting ? (
+              <ActivityIndicator color={SURFACE} />
+            ) : (
               <>
                 <Send size={18} color={SURFACE} strokeWidth={2.5} />
                 <Text style={styles.sendText}>Send Request</Text>
