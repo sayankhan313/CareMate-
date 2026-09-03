@@ -55,6 +55,8 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("DoctorRefillVerifications");
   };
 
+  const openPatientOrders = () => navigation.navigate("PatientTabs", { screen: "PatientOrders" });
+
   if (targetScreen === "Notifications") return fallbackToNotifications ? navigation.navigate("Notifications") : undefined;
 
   if (targetScreen === "PatientCaregiverAccess") return navigation.navigate("PatientCaregiverAccess");
@@ -65,6 +67,15 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (targetScreen === "CaregiverPatients") return navigation.navigate("CaregiverTabs", { screen: "Patients" });
   if (targetScreen === "CaregiverDashboard") return navigation.navigate("CaregiverTabs", { screen: "Home" });
   if (targetScreen === "CaregiverPharmacyOrders" || targetScreen === "CaregiverPharmacyOrderDetail") return openCaregiverPharmacyOrder();
+
+  if (
+    ["REFILL_DOCTOR_VERIFICATION_CONFIRMED", "REFILL_DOCTOR_VERIFICATION_REJECTED"].includes(type) &&
+    (recipientRole === "PATIENT" || entityType === "PATIENT_PRESCRIPTION_SUBMISSION" || targetScreen === "MedicineStock" || targetScreen === "PatientOrders")
+  ) {
+    return openPatientOrders();
+  }
+
+  if (targetScreen === "MedicineStock") return openPatientOrders();
 
   if (targetScreen === "PharmacyDashboard") {
     if (orderId) return navigation.navigate("PharmacyOrderDetail", { orderId });
@@ -101,7 +112,7 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (targetScreen === "PatientMedicines" || targetScreen === "Medicines") return navigation.navigate("PatientTabs", { screen: "Medicines" });
   if (targetScreen === "PatientConsultations" || targetScreen === "Consultations") return navigation.navigate("PatientTabs", { screen: "Consultations" });
   if (targetScreen === "PatientVitals" || targetScreen === "Vitals") return navigation.navigate("PatientTabs", { screen: "Vitals" });
-  if (targetScreen === "PatientOrders") return navigation.navigate("PatientTabs", { screen: "PatientOrders" });
+  if (targetScreen === "PatientOrders") return openPatientOrders();
 
   if (targetScreen === "AdminDoctors") return navigation.navigate("AdminTabs", { screen: "Doctors", params: { status: "PENDING_VERIFICATION" } });
   if (targetScreen === "AdminPharmacies") return navigation.navigate("AdminTabs", { screen: "Pharmacies", params: { status: "PENDING_VERIFICATION" } });
@@ -127,12 +138,18 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   }
 
   if (type === "REFILL_DOCTOR_VERIFICATION_REQUESTED") return openDoctorRefillVerification();
-
   if (type === "CAREGIVER_LINK_REQUESTED") return navigation.navigate("PatientCaregiverAccess");
 
-  if (type === "NEW_MEDICINE_ORDER") return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
+  if (type === "NEW_MEDICINE_ORDER") {
+    return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
+  }
 
-  if (["PHARMACY_PAYMENT_RECEIVED", "REFILL_DOCTOR_VERIFICATION_CONFIRMED", "REFILL_DOCTOR_VERIFICATION_REJECTED"].includes(type)) {
+  if (["REFILL_DOCTOR_VERIFICATION_CONFIRMED", "REFILL_DOCTOR_VERIFICATION_REJECTED"].includes(type)) {
+    if (recipientRole === "PATIENT" || entityType === "PATIENT_PRESCRIPTION_SUBMISSION") return openPatientOrders();
+    return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
+  }
+
+  if (type === "PHARMACY_PAYMENT_RECEIVED") {
     return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
   }
 
@@ -160,7 +177,7 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (type === "PRIMARY_DOCTOR_CHANGED") return navigation.navigate("PatientProfile");
 
   if (["ORDER_RECEIVED", "ORDER_ACCEPTED", "ORDER_REJECTED", "ORDER_PREPARING", "ORDER_READY", "ORDER_OUT_FOR_DELIVERY", "ORDER_DELIVERED", "ORDER_COLLECTED", "ORDER_DELAYED", "ORDER_OUT_OF_STOCK", "ORDER_CANCELLED"].includes(type)) {
-    return navigation.navigate("PatientTabs", { screen: "PatientOrders" });
+    return openPatientOrders();
   }
 
   if (type === "DOCTOR_VERIFICATION_REQUESTED") return navigation.navigate("AdminTabs", { screen: "Doctors", params: { status: "PENDING_VERIFICATION" } });
