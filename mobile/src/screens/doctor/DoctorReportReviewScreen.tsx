@@ -41,7 +41,7 @@ const getSafeString = (value: unknown) => typeof value === "string" ? value.trim
 const formatLabel = (value?: string | null) => {
   const safeValue = getSafeString(value);
   if (!safeValue) return "Medical Report";
-  return safeValue.toLowerCase().split("_").map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
+  return safeValue.toLowerCase().split("_").map(part => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
 };
 
 const formatDate = (value?: string | null) => {
@@ -96,7 +96,6 @@ const DoctorReportReviewScreen = ({ navigation, route }: Props) => {
       setImageErrorMessage("");
 
       const reportData = await doctorReportsApi.getReportDetail(patientId, reportId);
-
       setReport(reportData);
       setReviewNote(reportData.review?.reviewNote || "");
 
@@ -148,11 +147,26 @@ const DoctorReportReviewScreen = ({ navigation, route }: Props) => {
       setIsSubmitting(true);
 
       const updatedReport = await doctorReportsApi.reviewReport(patientId, reportId, { reviewNote: trimmedNote });
-
       setReport(updatedReport);
       setReviewNote(updatedReport.review?.reviewNote || trimmedNote);
 
-      Alert.alert("Review submitted", "The report has been marked as reviewed.");
+      Alert.alert(
+        "Review submitted",
+        "The report has been marked as reviewed.",
+        [
+          {
+            text: "Done",
+            onPress: () =>
+              navigation.reset({
+                index: 1,
+                routes: [
+                  { name: "DoctorTabs" },
+                  { name: "DoctorReportReviews" },
+                ],
+              }),
+          },
+        ],
+      );
     } catch (error) {
       Alert.alert("Unable to submit review", error instanceof Error ? error.message : "Please try again.");
     } finally {
@@ -228,7 +242,6 @@ const DoctorReportReviewScreen = ({ navigation, route }: Props) => {
 
                 <View style={[styles.reviewStatusBadge, isReviewed ? styles.reviewedBadge : styles.pendingBadge]}>
                   {isReviewed ? <CheckCircle2 size={15} color={SUCCESS_DARK} strokeWidth={2.7} /> : <FileText size={15} color={WARNING_DARK} strokeWidth={2.7} />}
-
                   <Text style={[styles.reviewStatusText, isReviewed ? styles.reviewedText : styles.pendingText]}>{isReviewed ? "Reviewed" : "Pending"}</Text>
                 </View>
               </View>
@@ -289,7 +302,6 @@ const DoctorReportReviewScreen = ({ navigation, route }: Props) => {
                   <Text style={[styles.safetyTitle, contentSafetyStatus === "CLEAR" ? styles.safetyClearText : styles.safetyWarningText]}>
                     {contentSafetyStatus === "CLEAR" ? "File safety check completed" : "Manual content review required"}
                   </Text>
-
                   <Text style={styles.safetyText}>{report.contentSafetyMessage || "Review the uploaded report carefully before recording your response."}</Text>
                 </View>
               </View>
