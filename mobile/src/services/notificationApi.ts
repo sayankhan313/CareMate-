@@ -123,4 +123,25 @@ export const notificationApi = {
     const response = await fetch(`${API_BASE_URL}/notifications/read-all`, { method: "PATCH", headers: await getAuthHeaders() });
     return readResponse<{ updatedCount: number }>(response);
   },
+
+  async markPharmacyOrderNotificationRead(orderId: string) {
+    const result = await this.listNotifications(1, 100, true);
+
+    const matchingNotifications = result.notifications.filter(notification =>
+      notification.type === "NEW_MEDICINE_ORDER" &&
+      notification.entityType === "MEDICINE_ORDER" &&
+      notification.entityId === orderId &&
+      !notification.isRead,
+    );
+
+    if (matchingNotifications.length === 0) return { updatedCount: 0 };
+
+    const results = await Promise.allSettled(
+      matchingNotifications.map(notification => this.markNotificationRead(notification.id)),
+    );
+
+    return {
+      updatedCount: results.filter(result => result.status === "fulfilled").length,
+    };
+  },
 };
