@@ -4,7 +4,7 @@ import LinearGradient from "react-native-linear-gradient";
 import { CommonActions, useFocusEffect } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertTriangle, Bell, CalendarDays, ChevronRight, Clock3, HeartPulse, PackageCheck, Pill, RefreshCw, ShieldAlert, ShieldCheck, UsersRound } from "lucide-react-native";
+import { AlertTriangle, Bell, CalendarDays, ChevronRight, ClipboardList, Clock3, HeartPulse, PackageCheck, Pill, RefreshCw, ShieldAlert, ShieldCheck, ShoppingBag, UsersRound } from "lucide-react-native";
 
 import { caregiverDashboardApi, type CaregiverDashboardPatient } from "../../services/caregiver/caregiverDashboardApi";
 import { notificationEvents } from "../../services/notificationEvents";
@@ -30,6 +30,8 @@ const DANGER_LIGHT = "#FDEBED";
 const BORDER = "#E4E8F2";
 const AUTO_REFRESH_MS = 30_000;
 
+const NON_ACTIVE_ORDER_STATUSES = new Set(["DELIVERED", "COLLECTED", "COMPLETED", "FULFILLED", "CANCELLED", "REJECTED"]);
+
 const elevate = (level: 1 | 2 | 3 = 1) => ({
   elevation: level === 1 ? 2 : level === 2 ? 4 : 7,
   shadowColor: "#172033",
@@ -51,13 +53,6 @@ const getInitials = (name?: string | null) => {
   if (!parts.length) return "CG";
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "Not scheduled";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
 const formatStatus = (value?: string | null) => {
@@ -158,15 +153,54 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
   const openAppointments = () => navigation.navigate("Appointments");
 
   const openPatientMedicines = (patient: CaregiverDashboardPatient) => {
-    openRootScreen("CaregiverMedications", { patientId: patient.patient.id, patientName: patient.patient.fullName });
+    openRootScreen("CaregiverMedications", {
+      patientId: patient.patient.id,
+      patientName: patient.patient.fullName,
+    });
   };
 
   const openMedicines = () => {
     const patients = dashboard?.patients || [];
+
     if (patients.length === 1) {
       openPatientMedicines(patients[0]);
       return;
     }
+
+    openPatients();
+  };
+
+  const openObservations = () => {
+    const patients = dashboard?.patients || [];
+
+    if (patients.length === 1) {
+      const patient = patients[0];
+
+      openRootScreen("CaregiverObservations", {
+        patientId: patient.patient.id,
+        patientName: patient.patient.fullName,
+      });
+
+      return;
+    }
+
+    openPatients();
+  };
+
+  const openPharmacyOrders = () => {
+    const patients = dashboard?.patients || [];
+
+    if (patients.length === 1) {
+      const patient = patients[0];
+
+      openRootScreen("CaregiverPharmacyOrders", {
+        patientId: patient.patient.id,
+        patientName: patient.patient.fullName,
+      });
+
+      return;
+    }
+
     openPatients();
   };
 
@@ -188,6 +222,14 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
 
   const needsAttention = useMemo(() => {
     return dashboard?.patients.filter(patient => patient.adherence.missedToday > 0 || patient.latestVital?.status === "CRITICAL" || Boolean(patient.safetyAlert) || patient.lowStock.count > 0) || [];
+  }, [dashboard?.patients]);
+
+  const activeOrderCount = useMemo(() => {
+    return dashboard?.patients.reduce((count, patient) => {
+      const status = patient.pharmacyOrder?.status;
+      if (!status || NON_ACTIVE_ORDER_STATUSES.has(status)) return count;
+      return count + 1;
+    }, 0) || 0;
   }, [dashboard?.patients]);
 
   return (
@@ -280,6 +322,8 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
                 <QuickAction title="Safety" icon={<ShieldAlert size={23} color={DANGER} strokeWidth={2.5} />} badge={dashboard.summary.unresolvedSafetyAlerts} danger onPress={openSafety} />
                 <QuickAction title="Appointments" icon={<CalendarDays size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} badge={dashboard.summary.activeConsultations} onPress={openAppointments} />
                 <QuickAction title="Low stock" icon={<PackageCheck size={23} color={WARNING} strokeWidth={2.5} />} badge={dashboard.summary.lowStockMedicines} onPress={openLowStock} />
+                <QuickAction title="Observations" icon={<ClipboardList size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} onPress={openObservations} />
+                <QuickAction title="Orders" icon={<ShoppingBag size={23} color={PRIMARY_DARK} strokeWidth={2.5} />} badge={activeOrderCount} onPress={openPharmacyOrders} />
               </ScrollView>
 
               <SectionHeader title="Needs attention" subtitle="Important updates" action="Safety" onPress={openSafety} />
@@ -317,45 +361,6 @@ export const CaregiverDashboardScreen = ({ navigation, route }: CaregiverDashboa
 
                   <Text style={styles.emptyTitle}>No linked patients</Text>
                   <Text style={styles.emptyText}>Approved patient links will appear here.</Text>
-                </View>
-              )}
-
-              <SectionHeader title="Recent updates" subtitle="Latest notifications" action="View all" onPress={openNotifications} />
-
-              {dashboard.recentNotifications.length ? (
-                <View style={styles.cardStack}>
-                  {dashboard.recentNotifications.slice(0, 4).map(notification => (
-                    <TouchableOpacity key={notification.id} style={styles.notificationCard} activeOpacity={0.86} onPress={openNotifications}>
-                      <View style={[styles.notificationIcon, !notification.isRead ? styles.notificationIconUnread : undefined]}>
-                        {notification.priority === "CRITICAL" || notification.priority === "HIGH" ? (
-                          <AlertTriangle size={20} color={DANGER} strokeWidth={2.5} />
-                        ) : (
-                          <Bell size={20} color={PRIMARY_DARK} strokeWidth={2.5} />
-                        )}
-                      </View>
-
-                      <View style={styles.notificationTextBlock}>
-                        <View style={styles.notificationTitleRow}>
-                          <Text style={styles.notificationTitle} numberOfLines={1}>{notification.title}</Text>
-                          {!notification.isRead ? <View style={styles.unreadDot} /> : null}
-                        </View>
-
-                        <Text style={styles.notificationBody} numberOfLines={2}>{notification.body}</Text>
-                        <Text style={styles.notificationTime}>{formatDateTime(notification.createdAt)}</Text>
-                      </View>
-
-                      <ChevronRight size={18} color={MUTED} strokeWidth={2.4} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.emptyCard}>
-                  <View style={styles.emptyIcon}>
-                    <Bell size={24} color={PRIMARY_DARK} strokeWidth={2.5} />
-                  </View>
-
-                  <Text style={styles.emptyTitle}>No updates yet</Text>
-                  <Text style={styles.emptyText}>New notifications will appear here.</Text>
                 </View>
               )}
             </>
@@ -595,15 +600,6 @@ const styles = StyleSheet.create({
   patientDetailValue: { flex: 1, color: TEXT, fontSize: 11, fontWeight: "700" },
   lowStockPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 11, paddingHorizontal: 10, paddingVertical: 9, flexDirection: "row", alignItems: "center", marginTop: 9 },
   lowStockText: { color: "#9A5B12", fontSize: 11, fontWeight: "700", marginLeft: 7 },
-  notificationCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 13, flexDirection: "row", alignItems: "center", ...elevate(1) },
-  notificationIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  notificationIconUnread: { backgroundColor: DANGER_LIGHT },
-  notificationTextBlock: { flex: 1 },
-  notificationTitleRow: { flexDirection: "row", alignItems: "center" },
-  notificationTitle: { flex: 1, color: TEXT, fontSize: 13, fontWeight: "700" },
-  unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: DANGER, marginLeft: 6 },
-  notificationBody: { color: MUTED, fontSize: 11, fontWeight: "500", lineHeight: 16, marginTop: 3 },
-  notificationTime: { color: "#98A1AD", fontSize: 10, fontWeight: "600", marginTop: 5 },
   emptyCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 20, alignItems: "center", ...elevate(1) },
   emptyIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 10 },
   emptyTitle: { color: TEXT, fontSize: 14, fontWeight: "700", textAlign: "center" },
