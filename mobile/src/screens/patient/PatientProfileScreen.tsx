@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AlertCircle, ArrowLeft, Bell, Building2, Calendar, CheckCircle2, ChevronRight, Clock, CreditCard, Crown, Droplet, Hash, HeartPulse, Languages, Lock, LogOut, Mail, MapPin, Pencil, Phone, RefreshCw, ShieldAlert, Stethoscope, UserRound, Users } from "lucide-react-native";
+import { AlertCircle, ArrowLeft, Bell, BookHeart, Building2, Calendar, CheckCircle2, ChevronRight, Clock, CreditCard, Crown, Droplet, Hash, HeartPulse, Languages, Lock, LogOut, Mail, MapPin, Pencil, Phone, RefreshCw, ShieldAlert, Stethoscope, UserRound, Users } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -309,6 +309,18 @@ export const PatientProfileScreen = ({ navigation, route }: Props) => {
                   title={pharmacyCopy.title}
                   value={pharmacyCopy.value}
                   onPress={() => navigation.navigate("MyPharmacies")}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  borderColor={palette.border}
+                  primaryLightColor={primaryLightColor}
+                  scaleFont={scaleFont}
+                />
+
+                <ProfileRow
+                  icon={<BookHeart size={20} color={primaryColor} strokeWidth={2.5} />}
+                  title="Care Diary"
+                  value="Record personal health notes"
+                  onPress={() => navigation.navigate("PatientCareDiary")}
                   textColor={textColor}
                   mutedColor={mutedColor}
                   borderColor={palette.border}

@@ -29,6 +29,7 @@ import ScanMedicineResultScreen from "../screens/patient/ScanMedicineResultScree
 import PrescriptionScanResultScreen from "../screens/patient/PrescriptionScanResultScreen";
 import { ManualSafetyResponseScreen } from "../screens/patient/ManualSafetyResponseScreen";
 import { PatientProfileScreen } from "../screens/patient/PatientProfileScreen";
+import PatientCareDiaryScreen from "../screens/patient/PatientCareDiaryScreen";
 import { PatientCaregiverAccessScreen } from "../screens/patient/PatientCaregiverAccessScreen";
 import EditPatientProfileScreen from "../screens/patient/EditPatientProfileScreen";
 import MyPharmaciesScreen from "../screens/patient/MyPharmaciesScreen";
@@ -116,6 +117,7 @@ const CaregiverPharmacyOrdersStackScreen = CaregiverPharmacyOrdersScreen as Comp
 const CaregiverPharmacyOrderDetailStackScreen = CaregiverPharmacyOrderDetailScreen as ComponentType<any>;
 const CaregiverObservationsStackScreen = CaregiverObservationsScreen as ComponentType<any>;
 
+const PatientCareDiaryStackScreen = PatientCareDiaryScreen as ComponentType<any>;
 const PatientCaregiverAccessStackScreen = PatientCaregiverAccessScreen as ComponentType<any>;
 const EditPatientProfileStackScreen = EditPatientProfileScreen as ComponentType<any>;
 const MyPharmaciesStackScreen = MyPharmaciesScreen as ComponentType<any>;
@@ -166,7 +168,7 @@ const SESSION_CHECK_INTERVAL_MS = 15_000;
 const SESSION_PREFERENCE_REFRESH_MS = 60_000;
 
 const PATIENT_SESSION_ROUTES = new Set([
-  "PatientTabs", "PatientProfile", "PatientCaregiverAccess", "EditPatientProfile", "MyPharmacies", "PrescriptionPaymentSettings", "NotificationPreferences",
+  "PatientTabs", "PatientProfile", "PatientCareDiary", "PatientCaregiverAccess", "EditPatientProfile", "MyPharmacies", "PrescriptionPaymentSettings", "NotificationPreferences",
   "ReminderSettings", "SafetyResponseSettings", "LanguageAccessibility", "PrivacySecurity", "SelectDoctor", "PatientActiveCalls", "MedicineUpdates",
   "PharmacyRequest", "PatientReports", "PatientUploadReport", "AddMedicine", "ConfirmReminder", "ScanMedicine", "ScanMedicineResult",
   "PrescriptionScanResult", "ConnectedDevice", "ManualSafetyResponse", "SafetyResponse", "VideoConsultation", "ConsultationEnded",
@@ -213,7 +215,6 @@ const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
 
     try {
       const result = await patientSettingsApi.getPrivacySettings();
-
       if (activeTokenRef.current !== token) return;
 
       patientSessionEnabledRef.current = true;
@@ -279,7 +280,6 @@ const PatientSessionBoundary = ({ children }: { children: ReactNode }) => {
       }
 
       if (tokenChanged) lastActivityAtRef.current = Date.now();
-
       await refreshPrivacySettings(token);
     };
 
@@ -413,6 +413,7 @@ export const AppNavigator = () => (
               <Stack.Screen name="AdminRegisterWebView" component={AdminRegisterWebViewScreen} />
 
               <Stack.Screen name="PatientProfile" component={PatientProfileScreen} />
+              <Stack.Screen name="PatientCareDiary" component={PatientCareDiaryStackScreen} />
               <Stack.Screen name="PatientCaregiverAccess" component={PatientCaregiverAccessStackScreen} />
               <Stack.Screen name="EditPatientProfile" component={EditPatientProfileStackScreen} />
               <Stack.Screen name="MyPharmacies" component={MyPharmaciesStackScreen} />
