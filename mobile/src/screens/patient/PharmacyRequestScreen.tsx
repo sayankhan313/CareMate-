@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, FileText, FileUp, Package, Send, ShieldCheck, Stethoscope, UserRound, X } from "lucide-react-native";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Clock3, FileText, FileUp, MapPin, Package, Send, ShieldCheck, Store, Stethoscope, UserRound, X } from "lucide-react-native";
 import { errorCodes, isErrorWithCode, pick, types } from "@react-native-documents/picker";
 
 import { LocalizedText as Text } from "../../components/common/LocalizedText";
 import { LocalizedTextInput as TextInput } from "../../components/common/LocalizedTextInput";
 import { API_BASE_URL } from "../../constants/api";
 import { doctorAssignmentApi, type AssignedDoctor } from "../../services/doctorAssignmentApi";
+import { patientPharmacyApi, type PatientPharmacy } from "../../services/pharmacy/patientPharmacyApi";
 import { patientPharmacyRefillApi, type PatientMedicineEvidenceType, type PatientRefillVerificationPath, type RefillEvidenceFile } from "../../services/patientPharmacyRefillApi";
 import { tokenStorage } from "../../services/tokenStorage";
 import type { RootStackParamList } from "../../types/navigation";
@@ -29,7 +31,6 @@ const PRIMARY_DARK = "#0C2A8C";
 const SUCCESS = "#3A9D75";
 const SUCCESS_LIGHT = "#DBF3E7";
 const SUCCESS_DARK = "#0F5C3C";
-const WARNING = "#C77A1F";
 const WARNING_LIGHT = "#FBE7CD";
 const WARNING_DARK = "#7A4708";
 const DANGER = "#C6404A";
@@ -100,6 +101,11 @@ const pendingReviewMessage = (routingStatus?: string | null, doctorName?: string
   return doctorName ? `Waiting for ${doctorName}` : "Doctor review already pending";
 };
 
+const getPharmacyLocation = (pharmacy: PatientPharmacy) => {
+  const parts = [pharmacy.address, pharmacy.city, pharmacy.postcode].filter(Boolean);
+  return parts.length ? parts.join(", ") : "Address not available";
+};
+
 export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
   const { medicineId, medicineName, dose, source, stockUnit, reviewStatus, reviewRoutingStatus, reviewDoctorName } = route.params;
@@ -113,6 +119,11 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [evidenceType, setEvidenceType] = useState<PatientMedicineEvidenceType | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<SelectedEvidence | null>(null);
+  const [savedPharmacies, setSavedPharmacies] = useState<PatientPharmacy[]>([]);
+  const [selectedPharmacyId, setSelectedPharmacyId] = useState<string | null>(null);
+  const [isLoadingPharmacies, setIsLoadingPharmacies] = useState(true);
+  const [showPharmacyChoices, setShowPharmacyChoices] = useState(false);
+  const [pharmacyError, setPharmacyError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPickingEvidence, setIsPickingEvidence] = useState(false);
 
@@ -121,12 +132,44 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
   const approvedMedicineReview = isApprovedReview(reviewStatus);
   const usesExistingMedicineReview = pendingMedicineReview || approvedMedicineReview;
 
+  const availablePharmacies = useMemo(() => savedPharmacies.filter(pharmacy => pharmacy.isAvailable), [savedPharmacies]);
+  const selectedPharmacy = useMemo(() => availablePharmacies.find(pharmacy => pharmacy.id === selectedPharmacyId) || null, [availablePharmacies, selectedPharmacyId]);
+
   const loadDoctors = useCallback(async () => {
     try {
       const result = await doctorAssignmentApi.getAssignedDoctors();
       setAssignedDoctors(result.doctors.filter(item => item.status === "ACTIVE"));
     } catch {
       setAssignedDoctors([]);
+    }
+  }, []);
+
+  const loadPharmacies = useCallback(async () => {
+    try {
+      setIsLoadingPharmacies(true);
+      setPharmacyError("");
+
+      const result = await patientPharmacyApi.getSavedPharmacies();
+      const available = result.pharmacies.filter(pharmacy => pharmacy.isAvailable);
+
+      setSavedPharmacies(result.pharmacies);
+
+      setSelectedPharmacyId(current => {
+        if (current && available.some(pharmacy => pharmacy.id === current)) return current;
+
+        const primary =
+          available.find(pharmacy => pharmacy.id === result.primaryPharmacyId) ||
+          available.find(pharmacy => pharmacy.isPrimary) ||
+          available[0];
+
+        return primary?.id || null;
+      });
+    } catch (error) {
+      setSavedPharmacies([]);
+      setSelectedPharmacyId(null);
+      setPharmacyError(error instanceof Error ? error.message : "Unable to load saved pharmacies.");
+    } finally {
+      setIsLoadingPharmacies(false);
     }
   }, []);
 
@@ -156,6 +199,12 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
     void resolveRequestUnit();
   }, [loadDoctors, resolveRequestUnit]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadPharmacies();
+    }, [loadPharmacies]),
+  );
+
   const selectVerificationPath = (path: PatientRefillVerificationPath) => {
     setVerificationPath(path);
 
@@ -165,6 +214,11 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
     } else {
       setSelectedDoctorId(null);
     }
+  };
+
+  const selectPharmacy = (pharmacyId: string) => {
+    setSelectedPharmacyId(pharmacyId);
+    setShowPharmacyChoices(false);
   };
 
   const pickEvidence = async () => {
@@ -204,6 +258,11 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
     const requestedQuantity = Number.parseInt(quantity.trim(), 10);
     const quantityUnit = requestUnit.trim();
 
+    if (!selectedPharmacyId || !selectedPharmacy) {
+      Alert.alert("Pharmacy required", "Choose a saved pharmacy before sending this request.");
+      return;
+    }
+
     if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 1000) {
       Alert.alert("Invalid quantity", "Enter a quantity between 1 and 1000.");
       return;
@@ -239,6 +298,7 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
 
       const result = await patientPharmacyRefillApi.createRefill({
         medicineId,
+        pharmacyId: selectedPharmacyId,
         requestedQuantity,
         quantityUnit,
         note: note.trim() || undefined,
@@ -250,15 +310,21 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
       });
 
       if (result.requiresDoctorVerification) {
-        Alert.alert("Request sent", pendingMedicineReview ? "Your pharmacy request has been received. Fulfilment remains locked until the existing doctor review is approved." : "Waiting for doctor confirmation.", [
-          { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
-          { text: "Done", onPress: () => navigation.goBack() },
-        ]);
+        Alert.alert(
+          "Request sent",
+          pendingMedicineReview
+            ? `Sent to ${result.pharmacy.pharmacyName}. Fulfilment remains locked until the existing doctor review is approved.`
+            : `Sent to ${result.pharmacy.pharmacyName}. Waiting for doctor confirmation.`,
+          [
+            { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
+            { text: "Done", onPress: () => navigation.goBack() },
+          ],
+        );
         return;
       }
 
       if (result.requiresPharmacyVerification) {
-        Alert.alert("Request sent", "Waiting for pharmacy review.", [
+        Alert.alert("Request sent", `Sent to ${result.pharmacy.pharmacyName}. Waiting for pharmacy review.`, [
           { text: "View Orders", onPress: () => navigation.reset({ index: 0, routes: [{ name: "PatientTabs", params: { screen: "PatientOrders" } }] }) },
           { text: "Done", onPress: () => navigation.goBack() },
         ]);
@@ -295,16 +361,122 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 120, 140) }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.medicineCard}>
-              <View style={styles.medicineIcon}><Package size={25} color={PRIMARY} strokeWidth={2.6} /></View>
+              <View style={styles.medicineIcon}>
+                <Package size={25} color={PRIMARY} strokeWidth={2.6} />
+              </View>
+
               <View style={styles.medicineText}>
                 <Text style={styles.medicineName}>{medicineName}</Text>
                 <Text style={styles.medicineDose}>{dose}</Text>
               </View>
             </View>
 
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Pharmacy</Text>
+              <Text style={styles.sectionSubtitle}>Choose where this request should be sent</Text>
+
+              {isLoadingPharmacies ? (
+                <View style={styles.pharmacyLoading}>
+                  <ActivityIndicator size="small" color={PRIMARY} />
+                  <Text style={styles.pharmacyLoadingText}>Loading saved pharmacies...</Text>
+                </View>
+              ) : pharmacyError ? (
+                <View style={styles.warningPanel}>
+                  <AlertTriangle size={18} color={WARNING_DARK} strokeWidth={2.5} />
+                  <View style={styles.warningContent}>
+                    <Text style={styles.warningText}>{pharmacyError}</Text>
+                    <TouchableOpacity onPress={() => void loadPharmacies()}>
+                      <Text style={styles.retryLink}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : !selectedPharmacy ? (
+                <View style={styles.noPharmacyPanel}>
+                  <Store size={21} color={WARNING_DARK} strokeWidth={2.5} />
+                  <View style={styles.noPharmacyText}>
+                    <Text style={styles.noPharmacyTitle}>No available pharmacy</Text>
+                    <Text style={styles.noPharmacySubtitle}>Save an approved pharmacy before sending a request.</Text>
+                  </View>
+
+                  <TouchableOpacity style={styles.manageButton} onPress={() => navigation.navigate("MyPharmacies")}>
+                    <Text style={styles.manageButtonText}>Manage</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.selectedPharmacyCard}>
+                    <View style={styles.pharmacyIcon}>
+                      <Store size={21} color={PRIMARY_DARK} strokeWidth={2.5} />
+                    </View>
+
+                    <View style={styles.pharmacyText}>
+                      <View style={styles.pharmacyNameRow}>
+                        <Text style={styles.pharmacyName} numberOfLines={1}>{selectedPharmacy.pharmacyName}</Text>
+
+                        {selectedPharmacy.isPrimary ? (
+                          <View style={styles.primaryBadge}>
+                            <Text style={styles.primaryBadgeText}>Primary</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.locationRow}>
+                        <MapPin size={12} color={MUTED} strokeWidth={2.2} />
+                        <Text style={styles.pharmacyLocation} numberOfLines={1}>{getPharmacyLocation(selectedPharmacy)}</Text>
+                      </View>
+                    </View>
+
+                    {availablePharmacies.length > 1 ? (
+                      <TouchableOpacity style={styles.changeButton} onPress={() => setShowPharmacyChoices(value => !value)}>
+                        <Text style={styles.changeText}>Change</Text>
+                        {showPharmacyChoices ? <ChevronUp size={16} color={PRIMARY_DARK} strokeWidth={2.5} /> : <ChevronDown size={16} color={PRIMARY_DARK} strokeWidth={2.5} />}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {showPharmacyChoices && availablePharmacies.length > 1 ? (
+                    <View style={styles.pharmacyChoices}>
+                      {availablePharmacies.map(pharmacy => {
+                        const selected = pharmacy.id === selectedPharmacyId;
+
+                        return (
+                          <TouchableOpacity key={pharmacy.id} style={[styles.pharmacyOption, selected && styles.pharmacyOptionSelected]} onPress={() => selectPharmacy(pharmacy.id)}>
+                            <View style={[styles.pharmacyOptionIcon, selected && styles.pharmacyOptionIconSelected]}>
+                              <Store size={18} color={selected ? PRIMARY : PRIMARY_DARK} strokeWidth={2.5} />
+                            </View>
+
+                            <View style={styles.pharmacyText}>
+                              <View style={styles.pharmacyNameRow}>
+                                <Text style={styles.pharmacyOptionName} numberOfLines={1}>{pharmacy.pharmacyName}</Text>
+
+                                {pharmacy.isPrimary ? (
+                                  <View style={styles.primaryBadge}>
+                                    <Text style={styles.primaryBadgeText}>Primary</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+
+                              <Text style={styles.pharmacyOptionLocation} numberOfLines={1}>{getPharmacyLocation(pharmacy)}</Text>
+                            </View>
+
+                            <SelectionDot selected={selected} />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity style={styles.managePharmaciesLink} onPress={() => navigation.navigate("MyPharmacies")}>
+                    <Text style={styles.managePharmaciesText}>Manage saved pharmacies</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
             {isCareMatePrescription ? (
               <View style={styles.successPanel}>
                 <ShieldCheck size={20} color={SUCCESS_DARK} strokeWidth={2.6} />
+
                 <View style={styles.panelText}>
                   <Text style={styles.successTitle}>CareMate+ Prescription</Text>
                   <Text style={styles.successSubtitle}>Prescription verified</Text>
@@ -313,6 +485,7 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
             ) : pendingMedicineReview ? (
               <View style={styles.reviewPanel}>
                 <Clock3 size={20} color={PRIMARY_DARK} strokeWidth={2.6} />
+
                 <View style={styles.panelText}>
                   <Text style={styles.reviewTitle}>Doctor review already pending</Text>
                   <Text style={styles.reviewSubtitle}>{pendingReviewMessage(reviewRoutingStatus, reviewDoctorName)}</Text>
@@ -322,6 +495,7 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
             ) : approvedMedicineReview ? (
               <View style={styles.successPanel}>
                 <ShieldCheck size={20} color={SUCCESS_DARK} strokeWidth={2.6} />
+
                 <View style={styles.panelText}>
                   <Text style={styles.successTitle}>Doctor review approved</Text>
                   <Text style={styles.successSubtitle}>{reviewDoctorName ? `Reviewed by ${reviewDoctorName}` : "Existing CareMate+ review will be reused"}</Text>
@@ -464,7 +638,11 @@ export const PharmacyRequestScreen = ({ navigation, route }: Props) => {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.sendButton, (isSubmitting || isResolvingRequestUnit) && styles.disabled]} disabled={isSubmitting || isResolvingRequestUnit} onPress={() => void submit()}>
+          <TouchableOpacity
+            style={[styles.sendButton, (isSubmitting || isResolvingRequestUnit || isLoadingPharmacies || !selectedPharmacyId) && styles.disabled]}
+            disabled={isSubmitting || isResolvingRequestUnit || isLoadingPharmacies || !selectedPharmacyId}
+            onPress={() => void submit()}
+          >
             {isSubmitting ? <ActivityIndicator color={SURFACE} /> : (
               <>
                 <Send size={18} color={SURFACE} strokeWidth={2.5} />
@@ -502,6 +680,34 @@ const styles = StyleSheet.create({
   section: { backgroundColor: SURFACE, borderRadius: 16, padding: 15, marginBottom: 13 },
   sectionTitle: { color: TEXT, fontSize: 16, fontWeight: "700" },
   sectionSubtitle: { color: MUTED, fontSize: 10, fontWeight: "500", marginTop: 3, marginBottom: 7 },
+  pharmacyLoading: { minHeight: 66, borderRadius: 13, backgroundColor: SOFT, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 },
+  pharmacyLoadingText: { color: MUTED, fontSize: 10, fontWeight: "600", marginLeft: 8 },
+  selectedPharmacyCard: { minHeight: 72, borderWidth: 1, borderColor: PRIMARY, borderRadius: 14, backgroundColor: "#F7F8FF", padding: 11, flexDirection: "row", alignItems: "center", marginTop: 8 },
+  pharmacyIcon: { width: 43, height: 43, borderRadius: 12, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  pharmacyText: { flex: 1 },
+  pharmacyNameRow: { flexDirection: "row", alignItems: "center" },
+  pharmacyName: { flexShrink: 1, color: TEXT, fontSize: 12, fontWeight: "700" },
+  primaryBadge: { backgroundColor: SUCCESS_LIGHT, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3, marginLeft: 6 },
+  primaryBadgeText: { color: SUCCESS_DARK, fontSize: 7, fontWeight: "800" },
+  locationRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  pharmacyLocation: { flex: 1, color: MUTED, fontSize: 8.5, fontWeight: "500", marginLeft: 4 },
+  changeButton: { minHeight: 34, borderRadius: 9, backgroundColor: PRIMARY_LIGHT, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", marginLeft: 8 },
+  changeText: { color: PRIMARY_DARK, fontSize: 9, fontWeight: "700", marginRight: 3 },
+  pharmacyChoices: { marginTop: 8 },
+  pharmacyOption: { borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 10, flexDirection: "row", alignItems: "center", marginBottom: 7 },
+  pharmacyOptionSelected: { borderColor: PRIMARY, backgroundColor: "#F7F8FF" },
+  pharmacyOptionIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: SOFT, alignItems: "center", justifyContent: "center", marginRight: 9 },
+  pharmacyOptionIconSelected: { backgroundColor: PRIMARY_LIGHT },
+  pharmacyOptionName: { flexShrink: 1, color: TEXT, fontSize: 10.5, fontWeight: "700" },
+  pharmacyOptionLocation: { color: MUTED, fontSize: 8, fontWeight: "500", marginTop: 3 },
+  managePharmaciesLink: { alignSelf: "flex-start", marginTop: 5, paddingVertical: 4 },
+  managePharmaciesText: { color: PRIMARY_DARK, fontSize: 9, fontWeight: "700" },
+  noPharmacyPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 12, padding: 11, flexDirection: "row", alignItems: "center", marginTop: 8 },
+  noPharmacyText: { flex: 1, marginLeft: 9 },
+  noPharmacyTitle: { color: WARNING_DARK, fontSize: 10.5, fontWeight: "700" },
+  noPharmacySubtitle: { color: WARNING_DARK, fontSize: 8.5, fontWeight: "500", lineHeight: 13, marginTop: 2 },
+  manageButton: { borderRadius: 9, backgroundColor: SURFACE, paddingHorizontal: 10, paddingVertical: 8, marginLeft: 7 },
+  manageButtonText: { color: WARNING_DARK, fontSize: 9, fontWeight: "700" },
   successPanel: { backgroundColor: SUCCESS_LIGHT, borderRadius: 14, padding: 13, flexDirection: "row", alignItems: "center", marginBottom: 13 },
   reviewPanel: { backgroundColor: PRIMARY_LIGHT, borderRadius: 14, padding: 13, flexDirection: "row", alignItems: "flex-start", marginBottom: 13 },
   panelText: { flex: 1, marginLeft: 9 },
@@ -523,8 +729,10 @@ const styles = StyleSheet.create({
   label: { color: TEXT, fontSize: 11, fontWeight: "700", marginTop: 14, marginBottom: 6 },
   doctorOption: { borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 10, flexDirection: "row", alignItems: "center", marginBottom: 7 },
   doctorIcon: { width: 39, height: 39, borderRadius: 12, backgroundColor: PRIMARY_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 9 },
-  warningPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 11, padding: 10, flexDirection: "row", alignItems: "center" },
-  warningText: { flex: 1, color: WARNING_DARK, fontSize: 10, fontWeight: "600", marginLeft: 8 },
+  warningPanel: { backgroundColor: WARNING_LIGHT, borderRadius: 11, padding: 10, flexDirection: "row", alignItems: "center", marginTop: 8 },
+  warningContent: { flex: 1, marginLeft: 8 },
+  warningText: { flex: 1, color: WARNING_DARK, fontSize: 10, fontWeight: "600" },
+  retryLink: { color: WARNING_DARK, fontSize: 9, fontWeight: "800", marginTop: 4 },
   evidenceOption: { borderWidth: 1, borderColor: BORDER, borderRadius: 11, padding: 10, flexDirection: "row", alignItems: "center", marginBottom: 7 },
   uploadButton: { minHeight: 60, borderWidth: 1, borderStyle: "dashed", borderColor: PRIMARY, borderRadius: 12, backgroundColor: "#F7F8FF", paddingHorizontal: 12, flexDirection: "row", alignItems: "center" },
   uploadText: { flex: 1, marginLeft: 9 },
