@@ -18,29 +18,16 @@ type AuthenticatedRequest = Request & {
 const getDoctorId = (req: Request) => {
   const authReq = req as AuthenticatedRequest;
 
-  if (!authReq.user) {
-    throw new AppError("Authentication required", 401);
-  }
-
-  if (authReq.user.role !== "DOCTOR") {
-    throw new AppError("Only doctors can access this resource", 403);
-  }
+  if (!authReq.user) throw new AppError("Authentication required", 401);
+  if (authReq.user.role !== "DOCTOR") throw new AppError("Only doctors can access this resource", 403);
 
   return authReq.user.id;
 };
 
 const getValidationMessage = (error: unknown) => {
-  if (
-    error &&
-    typeof error === "object" &&
-    "issues" in error &&
-    Array.isArray((error as { issues?: unknown[] }).issues)
-  ) {
+  if (error && typeof error === "object" && "issues" in error && Array.isArray((error as { issues?: unknown[] }).issues)) {
     const firstIssue = (error as { issues: { message?: string }[] }).issues[0];
-
-    if (firstIssue?.message) {
-      return firstIssue.message;
-    }
+    if (firstIssue?.message) return firstIssue.message;
   }
 
   return "Invalid request data";
@@ -65,21 +52,34 @@ export const doctorPatientsController = {
   async getPatientDetail(req: Request, res: Response, next: NextFunction) {
     try {
       const doctorId = getDoctorId(req);
-
       const parsedParams = doctorPatientParamsSchema.safeParse(req.params);
 
-      if (!parsedParams.success) {
-        throw new AppError(getValidationMessage(parsedParams.error), 400);
-      }
+      if (!parsedParams.success) throw new AppError(getValidationMessage(parsedParams.error), 400);
 
-      const result = await doctorPatientsService.getPatientDetail(
-        doctorId,
-        parsedParams.data.patientId
-      );
+      const result = await doctorPatientsService.getPatientDetail(doctorId, parsedParams.data.patientId);
 
       return res.status(200).json({
         success: true,
         message: "Patient detail fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getPatientCareDiary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const doctorId = getDoctorId(req);
+      const parsedParams = doctorPatientParamsSchema.safeParse(req.params);
+
+      if (!parsedParams.success) throw new AppError(getValidationMessage(parsedParams.error), 400);
+
+      const result = await doctorPatientsService.getPatientCareDiary(doctorId, parsedParams.data.patientId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Patient care diary fetched successfully",
         data: result,
       });
     } catch (error) {
