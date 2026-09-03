@@ -246,3 +246,7 @@ export const doctorPrescriptionsApi = {
     return readResponse<CreateDoctorPrescriptionData>(response);
   },
 };
+
+
+
+

@@ -535,3 +535,4 @@ const styles = StyleSheet.create({
   warningBox: { backgroundColor: RED_SOFT, borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "flex-start", ...elevate(0.5) },
   warningText: { flex: 1, color: RED_DARK, fontSize: 12, fontWeight: "600", lineHeight: 18, marginLeft: 10 },
 });
+
