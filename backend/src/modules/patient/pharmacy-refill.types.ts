@@ -1,6 +1,4 @@
-export type PatientRefillVerificationPath =
-  | "ASSIGNED_DOCTOR"
-  | "EXTERNAL_EVIDENCE";
+export type PatientRefillVerificationPath = "ASSIGNED_DOCTOR" | "EXTERNAL_EVIDENCE";
 
 export type PatientMedicineEvidenceType =
   | "NHS_APP_SCREENSHOT"
@@ -10,24 +8,17 @@ export type PatientMedicineEvidenceType =
   | "PHARMACY_LABELLED_MEDICINE"
   | "OTHER";
 
-export type PatientRefillDoctorVerificationStatus =
-  | "NOT_REQUIRED"
-  | "PENDING"
-  | "CONFIRMED"
-  | "REJECTED";
+export type PatientRefillDoctorVerificationStatus = "NOT_REQUIRED" | "PENDING" | "CONFIRMED" | "REJECTED";
 
 export type CreatePharmacyRefillInput = {
   medicineId: string;
+  pharmacyId?: string;
   requestedQuantity: number;
   quantityUnit: string;
   note?: string;
-
   verificationPath?: PatientRefillVerificationPath;
   verificationDoctorId?: string;
   evidenceType?: PatientMedicineEvidenceType;
-
-  // Added by the upload middleware/controller, never trusted directly
-  // from a client request body.
   evidenceFilePath?: string;
 };
 
@@ -37,23 +28,12 @@ export type PharmacyRefillResponse = {
     requestType: "REFILL_REQUEST";
     status: string;
     medicineId: string;
-
-    verificationPath:
-      | "CAREMATE_PRESCRIPTION"
-      | PatientRefillVerificationPath;
-
-    doctorVerificationStatus:
-      PatientRefillDoctorVerificationStatus;
-
-    verificationDoctor: {
-      id: string;
-      fullName: string;
-    } | null;
-
+    verificationPath: "CAREMATE_PRESCRIPTION" | PatientRefillVerificationPath;
+    doctorVerificationStatus: PatientRefillDoctorVerificationStatus;
+    verificationDoctor: { id: string; fullName: string } | null;
     evidenceType: PatientMedicineEvidenceType | null;
     hasEvidence: boolean;
   };
-
   order: {
     id: string;
     orderNumber: string | null;
@@ -62,19 +42,16 @@ export type PharmacyRefillResponse = {
     prescriptionConfirmed: boolean;
     fulfilmentAllowed: boolean;
   };
-
   pharmacy: {
     id: string;
     pharmacyName: string;
   };
-
   medicine: {
     id: string;
     name: string;
     dose: string;
     source: string;
   };
-
   requiresDoctorVerification: boolean;
   requiresPharmacyVerification: boolean;
 };
