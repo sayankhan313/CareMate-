@@ -13,7 +13,7 @@ export type PatientTabParamList = {
 
 export type DoctorTabParamList = {
   Home: { user?: any } | undefined;
-  Consultations: undefined;
+  Consultations: { consultationId?: string } | undefined;
   Alerts: undefined;
   Patients: undefined;
   Reviews: undefined;

@@ -1,65 +1,12 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import {
-  Activity,
-  AlertCircle,
-  AlertTriangle,
-  ArrowLeft,
-  BookHeart,
-  CalendarClock,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Clock3,
-  Droplet,
-  Droplets,
-  FileText,
-  Gauge,
-  Hash,
-  HeartPulse,
-  Mail,
-  MapPin,
-  NotebookPen,
-  Phone,
-  Pill,
-  RefreshCw,
-  ShieldCheck,
-  Stethoscope,
-  Thermometer,
-  UserRound,
-  Video,
-} from "lucide-react-native";
+import { Activity, AlertCircle, AlertTriangle, ArrowLeft, BookHeart, CalendarClock, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Clock3, Droplet, Droplets, FileText, Gauge, Hash, HeartPulse, Mail, MapPin, NotebookPen, Phone, Pill, RefreshCw, ShieldCheck, Stethoscope, Thermometer, UserRound, Video } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  doctorPatientsApi,
-  type DoctorPatientCareDiaryEntry,
-  type DoctorPatientDetailData,
-  type DoctorPatientDoseLog,
-  type DoctorPatientMedicine,
-  type DoctorPatientNote,
-  type DoctorUpcomingConsultation,
-  type DoctorUrgentAlert,
-  type DoctorVitalReading,
-} from "../../services/doctor/doctorPatientsApi";
+import { doctorPatientsApi, type DoctorPatientCareDiaryEntry, type DoctorPatientDetailData, type DoctorPatientDoseLog, type DoctorPatientMedicine, type DoctorPatientNote, type DoctorUpcomingConsultation, type DoctorUrgentAlert, type DoctorVitalReading } from "../../services/doctor/doctorPatientsApi";
 import { doctorNotesApi } from "../../services/doctor/doctorNotesApi";
 import { doctorConsultationsApi } from "../../services/doctor/doctorConsultationsApi";
 import type { RootStackParamList } from "../../types/navigation";
@@ -102,44 +49,29 @@ const getInitials = (name?: string | null) => {
 
 const getAgeText = (dateOfBirth?: string | null) => {
   if (!dateOfBirth) return "Age not set";
-
   const dateMatch = dateOfBirth.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   const birthDate = dateMatch ? new Date(Number(dateMatch[3]), Number(dateMatch[2]) - 1, Number(dateMatch[1])) : new Date(dateOfBirth);
-
   if (Number.isNaN(birthDate.getTime())) return dateOfBirth;
 
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
   return age >= 0 ? `${age} years` : dateOfBirth;
 };
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "Not available";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString([], {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
 const formatShortTime = (value?: string | null) => {
   if (!value) return "--";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 const formatStatus = (value?: string | null) => {
@@ -179,11 +111,7 @@ const getPrimaryVital = (vital: DoctorVitalReading | null) => {
   if (!vital) return { label: "No recent vitals", value: "--" };
   if (vital.spo2 !== null && vital.spo2 !== undefined) return { label: "SpO2", value: `${vital.spo2}%` };
   if (vital.heartRate !== null && vital.heartRate !== undefined) return { label: "Heart rate", value: `${vital.heartRate} bpm` };
-
-  if (vital.bpSystolic !== null && vital.bpSystolic !== undefined && vital.bpDiastolic !== null && vital.bpDiastolic !== undefined) {
-    return { label: "Blood pressure", value: `${vital.bpSystolic}/${vital.bpDiastolic}` };
-  }
-
+  if (vital.bpSystolic !== null && vital.bpSystolic !== undefined && vital.bpDiastolic !== null && vital.bpDiastolic !== undefined) return { label: "Blood pressure", value: `${vital.bpSystolic}/${vital.bpDiastolic}` };
   if (vital.glucose !== null && vital.glucose !== undefined) return { label: "Glucose", value: `${vital.glucose} mmol/L` };
   if (vital.temperature !== null && vital.temperature !== undefined) return { label: "Temperature", value: `${vital.temperature}°C` };
   return { label: "Vitals", value: vital.status };
@@ -237,22 +165,24 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
     void loadPatientDetail("initial");
   }, [loadPatientDetail]));
 
-  const openPrescription = () => {
-    navigation.navigate("DoctorPrescription", { patientId, patientName });
-  };
+  const openPrescription = () => navigation.navigate("DoctorPrescription", { patientId, patientName });
 
   const openPatientReports = () => {
     if (patientDetail && !patientDetail.privacy.shareReportsWithAssignedDoctors) {
       Alert.alert("Reports private", "This patient has disabled medical report sharing with assigned doctors.");
       return;
     }
-
     navigation.navigate("DoctorPatientReports", { patientId, patientName });
   };
 
-  const openSafetyAlert = (alert: DoctorUrgentAlert) => {
-    navigation.navigate("DoctorAlertDetail", { alertId: alert.id });
+  const openConsultation = (consultation: DoctorUpcomingConsultation) => {
+    navigation.navigate("DoctorTabs", {
+      screen: "Consultations",
+      params: { consultationId: consultation.id },
+    });
   };
+
+  const openSafetyAlert = (alert: DoctorUrgentAlert) => navigation.navigate("DoctorAlertDetail", { alertId: alert.id });
 
   const joinSafetyAlertCall = async (alert: DoctorUrgentAlert) => {
     if (!alert.consultation) {
@@ -359,7 +289,6 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
               <View style={styles.errorIcon}><RefreshCw size={26} color={DANGER} strokeWidth={2.7} /></View>
               <Text style={styles.errorTitle}>Unable to load record</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
-
               <TouchableOpacity style={styles.retryButton} activeOpacity={0.86} onPress={() => void loadPatientDetail("initial")}>
                 <RefreshCw size={17} color="#FFFFFF" strokeWidth={2.5} />
                 <Text style={styles.retryButtonText}>Retry</Text>
@@ -371,18 +300,12 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
             <>
               <LinearGradient colors={heroGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
                 <View style={styles.heroTopRow}>
-                  <View style={styles.heroAvatar}>
-                    <Text style={styles.heroAvatarText}>{getInitials(patientDetail.patient.fullName)}</Text>
-                  </View>
-
+                  <View style={styles.heroAvatar}><Text style={styles.heroAvatarText}>{getInitials(patientDetail.patient.fullName)}</Text></View>
                   <View style={styles.heroTitleBlock}>
                     <Text style={styles.heroName} numberOfLines={1}>{patientDetail.patient.fullName}</Text>
                     <Text style={styles.heroMeta}>{getAgeText(patientDetail.patient.dateOfBirth)} • {patientDetail.patient.gender || "Gender not set"}</Text>
                   </View>
-
-                  <View style={styles.heroStatusChip}>
-                    <Text style={styles.heroStatusText}>{latestVitalTone.label}</Text>
-                  </View>
+                  <View style={styles.heroStatusChip}><Text style={styles.heroStatusText}>{latestVitalTone.label}</Text></View>
                 </View>
 
                 <View style={styles.heroDivider} />
@@ -406,10 +329,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
                     <Text style={styles.overviewTitle}>Clinical Overview</Text>
                     <Text style={styles.overviewSubtitle}>Today’s patient activity</Text>
                   </View>
-
-                  <View style={styles.overviewIconBox}>
-                    <Stethoscope size={22} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-                  </View>
+                  <View style={styles.overviewIconBox}><Stethoscope size={22} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
                 </View>
 
                 <View style={styles.overviewGrid}>
@@ -426,7 +346,6 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
                     <Text style={styles.patientProfileTitle}>Patient Profile</Text>
                     <Text style={styles.patientProfileSubtitle}>Personal and health information saved by this patient</Text>
                   </View>
-
                   <View style={styles.patientProfileIcon}><UserRound size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
                 </View>
 
@@ -476,9 +395,7 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
                   </View>
                   <ChevronRight size={20} color={DOCTOR_PRIMARY} strokeWidth={2.7} />
                 </TouchableOpacity>
-              ) : (
-                <PrivacyRestrictedCard title="Medical reports are private" text="This patient has disabled report sharing with assigned doctors." />
-              )}
+              ) : <PrivacyRestrictedCard title="Medical reports are private" text="This patient has disabled report sharing with assigned doctors." />}
 
               {patientDetail.activeAlert ? (
                 <SafetyAlertPanel alert={patientDetail.activeAlert} isJoining={isJoiningAlertCall} onView={() => openSafetyAlert(patientDetail.activeAlert!)} onJoin={() => void joinSafetyAlertCall(patientDetail.activeAlert!)} />
@@ -493,60 +410,26 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
               )}
 
               <SectionHeader title="Latest Vitals" subtitle="Most recent saved Health Connect or manual reading" />
-
-              {!canViewVitals ? (
-                <PrivacyRestrictedCard title="Vitals are private" text="This patient has disabled routine vital sharing with assigned doctors. Safety Response data remains handled separately." />
-              ) : patientDetail.latestVital ? (
-                <VitalsCard vital={patientDetail.latestVital} history={patientDetail.vitalsHistory} />
-              ) : (
-                <EmptyCard icon={<HeartPulse size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No vitals yet" text="Latest readings will appear here when the patient syncs vitals." />
-              )}
+              {!canViewVitals ? <PrivacyRestrictedCard title="Vitals are private" text="This patient has disabled routine vital sharing with assigned doctors. Safety Response data remains handled separately." /> : patientDetail.latestVital ? <VitalsCard vital={patientDetail.latestVital} history={patientDetail.vitalsHistory} /> : <EmptyCard icon={<HeartPulse size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No vitals yet" text="Latest readings will appear here when the patient syncs vitals." />}
 
               <SectionHeader title="Today’s Dose Activity" subtitle="Taken, missed and snoozed reminders" />
-
-              {!canViewMedicines ? (
-                <PrivacyRestrictedCard title="Dose activity is private" text="This patient has disabled medicine sharing with assigned doctors." />
-              ) : patientDetail.todayDoseLogs.length > 0 ? (
-                <View style={styles.cardStack}>{patientDetail.todayDoseLogs.map(doseLog => <DoseLogCard key={doseLog.id} doseLog={doseLog} />)}</View>
-              ) : (
-                <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No dose activity today" text="Medicine reminder activity will appear here." />
-              )}
+              {!canViewMedicines ? <PrivacyRestrictedCard title="Dose activity is private" text="This patient has disabled medicine sharing with assigned doctors." /> : patientDetail.todayDoseLogs.length > 0 ? <View style={styles.cardStack}>{patientDetail.todayDoseLogs.map(doseLog => <DoseLogCard key={doseLog.id} doseLog={doseLog} />)}</View> : <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No dose activity today" text="Medicine reminder activity will appear here." />}
 
               <SectionHeader title="Active Medicines" subtitle="Current medicine plan and review status" />
-
-              {!canViewMedicines ? (
-                <PrivacyRestrictedCard title="Medicines are private" text="This patient has disabled medicine and reminder sharing with assigned doctors." />
-              ) : patientDetail.activeMedicines.length > 0 ? (
-                <View style={styles.cardStack}>{patientDetail.activeMedicines.map(medicine => <MedicineCard key={medicine.id} medicine={medicine} />)}</View>
-              ) : (
-                <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No active medicines" text="Medicines will appear here after they are added." />
-              )}
+              {!canViewMedicines ? <PrivacyRestrictedCard title="Medicines are private" text="This patient has disabled medicine and reminder sharing with assigned doctors." /> : patientDetail.activeMedicines.length > 0 ? <View style={styles.cardStack}>{patientDetail.activeMedicines.map(medicine => <MedicineCard key={medicine.id} medicine={medicine} />)}</View> : <EmptyCard icon={<Pill size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No active medicines" text="Medicines will appear here after they are added." />}
 
               <SectionHeader title="Patient Care Diary" subtitle="Personal health notes recorded by the patient" />
-
-              {careDiaryEntries.length > 0 ? (
-                <View style={styles.cardStack}>
-                  {careDiaryEntries.map(entry => <CareDiaryCard key={entry.id} entry={entry} />)}
-                </View>
-              ) : (
-                <EmptyCard icon={<BookHeart size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No diary entries" text="Patient health notes will appear here when the patient records them." />
-              )}
+              {careDiaryEntries.length > 0 ? <View style={styles.cardStack}>{careDiaryEntries.map(entry => <CareDiaryCard key={entry.id} entry={entry} />)}</View> : <EmptyCard icon={<BookHeart size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No diary entries" text="Patient health notes will appear here when the patient records them." />}
 
               <SectionHeader title="Doctor Notes" subtitle="Your latest notes for this patient" rightAction="Add Note" onPressRight={openNoteModal} />
-
-              {patientDetail.latestNotes.length > 0 ? (
-                <View style={styles.cardStack}>{patientDetail.latestNotes.map(note => <NoteCard key={note.id} note={note} />)}</View>
-              ) : (
-                <EmptyCard icon={<NotebookPen size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No notes yet" text="Doctor-specific notes will appear here after you add them." />
-              )}
+              {patientDetail.latestNotes.length > 0 ? <View style={styles.cardStack}>{patientDetail.latestNotes.map(note => <NoteCard key={note.id} note={note} />)}</View> : <EmptyCard icon={<NotebookPen size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No notes yet" text="Doctor-specific notes will appear here after you add them." />}
 
               <SectionHeader title="Consultations" subtitle="Recent manual and emergency consultations" />
-
               {patientDetail.recentConsultations.length > 0 ? (
-                <View style={styles.cardStack}>{patientDetail.recentConsultations.map(consultation => <ConsultationCard key={consultation.id} consultation={consultation} />)}</View>
-              ) : (
-                <EmptyCard icon={<Video size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No consultations yet" text="Consultation history will appear here." />
-              )}
+                <View style={styles.cardStack}>
+                  {patientDetail.recentConsultations.map(consultation => <ConsultationCard key={consultation.id} consultation={consultation} onPress={() => openConsultation(consultation)} />)}
+                </View>
+              ) : <EmptyCard icon={<Video size={25} color={DOCTOR_PRIMARY} strokeWidth={2.6} />} title="No consultations yet" text="Consultation history will appear here." />}
             </>
           ) : null}
         </ScrollView>
@@ -560,120 +443,51 @@ export const DoctorPatientDetailScreen = ({ navigation, route }: DoctorPatientDe
 const OverviewStat = ({ label, value, tone }: { label: string; value: string; tone: "default" | "success" | "warning" | "danger" }) => {
   const background = tone === "danger" ? DANGER_LIGHT : tone === "warning" ? WARNING_LIGHT : tone === "success" ? SUCCESS_LIGHT : DOCTOR_LIGHT;
   const color = tone === "danger" ? DANGER_DARK : tone === "warning" ? WARNING_DARK : tone === "success" ? SUCCESS_DARK : DOCTOR_DARK;
-
-  return (
-    <View style={[styles.overviewStatBox, { backgroundColor: background }]}>
-      <Text style={[styles.overviewStatValue, { color }]}>{value}</Text>
-      <Text style={[styles.overviewStatLabel, { color }]}>{label}</Text>
-    </View>
-  );
+  return <View style={[styles.overviewStatBox, { backgroundColor: background }]}><Text style={[styles.overviewStatValue, { color }]}>{value}</Text><Text style={[styles.overviewStatLabel, { color }]}>{label}</Text></View>;
 };
 
 const SectionHeader = ({ title, subtitle, rightAction, onPressRight }: { title: string; subtitle: string; rightAction?: string; onPressRight?: () => void }) => (
   <View style={styles.sectionHeader}>
-    <View style={styles.sectionTitleBlock}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-    </View>
-
-    {rightAction && onPressRight ? (
-      <TouchableOpacity style={styles.sectionActionButton} activeOpacity={0.86} onPress={onPressRight}>
-        <NotebookPen size={15} color="#FFFFFF" strokeWidth={2.5} />
-        <Text style={styles.sectionActionText}>{rightAction}</Text>
-      </TouchableOpacity>
-    ) : null}
+    <View style={styles.sectionTitleBlock}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionSubtitle}>{subtitle}</Text></View>
+    {rightAction && onPressRight ? <TouchableOpacity style={styles.sectionActionButton} activeOpacity={0.86} onPress={onPressRight}><NotebookPen size={15} color="#FFFFFF" strokeWidth={2.5} /><Text style={styles.sectionActionText}>{rightAction}</Text></TouchableOpacity> : null}
   </View>
 );
 
 const ProfileDetailRow = ({ icon, label, value, isLast }: { icon: ReactNode; label: string; value: string; isLast?: boolean }) => (
   <View style={[styles.profileDetailRow, isLast ? styles.profileDetailRowLast : undefined]}>
     <View style={styles.profileDetailIcon}>{icon}</View>
-    <View style={styles.profileDetailText}>
-      <Text style={styles.profileDetailLabel}>{label}</Text>
-      <Text style={styles.profileDetailValue}>{value}</Text>
-    </View>
+    <View style={styles.profileDetailText}><Text style={styles.profileDetailLabel}>{label}</Text><Text style={styles.profileDetailValue}>{value}</Text></View>
   </View>
 );
 
 const CareDiaryCard = ({ entry }: { entry: DoctorPatientCareDiaryEntry }) => (
   <View style={styles.diaryCard}>
     <View style={styles.diaryTopRow}>
-      <View style={styles.diaryIconBox}>
-        <BookHeart size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />
-      </View>
-
-      <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>{entry.title}</Text>
-        <Text style={styles.listSubtitle}>{formatDateTime(entry.entryDate)}</Text>
-      </View>
-
-      <View style={styles.readOnlyBadge}>
-        <Text style={styles.readOnlyBadgeText}>Patient note</Text>
-      </View>
+      <View style={styles.diaryIconBox}><BookHeart size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
+      <View style={styles.listTextBlock}><Text style={styles.listTitle}>{entry.title}</Text><Text style={styles.listSubtitle}>{formatDateTime(entry.entryDate)}</Text></View>
+      <View style={styles.readOnlyBadge}><Text style={styles.readOnlyBadgeText}>Patient note</Text></View>
     </View>
-
     <Text style={styles.diaryNote}>{entry.note}</Text>
-
-    {entry.mood ? (
-      <View style={styles.diaryDetail}>
-        <Text style={styles.diaryDetailLabel}>Mood / feeling</Text>
-        <Text style={styles.diaryDetailValue}>{entry.mood}</Text>
-      </View>
-    ) : null}
-
-    {entry.symptoms ? (
-      <View style={styles.diaryDetail}>
-        <Text style={styles.diaryDetailLabel}>Symptoms</Text>
-        <Text style={styles.diaryDetailValue}>{entry.symptoms}</Text>
-      </View>
-    ) : null}
+    {entry.mood ? <View style={styles.diaryDetail}><Text style={styles.diaryDetailLabel}>Mood / feeling</Text><Text style={styles.diaryDetailValue}>{entry.mood}</Text></View> : null}
+    {entry.symptoms ? <View style={styles.diaryDetail}><Text style={styles.diaryDetailLabel}>Symptoms</Text><Text style={styles.diaryDetailValue}>{entry.symptoms}</Text></View> : null}
   </View>
 );
 
-const DoctorNoteModal = ({ visible, noteText, isSaving, onChangeNote, onCancel, onSave }: {
-  visible: boolean;
-  noteText: string;
-  isSaving: boolean;
-  onChangeNote: (value: string) => void;
-  onCancel: () => void;
-  onSave: () => void;
-}) => {
+const DoctorNoteModal = ({ visible, noteText, isSaving, onChangeNote, onCancel, onSave }: { visible: boolean; noteText: string; isSaving: boolean; onChangeNote: (value: string) => void; onCancel: () => void; onSave: () => void }) => {
   const isSaveDisabled = isSaving || noteText.trim().length < 2;
-
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onCancel}>
       <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <View style={styles.modalIconBox}><NotebookPen size={24} color={DOCTOR_PRIMARY} strokeWidth={2.7} /></View>
-            <View style={styles.modalTitleBlock}>
-              <Text style={styles.modalTitle}>Add Doctor Note</Text>
-              <Text style={styles.modalSubtitle}>This note will be saved under your doctor account.</Text>
-            </View>
+            <View style={styles.modalTitleBlock}><Text style={styles.modalTitle}>Add Doctor Note</Text><Text style={styles.modalSubtitle}>This note will be saved under your doctor account.</Text></View>
           </View>
-
-          <TextInput
-            style={styles.noteInput}
-            value={noteText}
-            onChangeText={onChangeNote}
-            placeholder="Write clinical observation, advice, or follow-up note..."
-            placeholderTextColor={MUTED}
-            multiline
-            maxLength={MAX_NOTE_LENGTH}
-            textAlignVertical="top"
-            editable={!isSaving}
-          />
-
+          <TextInput style={styles.noteInput} value={noteText} onChangeText={onChangeNote} placeholder="Write clinical observation, advice, or follow-up note..." placeholderTextColor={MUTED} multiline maxLength={MAX_NOTE_LENGTH} textAlignVertical="top" editable={!isSaving} />
           <Text style={styles.noteCounter}>{noteText.length}/{MAX_NOTE_LENGTH}</Text>
-
           <View style={styles.modalButtonRow}>
-            <TouchableOpacity style={styles.modalCancelButton} activeOpacity={0.86} onPress={onCancel} disabled={isSaving}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.modalSaveButton, isSaveDisabled ? styles.modalSaveButtonDisabled : undefined]} activeOpacity={0.86} onPress={onSave} disabled={isSaveDisabled}>
-              {isSaving ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.modalSaveText}>Save Note</Text>}
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelButton} activeOpacity={0.86} onPress={onCancel} disabled={isSaving}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.modalSaveButton, isSaveDisabled ? styles.modalSaveButtonDisabled : undefined]} activeOpacity={0.86} onPress={onSave} disabled={isSaveDisabled}>{isSaving ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.modalSaveText}>Save Note</Text>}</TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -685,22 +499,15 @@ const SafetyAlertPanel = ({ alert, isJoining, onView, onJoin }: { alert: DoctorU
   <View style={styles.alertCard}>
     <View style={styles.alertHeader}>
       <View style={styles.alertIconBox}><AlertTriangle size={24} color={DANGER} strokeWidth={2.7} /></View>
-      <View style={styles.alertTitleBlock}>
-        <Text style={styles.alertTitle}>Active Safety Alert</Text>
-        <Text style={styles.alertSubtitle}>{alert.vitalSummary ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}` : "Critical reading needs review"}</Text>
-      </View>
+      <View style={styles.alertTitleBlock}><Text style={styles.alertTitle}>Active Safety Alert</Text><Text style={styles.alertSubtitle}>{alert.vitalSummary ? `${alert.vitalSummary.label}: ${alert.vitalSummary.value}` : "Critical reading needs review"}</Text></View>
       <View style={styles.alertBadge}><Text style={styles.alertBadgeText}>{alert.status}</Text></View>
     </View>
-
     <Text style={styles.alertReason}>{alert.reason}</Text>
-
     <View style={styles.alertFooter}>
       <Text style={styles.alertTime}>{formatDateTime(alert.createdAt)}</Text>
       <View style={styles.alertActions}>
         <TouchableOpacity style={styles.alertSecondaryButton} activeOpacity={0.86} onPress={onView}><Text style={styles.alertSecondaryText}>View</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.alertPrimaryButton, !alert.canJoinCall || isJoining ? styles.alertDisabledButton : undefined]} activeOpacity={0.86} onPress={onJoin} disabled={!alert.canJoinCall || isJoining}>
-          {isJoining ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.alertPrimaryText}>{alert.canJoinCall ? "Join" : "No call"}</Text>}
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.alertPrimaryButton, !alert.canJoinCall || isJoining ? styles.alertDisabledButton : undefined]} activeOpacity={0.86} onPress={onJoin} disabled={!alert.canJoinCall || isJoining}>{isJoining ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.alertPrimaryText}>{alert.canJoinCall ? "Join" : "No call"}</Text>}</TouchableOpacity>
       </View>
     </View>
   </View>
@@ -714,10 +521,7 @@ const VitalsCard = ({ vital, history }: { vital: DoctorVitalReading; history: Do
     <View style={[styles.vitalsCard, { backgroundColor: cardBackground }]}>
       <View style={styles.vitalsTopRow}>
         <View style={[styles.vitalsIconBox, { backgroundColor: SURFACE }]}><HeartPulse size={24} color={tone.icon} strokeWidth={2.7} /></View>
-        <View style={styles.vitalsTitleBlock}>
-          <Text style={styles.vitalsTitle}>Latest Reading</Text>
-          <Text style={styles.vitalsSubtitle}>{formatDateTime(vital.recordedAt)}</Text>
-        </View>
+        <View style={styles.vitalsTitleBlock}><Text style={styles.vitalsTitle}>Latest Reading</Text><Text style={styles.vitalsSubtitle}>{formatDateTime(vital.recordedAt)}</Text></View>
         <View style={[styles.statusBadge, { backgroundColor: SURFACE }]}><Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text></View>
       </View>
 
@@ -730,117 +534,48 @@ const VitalsCard = ({ vital, history }: { vital: DoctorVitalReading; history: Do
         <VitalMetric icon={<Stethoscope size={19} color={tone.icon} strokeWidth={2.6} />} label="Source" value={vital.deviceSource || vital.source} />
       </View>
 
-      {history.length > 1 ? (
-        <View style={styles.historyPanel}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Recent readings</Text>
-            <Text style={styles.historySubtitle}>Last {history.length}</Text>
-          </View>
-
-          {history.slice(0, 3).map(item => <VitalHistoryRow key={item.id} vital={item} />)}
-        </View>
-      ) : null}
+      {history.length > 1 ? <View style={styles.historyPanel}><View style={styles.historyHeader}><Text style={styles.historyTitle}>Recent readings</Text><Text style={styles.historySubtitle}>Last {history.length}</Text></View>{history.slice(0, 3).map(item => <VitalHistoryRow key={item.id} vital={item} />)}</View> : null}
     </View>
   );
 };
 
-const VitalMetric = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <View style={styles.vitalMetricBox}>
-    <View style={styles.vitalMetricIcon}>{icon}</View>
-    <View style={styles.vitalMetricTextBlock}>
-      <Text style={styles.vitalMetricLabel}>{label}</Text>
-      <Text style={styles.vitalMetricValue} numberOfLines={1}>{value}</Text>
-    </View>
-  </View>
-);
+const VitalMetric = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => <View style={styles.vitalMetricBox}><View style={styles.vitalMetricIcon}>{icon}</View><View style={styles.vitalMetricTextBlock}><Text style={styles.vitalMetricLabel}>{label}</Text><Text style={styles.vitalMetricValue} numberOfLines={1}>{value}</Text></View></View>;
 
 const VitalHistoryRow = ({ vital }: { vital: DoctorVitalReading }) => {
   const tone = getVitalTone(vital.status);
   const primary = getPrimaryVital(vital);
-
-  return (
-    <View style={styles.historyRow}>
-      <View style={[styles.historyDot, { backgroundColor: tone.icon }]} />
-      <View style={styles.historyTextBlock}>
-        <Text style={styles.historyMain}>{primary.label}: {primary.value}</Text>
-        <Text style={styles.historyTime}>{formatDateTime(vital.recordedAt)}</Text>
-      </View>
-      <View style={[styles.historyChip, { backgroundColor: tone.background }]}><Text style={[styles.historyChipText, { color: tone.text }]}>{tone.label}</Text></View>
-    </View>
-  );
+  return <View style={styles.historyRow}><View style={[styles.historyDot, { backgroundColor: tone.icon }]} /><View style={styles.historyTextBlock}><Text style={styles.historyMain}>{primary.label}: {primary.value}</Text><Text style={styles.historyTime}>{formatDateTime(vital.recordedAt)}</Text></View><View style={[styles.historyChip, { backgroundColor: tone.background }]}><Text style={[styles.historyChipText, { color: tone.text }]}>{tone.label}</Text></View></View>;
 };
 
 const DoseLogCard = ({ doseLog }: { doseLog: DoctorPatientDoseLog }) => {
   const tone = getDoseTone(doseLog.status);
-
-  return (
-    <View style={styles.listCard}>
-      <View style={styles.listIconBox}><Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
-      <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>{doseLog.medicine.name}</Text>
-        <Text style={styles.listSubtitle}>{doseLog.medicine.dose} • {formatShortTime(doseLog.scheduledFor)}</Text>
-      </View>
-      <View style={[styles.statusBadge, { backgroundColor: tone.background }]}><Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text></View>
-    </View>
-  );
+  return <View style={styles.listCard}><View style={styles.listIconBox}><Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View><View style={styles.listTextBlock}><Text style={styles.listTitle}>{doseLog.medicine.name}</Text><Text style={styles.listSubtitle}>{doseLog.medicine.dose} • {formatShortTime(doseLog.scheduledFor)}</Text></View><View style={[styles.statusBadge, { backgroundColor: tone.background }]}><Text style={[styles.statusBadgeText, { color: tone.text }]}>{tone.label}</Text></View></View>;
 };
 
 const MedicineCard = ({ medicine }: { medicine: DoctorPatientMedicine }) => {
   const pendingReviewCount = medicine.reminders.filter(reminder => reminder.sendToDoctorForReview && reminder.reviewStatus === "PENDING").length;
-
   return (
     <View style={styles.medicineCard}>
       <View style={styles.medicineTopRow}>
         <View style={styles.listIconBox}><Pill size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
-        <View style={styles.listTextBlock}>
-          <Text style={styles.listTitle}>{medicine.name}</Text>
-          <Text style={styles.listSubtitle}>{medicine.dose}</Text>
-        </View>
-
-        <View style={[styles.sourceBadge, pendingReviewCount > 0 ? styles.reviewSourceBadge : undefined]}>
-          <Text style={[styles.sourceBadgeText, pendingReviewCount > 0 ? styles.reviewSourceBadgeText : undefined]}>{pendingReviewCount > 0 ? "Review" : formatStatus(medicine.source)}</Text>
-        </View>
+        <View style={styles.listTextBlock}><Text style={styles.listTitle}>{medicine.name}</Text><Text style={styles.listSubtitle}>{medicine.dose}</Text></View>
+        <View style={[styles.sourceBadge, pendingReviewCount > 0 ? styles.reviewSourceBadge : undefined]}><Text style={[styles.sourceBadgeText, pendingReviewCount > 0 ? styles.reviewSourceBadgeText : undefined]}>{pendingReviewCount > 0 ? "Review" : formatStatus(medicine.source)}</Text></View>
       </View>
-
       {medicine.instructions ? <Text style={styles.medicineInstructions}>{medicine.instructions}</Text> : null}
-
       <View style={styles.reminderStack}>
-        {medicine.reminders.length > 0 ? medicine.reminders.map(reminder => (
-          <View key={reminder.id} style={styles.reminderRow}>
-            <Clock3 size={15} color={DOCTOR_PRIMARY} strokeWidth={2.4} />
-            <Text style={styles.reminderText}>{reminder.timeOfDay} • {formatStatus(reminder.frequency)}</Text>
-
-            {reminder.sendToDoctorForReview ? (
-              <View style={styles.reviewBadge}><Text style={styles.reviewBadgeText}>{formatStatus(reminder.reviewStatus)}</Text></View>
-            ) : (
-              <CheckCircle2 size={16} color={SUCCESS} strokeWidth={2.5} />
-            )}
-          </View>
-        )) : <Text style={styles.noReminderText}>No active reminders</Text>}
+        {medicine.reminders.length > 0 ? medicine.reminders.map(reminder => <View key={reminder.id} style={styles.reminderRow}><Clock3 size={15} color={DOCTOR_PRIMARY} strokeWidth={2.4} /><Text style={styles.reminderText}>{reminder.timeOfDay} • {formatStatus(reminder.frequency)}</Text>{reminder.sendToDoctorForReview ? <View style={styles.reviewBadge}><Text style={styles.reviewBadgeText}>{formatStatus(reminder.reviewStatus)}</Text></View> : <CheckCircle2 size={16} color={SUCCESS} strokeWidth={2.5} />}</View>) : <Text style={styles.noReminderText}>No active reminders</Text>}
       </View>
     </View>
   );
 };
 
-const NoteCard = ({ note }: { note: DoctorPatientNote }) => (
-  <View style={styles.noteCard}>
-    <View style={styles.noteTopRow}>
-      <View style={styles.noteIconBox}><NotebookPen size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
-      <View style={styles.listTextBlock}>
-        <Text style={styles.listTitle}>Doctor note</Text>
-        <Text style={styles.listSubtitle}>{formatDateTime(note.createdAt)}</Text>
-      </View>
-    </View>
+const NoteCard = ({ note }: { note: DoctorPatientNote }) => <View style={styles.noteCard}><View style={styles.noteTopRow}><View style={styles.noteIconBox}><NotebookPen size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View><View style={styles.listTextBlock}><Text style={styles.listTitle}>Doctor note</Text><Text style={styles.listSubtitle}>{formatDateTime(note.createdAt)}</Text></View></View><Text style={styles.noteText}>{note.note}</Text></View>;
 
-    <Text style={styles.noteText}>{note.note}</Text>
-  </View>
-);
-
-const ConsultationCard = ({ consultation }: { consultation: DoctorUpcomingConsultation }) => {
+const ConsultationCard = ({ consultation, onPress }: { consultation: DoctorUpcomingConsultation; onPress: () => void }) => {
   const isEmergency = consultation.type === "EMERGENCY";
 
   return (
-    <View style={styles.listCard}>
+    <TouchableOpacity style={styles.listCard} activeOpacity={0.84} onPress={onPress}>
       <View style={[styles.listIconBox, isEmergency ? styles.listIconDanger : undefined]}>
         {isEmergency ? <AlertTriangle size={21} color={DANGER} strokeWidth={2.6} /> : <CalendarClock size={21} color={DOCTOR_PRIMARY} strokeWidth={2.6} />}
       </View>
@@ -851,27 +586,13 @@ const ConsultationCard = ({ consultation }: { consultation: DoctorUpcomingConsul
       </View>
 
       <ChevronRight size={18} color={MUTED} strokeWidth={2.5} />
-    </View>
+    </TouchableOpacity>
   );
 };
 
-const PrivacyRestrictedCard = ({ title, text }: { title: string; text: string }) => (
-  <View style={styles.privacyRestrictedCard}>
-    <View style={styles.privacyRestrictedIcon}><ShieldCheck size={24} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View>
-    <View style={styles.privacyRestrictedTextBlock}>
-      <Text style={styles.privacyRestrictedTitle}>{title}</Text>
-      <Text style={styles.privacyRestrictedText}>{text}</Text>
-    </View>
-  </View>
-);
+const PrivacyRestrictedCard = ({ title, text }: { title: string; text: string }) => <View style={styles.privacyRestrictedCard}><View style={styles.privacyRestrictedIcon}><ShieldCheck size={24} color={DOCTOR_PRIMARY} strokeWidth={2.6} /></View><View style={styles.privacyRestrictedTextBlock}><Text style={styles.privacyRestrictedTitle}>{title}</Text><Text style={styles.privacyRestrictedText}>{text}</Text></View></View>;
 
-const EmptyCard = ({ icon, title, text }: { icon: ReactNode; title: string; text: string }) => (
-  <View style={styles.emptyCard}>
-    <View style={styles.emptyIcon}>{icon}</View>
-    <Text style={styles.emptyTitle}>{title}</Text>
-    <Text style={styles.emptyText}>{text}</Text>
-  </View>
-);
+const EmptyCard = ({ icon, title, text }: { icon: ReactNode; title: string; text: string }) => <View style={styles.emptyCard}><View style={styles.emptyIcon}>{icon}</View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyText}>{text}</Text></View>;
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: BACKGROUND },
@@ -1009,7 +730,6 @@ const styles = StyleSheet.create({
   reviewBadge: { backgroundColor: WARNING_LIGHT, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
   reviewBadgeText: { color: WARNING_DARK, fontSize: 9, fontWeight: "700", textTransform: "capitalize" },
   noReminderText: { color: MUTED, fontSize: 12, fontWeight: "600" },
-
   diaryCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
   diaryTopRow: { flexDirection: "row", alignItems: "center" },
   diaryIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
@@ -1019,7 +739,6 @@ const styles = StyleSheet.create({
   diaryDetail: { backgroundColor: SOFT_PANEL, borderRadius: 11, padding: 10, marginTop: 9 },
   diaryDetailLabel: { color: MUTED, fontSize: 9, fontWeight: "800", textTransform: "uppercase" },
   diaryDetailValue: { color: TEXT, fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 3 },
-
   noteCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 14, ...elevate(1) },
   noteTopRow: { flexDirection: "row", alignItems: "center" },
   noteIconBox: { width: 44, height: 44, borderRadius: 13, backgroundColor: DOCTOR_LIGHT, alignItems: "center", justifyContent: "center", marginRight: 12 },
