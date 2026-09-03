@@ -19,6 +19,7 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   const patientId = getDataText(notification, "patientId");
   const patientName = getDataText(notification, "patientName") || "Patient";
   const medicineId = getDataText(notification, "medicineId");
+  const submissionId = getDataText(notification, "submissionId") || (entityType === "PATIENT_PRESCRIPTION_SUBMISSION" ? entityId : undefined);
   const doseLogId = getDataText(notification, "doseLogId") || (entityType === "CAREGIVER_MEDICINE_DOSE_LOG" ? entityId : undefined);
   const alertId = getDataText(notification, "alertId") || (entityType === "SAFETY_ALERT" ? entityId : undefined);
   const orderId = getDataText(notification, "orderId") || (entityType === "MEDICINE_ORDER" ? entityId : undefined);
@@ -49,6 +50,11 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Patients" });
   };
 
+  const openDoctorRefillVerification = () => {
+    if (submissionId) return navigation.navigate("DoctorRefillVerificationDetail", { submissionId });
+    return navigation.navigate("DoctorRefillVerifications");
+  };
+
   if (targetScreen === "Notifications") return fallbackToNotifications ? navigation.navigate("Notifications") : undefined;
 
   if (targetScreen === "PatientCaregiverAccess") return navigation.navigate("PatientCaregiverAccess");
@@ -76,6 +82,8 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (targetScreen === "PatientActiveCalls") return navigation.navigate("PatientActiveCalls");
   if (targetScreen === "PatientProfile") return navigation.navigate("PatientProfile");
 
+  if (targetScreen === "DoctorRefillVerifications") return navigation.navigate("DoctorRefillVerifications");
+  if (targetScreen === "DoctorRefillVerificationDetail") return openDoctorRefillVerification();
   if (targetScreen === "DoctorReportReviews") return navigation.navigate("DoctorReportReviews");
   if (targetScreen === "DoctorPatientReports" && patientId) return navigation.navigate("DoctorPatientReports", { patientId, patientName });
   if (targetScreen === "DoctorReportReview" && patientId && reportId) return navigation.navigate("DoctorReportReview", { patientId, patientName, reportId });
@@ -118,6 +126,8 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Home" });
   }
 
+  if (type === "REFILL_DOCTOR_VERIFICATION_REQUESTED") return openDoctorRefillVerification();
+
   if (type === "CAREGIVER_LINK_REQUESTED") return navigation.navigate("PatientCaregiverAccess");
 
   if (type === "NEW_MEDICINE_ORDER") return orderId ? navigation.navigate("PharmacyOrderDetail", { orderId }) : navigation.navigate("PharmacyTabs", { screen: "Orders" });
@@ -129,9 +139,13 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   if (["SAFETY_ALERT_CREATED", "SAFETY_ALERT_ESCALATED", "SAFETY_ALERT_RESOLVED"].includes(type)) return navigation.navigate("DoctorTabs", { screen: "Alerts" });
   if (type === "CRITICAL_VITAL_DETECTED") return navigation.navigate("PatientTabs", { screen: "Vitals" });
 
-  if (["EMERGENCY_CONSULTATION_REQUESTED", "MANUAL_CONSULTATION_REQUESTED", "PATIENT_JOINED_CALL"].includes(type)) return navigation.navigate("DoctorTabs", { screen: "Consultations" });
+  if (["EMERGENCY_CONSULTATION_REQUESTED", "MANUAL_CONSULTATION_REQUESTED", "PATIENT_JOINED_CALL"].includes(type)) {
+    return navigation.navigate("DoctorTabs", { screen: "Consultations" });
+  }
 
-  if (["CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED", "CONSULTATION_COMPLETED", "CONSULTATION_CANCELLED"].includes(type)) return navigation.navigate("PatientTabs", { screen: "Consultations" });
+  if (["CONSULTATION_ACCEPTED", "CONSULTATION_REJECTED", "CONSULTATION_COMPLETED", "CONSULTATION_CANCELLED"].includes(type)) {
+    return navigation.navigate("PatientTabs", { screen: "Consultations" });
+  }
 
   if (type === "MEDICINE_REVIEW_REQUESTED") return navigation.navigate("DoctorTabs", { screen: "Reviews" });
   if (["MEDICINE_REVIEW_APPROVED", "MEDICINE_REVIEW_REJECTED"].includes(type)) return navigation.navigate("MedicineUpdates");
