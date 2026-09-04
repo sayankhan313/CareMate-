@@ -28,6 +28,7 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
   const auditLogId = getDataText(notification, "auditLogId") || (entityType === "AUDIT_LOG" ? entityId : undefined);
   const doctorId = getDataText(notification, "doctorId") || (entityType === "DOCTOR_VERIFICATION" ? entityId : undefined);
   const pharmacyId = getDataText(notification, "pharmacyId") || (entityType === "PHARMACY_VERIFICATION" ? entityId : undefined);
+  const medicineReviewRequestId = getDataText(notification, "requestId") || (entityType === "MEDICINE_REVIEW_REQUEST" ? entityId : undefined);
 
   const openCaregiverMedicine = () => {
     if (!patientId) return navigation.navigate("CaregiverTabs", { screen: "Patients" });
@@ -55,6 +56,12 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("DoctorRefillVerifications");
   };
 
+  const openDoctorPoolReview = () => {
+    if (medicineReviewRequestId) return navigation.navigate("DoctorMedicineReviewPoolDetail", { requestId: medicineReviewRequestId });
+    return navigation.navigate("DoctorMedicineReviewPool");
+  };
+
+  const openAdminMedicineReviews = () => navigation.navigate("AdminMedicineReviewRequests");
   const openPatientOrders = () => navigation.navigate("PatientTabs", { screen: "PatientOrders" });
 
   if (targetScreen === "Notifications") return fallbackToNotifications ? navigation.navigate("Notifications") : undefined;
@@ -95,11 +102,16 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
 
   if (targetScreen === "DoctorRefillVerifications") return navigation.navigate("DoctorRefillVerifications");
   if (targetScreen === "DoctorRefillVerificationDetail") return openDoctorRefillVerification();
+
+  if (targetScreen === "DoctorMedicineReviewPool") return navigation.navigate("DoctorMedicineReviewPool");
+  if (targetScreen === "DoctorMedicineReviewPoolDetail") return openDoctorPoolReview();
+
   if (targetScreen === "DoctorReportReviews") return navigation.navigate("DoctorReportReviews");
   if (targetScreen === "DoctorPatientReports" && patientId) return navigation.navigate("DoctorPatientReports", { patientId, patientName });
   if (targetScreen === "DoctorReportReview" && patientId && reportId) return navigation.navigate("DoctorReportReview", { patientId, patientName, reportId });
   if (targetScreen === "DoctorPatientDetail" && patientId) return navigation.navigate("DoctorPatientDetail", { patientId, patientName });
 
+  if (targetScreen === "AdminMedicineReviewRequests") return openAdminMedicineReviews();
   if (targetScreen === "AdminDoctorVerificationDetail" && doctorId) return navigation.navigate("AdminDoctorVerificationDetail", { doctorId });
   if (targetScreen === "AdminPharmacyVerificationDetail" && pharmacyId) return navigation.navigate("AdminPharmacyVerificationDetail", { pharmacyId });
   if (targetScreen === "AdminAuditLogDetail" && auditLogId) return navigation.navigate("AdminAuditLogDetail", { auditLogId });
@@ -137,7 +149,23 @@ export const openNotificationTarget = (navigation: any, notification: Notificati
     return navigation.navigate("CaregiverTabs", { screen: "Home" });
   }
 
+  if (
+    recipientRole === "ADMIN" &&
+    ["MEDICINE_REVIEW_ADMIN_ESCALATION", "MEDICINE_REVIEW_POOL_RESULT"].includes(entityType || "")
+  ) {
+    return openAdminMedicineReviews();
+  }
+
+  if (
+    ["MEDICINE_REVIEW_ADMIN_ESCALATION", "MEDICINE_REVIEW_POOL_RESULT"].includes(entityType || "")
+  ) {
+    return openAdminMedicineReviews();
+  }
+
   if (type === "REFILL_DOCTOR_VERIFICATION_REQUESTED") return openDoctorRefillVerification();
+
+  if (type === "MEDICINE_REVIEW_POOL_ASSIGNED") return openDoctorPoolReview();
+
   if (type === "CAREGIVER_LINK_REQUESTED") return navigation.navigate("PatientCaregiverAccess");
 
   if (type === "NEW_MEDICINE_ORDER") {
