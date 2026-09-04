@@ -126,15 +126,35 @@ Regarding the use of this repository, once a feature (or part of it) is develope
 
 Please choose the structure of the contents of this repository that suits the needs of your project but do indicate in this file where the main software artefacts are located.
 
-## Planned repository structure
+## Repository structure
 
-- `/mobile` - React Native Android application for patient, doctor, caregiver, pharmacy and admin screens.
-- `/backend` - Node.js/Express TypeScript backend for authentication, role-based access, APIs and business logic.
-- `/database` - PostgreSQL and Prisma schema, migrations and seed data.
-- `/docs` - dissertation-related materials.
-- `/tests` - API, role-based access, OCR, reminder and emergency workflow testing resources.
-- `/deployment` - optional deployment configuration and environment setup notes.
+- `/mobile` - React Native Android application containing the Patient, Doctor, Caregiver, Pharmacy and Admin user interfaces, navigation, mobile services, state handling, notification integration and Android-specific configuration.
+- `/backend` - Node.js/Express TypeScript backend containing authentication, role-based and relationship-aware access control, API routes, controllers, services, validation, notification handling and application business logic.
+- `/backend/prisma` - Prisma schema, PostgreSQL database models, migrations and database configuration.
+- `/backend/tests` - Automated backend tests covering authentication, security, access control, medicines, reminders, OCR/reference matching, vitals, Safety Response, consultations, doctor workflows, caregiver workflows, pharmacy workflows, medicine-review routing and admin behaviour.
+- `/docs` - Project documentation and supporting development/testing material.
+- `/docs/testing-evidence` - Final testing evidence, including Postman screenshots and exported API testing resources.
+- `/docs/testing-evidence/postman-screenshots` - Numbered screenshots demonstrating tested API, integration, security and cross-role workflow behaviour.
+- `/docs/testing-evidence/postman-export` - Exported Postman collections and environment files used during API testing.
 
 ## Main software artefacts
 
-The main software artefacts will be the React Native Android application, Node.js/Express backend API, PostgreSQL database schema, Prisma models, authentication and role-based access middleware, OCR-assisted medicine scanning workflow, medicine reminder system, simulated vitals and Safety Response workflow, Jitsi/JaaS consultation integration, pharmacy order workflow and admin verification dashboard.
+The main software artefacts are:
+
+- React Native Android mobile application for Patient, Doctor, Caregiver, Pharmacy and Admin roles.
+- Node.js/Express TypeScript backend API.
+- PostgreSQL database managed through Prisma.
+- JWT authentication, bcrypt password hashing and role-based/relationship-aware authorisation.
+- Doctor and pharmacy verification workflows.
+- Medicine management, reminders and adherence tracking.
+- Google ML Kit OCR-assisted medicine and prescription scanning.
+- Patient Care Diary and caregiver observation workflows.
+- Simulated vitals and Android Health Connect integration.
+- Safety Response and doctor escalation workflow.
+- Doctor availability-aware medicine-review routing with Admin-assisted pool reassignment.
+- Jitsi/JaaS video consultation integration.
+- Pharmacy request, exemption, inventory, payment and fulfilment workflows.
+- Firebase Cloud Messaging notifications.
+- Stripe test-mode payment integration.
+- Admin account management, verification, medicine-review routing and audit-log functionality.
+- Automated backend test suites and Postman-based integration/security evidence.
