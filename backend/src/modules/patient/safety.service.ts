@@ -298,3 +298,8 @@ export const safetyService = {
     return { alert: formatSafetyAlert(updatedAlert), ...consultationResult };
   },
 };
+
+
+
+
+

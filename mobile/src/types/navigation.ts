@@ -13,7 +13,7 @@ export type PatientTabParamList = {
 
 export type DoctorTabParamList = {
   Home: { user?: any } | undefined;
-  Consultations: undefined;
+  Consultations: { consultationId?: string } | undefined;
   Alerts: undefined;
   Patients: undefined;
   Reviews: undefined;
@@ -63,7 +63,6 @@ export type MedicineDraft = {
 };
 
 export type ScanMedicineSource = "DEMO" | "CAMERA" | "GALLERY";
-
 export type ConsultationParticipantRole = "PATIENT" | "DOCTOR";
 export type ConsultationEndedBy = "PATIENT" | "DOCTOR";
 export type ConsultationCompletionStatus = "COMPLETED" | "LEFT";
@@ -130,6 +129,7 @@ export type RootStackParamList = {
   AdminRegisterWebView: { title: string; url: string; helperText?: string };
 
   PatientProfile: { user?: any } | undefined;
+  PatientCareDiary: undefined;
   PatientCaregiverAccess: undefined;
   EditPatientProfile: undefined;
   MyPharmacies: undefined;
@@ -142,7 +142,19 @@ export type RootStackParamList = {
   SelectDoctor: undefined;
   PatientActiveCalls: undefined;
   MedicineUpdates: undefined;
-  MedicineStock: { initialRequest?: { medicineId: string } } | undefined;
+
+  PharmacyRequest: {
+    medicineId: string;
+    medicineName: string;
+    dose: string;
+    source: string;
+    currentStock?: number | null;
+    stockUnit?: string | null;
+    reviewStatus?: string | null;
+    reviewRoutingStatus?: string | null;
+    reviewDoctorName?: string | null;
+  };
+
   PatientReports: undefined;
   PatientUploadReport: undefined;
 

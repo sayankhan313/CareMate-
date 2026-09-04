@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { WebView } from "react-native-webview";
 
 import { pharmacyOrdersApi, type PharmacyOrderDetail, type PharmacyOrderStatus } from "../../services/pharmacy/pharmacy-orders.api";
+import { notificationApi } from "../../services/notificationApi";
 import type { RootStackParamList } from "../../types/navigation";
 import PharmacyInventoryMatchModal from "./PharmacyInventoryMatchModal";
 
@@ -123,9 +124,12 @@ export const PharmacyOrderDetailScreen = ({ navigation, route }: Props) => {
       if (mode === "initial") setIsLoading(true);
       if (mode === "refresh") setIsRefreshing(true);
       setErrorMessage("");
+
       const result = await pharmacyOrdersApi.getOrderDetail(route.params.orderId);
       setOrder(result.order);
       setAllowedNextStatuses(result.allowedNextStatuses || []);
+
+      await notificationApi.markPharmacyOrderNotificationRead(route.params.orderId).catch(() => undefined);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to load pharmacy order.");
     } finally {

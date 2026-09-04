@@ -10,6 +10,7 @@ export type PharmacyDashboardResponse = {
     postcode: string;
   };
   counts: {
+    unreadNotifications: number;
     newOrders: number;
     preparing: number;
     ready: number;

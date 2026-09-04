@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const optionalText = (max: number) => z.string().trim().max(max).optional().transform(value => value || undefined);
 
+const packSizeSchema = z.coerce.number().int("Pack size must be a whole number.").min(1, "Pack size must be at least 1.").max(1_000_000, "Pack size is too large.");
+
 const priceSchema = z.coerce.number().int("Medicine price must be a whole number of pence.").min(1, "Medicine price must be greater than £0.00.").max(1_000_000, "Medicine price is too high.");
 
 export const pharmacyInventoryQuerySchema = z.object({
@@ -25,6 +27,8 @@ export const createPharmacyInventoryItemSchema = z.object({
   strength: optionalText(60),
   form: optionalText(60),
   stockUnit: z.string().trim().min(1).max(30).optional(),
+  packSize: packSizeSchema.optional(),
+  contentUnit: optionalText(30),
   unitPricePence: priceSchema.optional(),
   quantityInStock: z.coerce.number().int().min(0).max(1_000_000).optional().default(0),
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).optional().default(5),
@@ -35,6 +39,8 @@ export const updatePharmacyInventoryItemSchema = z.object({
   strength: z.string().trim().max(60).nullable().optional(),
   form: z.string().trim().max(60).nullable().optional(),
   stockUnit: z.string().trim().min(1).max(30).optional(),
+  packSize: packSizeSchema.optional(),
+  contentUnit: z.string().trim().max(30).nullable().optional(),
   unitPricePence: priceSchema.optional(),
   quantityInStock: z.coerce.number().int().min(0).max(1_000_000).optional(),
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).optional(),

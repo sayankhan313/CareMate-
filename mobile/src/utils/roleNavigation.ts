@@ -1,9 +1,4 @@
-export type AppUserRole =
-  | "PATIENT"
-  | "DOCTOR"
-  | "CAREGIVER"
-  | "PHARMACY"
-  | "ADMIN";
+export type AppUserRole = "PATIENT" | "DOCTOR" | "CAREGIVER" | "PHARMACY" | "ADMIN";
 
 export type AppUser = {
   id: string;
@@ -14,26 +9,27 @@ export type AppUser = {
   isEmailVerified?: boolean;
 };
 
-const isActiveAccount = (status?: string) => {
-  return status === "ACTIVE" || status === "APPROVED";
-};
+const isActiveAccount = (status?: string) => status === "ACTIVE" || status === "APPROVED";
 
 export const getRoleHomeRoute = (user: AppUser) => {
   if (user.role === "ADMIN") {
     return {
       name: "AdminTabs" as const,
-      params: {
-        user,
-      },
+      params: { user },
     };
   }
 
   if (user.role === "PATIENT") {
     return {
       name: "PatientTabs" as const,
-      params: {
-        user,
-      },
+      params: { user },
+    };
+  }
+
+  if (user.role === "CAREGIVER") {
+    return {
+      name: "CaregiverTabs" as const,
+      params: { user },
     };
   }
 
@@ -41,18 +37,13 @@ export const getRoleHomeRoute = (user: AppUser) => {
     if (!isActiveAccount(user.accountStatus)) {
       return {
         name: "DoctorPendingApproval" as const,
-        params: {
-          user,
-          email: user.email,
-        },
+        params: { user, email: user.email },
       };
     }
 
     return {
       name: "DoctorTabs" as const,
-      params: {
-        user,
-      },
+      params: { user },
     };
   }
 
@@ -60,18 +51,13 @@ export const getRoleHomeRoute = (user: AppUser) => {
     if (isActiveAccount(user.accountStatus)) {
       return {
         name: "PharmacyTabs" as const,
-        params: {
-          user,
-        },
+        params: { user },
       };
     }
 
     return {
       name: "PharmacyPendingApproval" as const,
-      params: {
-        user,
-        email: user.email,
-      },
+      params: { user, email: user.email },
     };
   }
 

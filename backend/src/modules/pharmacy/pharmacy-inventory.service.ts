@@ -15,6 +15,8 @@ const inventorySelect = {
   strength: true,
   form: true,
   stockUnit: true,
+  packSize: true,
+  contentUnit: true,
   unitPricePence: true,
   quantityInStock: true,
   reservedQuantity: true,
@@ -30,6 +32,8 @@ type InventoryRecord = {
   strength: string | null;
   form: string | null;
   stockUnit: string;
+  packSize: number | null;
+  contentUnit: string | null;
   unitPricePence: number;
   quantityInStock: number;
   reservedQuantity: number;
@@ -69,6 +73,8 @@ const findReference = async (medicineName: string, strength?: string | null) => 
       strength: true,
       form: true,
       packageUnit: true,
+      packSize: true,
+      contentUnit: true,
       defaultUnitPricePence: true,
     },
   });
@@ -182,6 +188,8 @@ export const pharmacyInventoryService = {
         strength: strength || reference?.strength || null,
         form: form || reference?.form || null,
         stockUnit: input.stockUnit?.trim() || reference?.packageUnit || "pack",
+        packSize: input.packSize ?? reference?.packSize ?? null,
+        contentUnit: input.contentUnit?.trim() || reference?.contentUnit || null,
         unitPricePence,
         quantityInStock: input.quantityInStock ?? 0,
         lowStockThreshold: input.lowStockThreshold ?? 5,
@@ -210,6 +218,8 @@ export const pharmacyInventoryService = {
         ...(input.strength !== undefined ? { strength: input.strength?.trim() || null } : {}),
         ...(input.form !== undefined ? { form: input.form?.trim() || null } : {}),
         ...(input.stockUnit !== undefined ? { stockUnit: input.stockUnit.trim() } : {}),
+        ...(input.packSize !== undefined ? { packSize: input.packSize } : {}),
+        ...(input.contentUnit !== undefined ? { contentUnit: input.contentUnit?.trim() || null } : {}),
         ...(input.unitPricePence !== undefined ? { unitPricePence: input.unitPricePence } : {}),
         ...(input.quantityInStock !== undefined ? { quantityInStock: input.quantityInStock } : {}),
         ...(input.lowStockThreshold !== undefined ? { lowStockThreshold: input.lowStockThreshold } : {}),

@@ -459,4 +459,28 @@ export const doctorPatientsService = {
       recentConsultations: recentConsultations.map(formatConsultation),
     };
   },
+
+  async getPatientCareDiary(doctorId: string, patientId: string) {
+    await ensureAssignedPatient(doctorId, patientId);
+
+    const entries = await prisma.patientCareDiaryEntry.findMany({
+      where: { patientId },
+      select: {
+        id: true,
+        title: true,
+        note: true,
+        mood: true,
+        symptoms: true,
+        entryDate: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ entryDate: "desc" }, { createdAt: "desc" }],
+    });
+
+    return {
+      count: entries.length,
+      entries,
+    };
+  },
 };

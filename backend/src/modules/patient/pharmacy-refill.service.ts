@@ -37,7 +37,6 @@ const normalizeStrength = (value?: string | null) => {
 const inferPackageUnit = (medicineName: string, fallback?: string | null) => {
   const fallbackUnit = normalizeUnit(fallback);
   if (PACKAGE_UNITS.has(fallbackUnit)) return fallbackUnit;
-
   const text = medicineName.toLowerCase();
   if (/\b(syrup|suspension|solution|liquid)\b/.test(text)) return "bottle";
   if (/\b(gel|cream|ointment)\b/.test(text)) return "tube";
@@ -122,27 +121,30 @@ const getPatientMedicine = async (patientId: string, medicineId: string) => {
   if (!medicine) throw new AppError("Medicine not found", 404);
 
   const latestAddReview = medicine.reviewRequests[0] || null;
-  const inactiveButReviewable = !medicine.isActive && latestAddReview && ["PENDING", "APPROVED", "APPLIED"].includes(latestAddReview.status);
-
-  if (!medicine.isActive && !inactiveButReviewable) {
-    throw new AppError("Medicine is not available for a pharmacy request", 409);
+  if (!medicine.isActive && latestAddReview?.status === "REJECTED") {
+    throw new AppError("This medicine was rejected during review and cannot be requested from the pharmacy.", 409);
   }
 
   return medicine;
 };
 
 const getPatient = async (patientId: string) => {
-  const patient = await prisma.user.findFirst({ where: { id: patientId, role: "PATIENT" }, select: { id: true, fullName: true } });
+  const patient = await prisma.user.findFirst({
+    where: { id: patientId, role: "PATIENT" },
+    select: { id: true, fullName: true },
+  });
+
   if (!patient) throw new AppError("Patient account not found", 404);
   return patient;
 };
 
-const getPrimaryPharmacy = async (patientId: string) => {
+const getRequestPharmacy = async (patientId: string, pharmacyId?: string) => {
   const link = await prisma.patientPharmacyLink.findFirst({
-    where: { patientId, isPrimary: true },
+    where: pharmacyId ? { patientId, pharmacyId } : { patientId, isPrimary: true },
     select: {
       id: true,
       pharmacyId: true,
+      isPrimary: true,
       pharmacy: {
         select: {
           id: true,
@@ -155,7 +157,10 @@ const getPrimaryPharmacy = async (patientId: string) => {
     },
   });
 
-  if (!link) throw new AppError("Please select a primary pharmacy before requesting medicine", 400);
+  if (!link) {
+    if (pharmacyId) throw new AppError("The selected pharmacy is not saved to your CareMate+ account.", 403);
+    throw new AppError("Please select a primary pharmacy before requesting medicine.", 400);
+  }
 
   const pharmacyAvailable =
     link.pharmacy.role === "PHARMACY" &&
@@ -163,7 +168,7 @@ const getPrimaryPharmacy = async (patientId: string) => {
     ["ACTIVE", "APPROVED"].includes(link.pharmacy.accountStatus) &&
     Boolean(link.pharmacy.pharmacyProfile);
 
-  if (!pharmacyAvailable) throw new AppError("Your primary pharmacy is currently unavailable. Please select another approved pharmacy.", 409);
+  if (!pharmacyAvailable) throw new AppError("The selected pharmacy is currently unavailable. Please choose another approved pharmacy.", 409);
   return link;
 };
 
@@ -246,17 +251,7 @@ const notifyPharmacy = async ({
       entityType: "MEDICINE_ORDER",
       entityId: orderId,
       targetScreen: "PharmacyDashboard",
-      data: {
-        orderId,
-        orderNumber,
-        patientId,
-        patientName,
-        medicineName,
-        orderSource: "REFILL_REQUEST",
-        prescriptionConfirmed,
-        waitingForDoctor,
-        status: "RECEIVED",
-      },
+      data: { orderId, orderNumber, patientId, patientName, medicineName, orderSource: "REFILL_REQUEST", prescriptionConfirmed, waitingForDoctor, status: "RECEIVED" },
     });
   } catch (error) {
     console.warn(`Unable to notify pharmacy about refill order ${orderId}:`, error instanceof Error ? error.message : error);
@@ -282,12 +277,7 @@ const notifyVerificationDoctor = async ({
 }) => {
   try {
     const existing = await prisma.userNotification.findFirst({
-      where: {
-        userId: doctorId,
-        type: "REFILL_DOCTOR_VERIFICATION_REQUESTED",
-        entityType: "PATIENT_PRESCRIPTION_SUBMISSION",
-        entityId: submissionId,
-      },
+      where: { userId: doctorId, type: "REFILL_DOCTOR_VERIFICATION_REQUESTED", entityType: "PATIENT_PRESCRIPTION_SUBMISSION", entityId: submissionId },
       select: { id: true },
     });
 
@@ -302,16 +292,7 @@ const notifyVerificationDoctor = async ({
       entityType: "PATIENT_PRESCRIPTION_SUBMISSION",
       entityId: submissionId,
       targetScreen: "DoctorDashboard",
-      data: {
-        submissionId,
-        orderId,
-        orderNumber,
-        patientId,
-        patientName,
-        medicineName,
-        source: "REFILL_DOCTOR_VERIFICATION",
-        status: "PENDING",
-      },
+      data: { submissionId, orderId, orderNumber, patientId, patientName, medicineName, source: "REFILL_DOCTOR_VERIFICATION", status: "PENDING" },
     });
   } catch (error) {
     console.warn(`Unable to notify doctor about refill verification ${submissionId}:`, error instanceof Error ? error.message : error);
@@ -320,10 +301,10 @@ const notifyVerificationDoctor = async ({
 
 export const pharmacyRefillService = {
   async createRefillRequest(patientId: string, input: CreatePharmacyRefillInput): Promise<PharmacyRefillResponse> {
-    const [patient, medicine, primaryPharmacy] = await Promise.all([
+    const [patient, medicine, requestPharmacy] = await Promise.all([
       getPatient(patientId),
       getPatientMedicine(patientId, input.medicineId),
-      getPrimaryPharmacy(patientId),
+      getRequestPharmacy(patientId, input.pharmacyId),
     ]);
 
     await ensureNoActiveRefillRequest(patientId, medicine.id);
@@ -338,20 +319,13 @@ export const pharmacyRefillService = {
       Boolean(medicine.prescribedByDoctorId) &&
       Boolean(medicine.prescriptionItem?.prescriptionId);
 
-    const pendingPatientMedicineReview =
-      !linkedDoctorPrescription &&
-      latestMedicineReview?.status === "PENDING";
-
+    const pendingPatientMedicineReview = !linkedDoctorPrescription && latestMedicineReview?.status === "PENDING";
     const approvedPatientMedicineReview =
       !linkedDoctorPrescription &&
       Boolean(latestMedicineReview) &&
       (latestMedicineReview?.status === "APPROVED" || latestMedicineReview?.status === "APPLIED");
 
-    const linkedReviewDoctor =
-      latestMedicineReview?.reviewedByDoctor ||
-      latestMedicineReview?.doctor ||
-      latestMedicineReview?.poolDoctor ||
-      null;
+    const linkedReviewDoctor = latestMedicineReview?.reviewedByDoctor || latestMedicineReview?.doctor || latestMedicineReview?.poolDoctor || null;
 
     let verificationPath: "CAREMATE_PRESCRIPTION" | "ASSIGNED_DOCTOR" | "EXTERNAL_EVIDENCE";
     let verificationDoctor: { id: string; fullName: string; email: string } | null = null;
@@ -369,10 +343,7 @@ export const pharmacyRefillService = {
       verificationDoctor = linkedReviewDoctor;
       evidenceType = null;
     } else {
-      if (!input.verificationPath) {
-        throw new AppError("Please choose whether this medicine should be verified by one of your assigned doctors or by supporting evidence.", 400);
-      }
-
+      if (!input.verificationPath) throw new AppError("Please choose whether this medicine should be verified by one of your assigned doctors or by supporting evidence.", 400);
       verificationPath = input.verificationPath;
 
       if (verificationPath === "ASSIGNED_DOCTOR") {
@@ -401,18 +372,10 @@ export const pharmacyRefillService = {
     const fulfilmentAllowed = prescriptionConfirmed;
 
     const doctorVerificationStatus =
-      approvedPatientMedicineReview
-        ? "CONFIRMED"
-        : verificationPath === "ASSIGNED_DOCTOR"
-          ? "PENDING"
-          : "NOT_REQUIRED";
+      approvedPatientMedicineReview ? "CONFIRMED" : verificationPath === "ASSIGNED_DOCTOR" ? "PENDING" : "NOT_REQUIRED";
 
     const submissionStatus =
-      linkedDoctorPrescription || approvedPatientMedicineReview
-        ? "VERIFIED"
-        : verificationPath === "ASSIGNED_DOCTOR"
-          ? "UNDER_REVIEW"
-          : "VERIFICATION_REQUIRED";
+      linkedDoctorPrescription || approvedPatientMedicineReview ? "VERIFIED" : verificationPath === "ASSIGNED_DOCTOR" ? "UNDER_REVIEW" : "VERIFICATION_REQUIRED";
 
     const standaloneDoctorVerification =
       verificationPath === "ASSIGNED_DOCTOR" &&
@@ -439,7 +402,7 @@ export const pharmacyRefillService = {
       const submission = await tx.patientPrescriptionSubmission.create({
         data: {
           patientId,
-          pharmacyId: primaryPharmacy.pharmacyId,
+          pharmacyId: requestPharmacy.pharmacyId,
           requestType: "REFILL_REQUEST",
           verificationPath,
           verificationDoctorId: pendingPatientMedicineReview ? null : verificationDoctor?.id || null,
@@ -494,7 +457,7 @@ export const pharmacyRefillService = {
         data: {
           orderNumber: `CMRF-${submission.id}`,
           patientId,
-          pharmacyId: primaryPharmacy.pharmacyId,
+          pharmacyId: requestPharmacy.pharmacyId,
           doctorId,
           prescriptionId,
           patientSubmissionId: submission.id,
@@ -557,7 +520,7 @@ export const pharmacyRefillService = {
     });
 
     await notifyPharmacy({
-      pharmacyId: primaryPharmacy.pharmacyId,
+      pharmacyId: requestPharmacy.pharmacyId,
       patientId,
       patientName: patient.fullName,
       medicineName: medicine.name,
@@ -581,9 +544,7 @@ export const pharmacyRefillService = {
 
     const responseVerificationDoctor =
       created.submission.verificationDoctor ||
-      (pendingPatientMedicineReview && linkedReviewDoctor
-        ? { id: linkedReviewDoctor.id, fullName: linkedReviewDoctor.fullName }
-        : null);
+      (pendingPatientMedicineReview && linkedReviewDoctor ? { id: linkedReviewDoctor.id, fullName: linkedReviewDoctor.fullName } : null);
 
     return {
       submission: {
@@ -606,8 +567,8 @@ export const pharmacyRefillService = {
         fulfilmentAllowed: created.order.fulfilmentAllowed,
       },
       pharmacy: {
-        id: primaryPharmacy.pharmacyId,
-        pharmacyName: primaryPharmacy.pharmacy.pharmacyProfile?.pharmacyName || "Primary pharmacy",
+        id: requestPharmacy.pharmacyId,
+        pharmacyName: requestPharmacy.pharmacy.pharmacyProfile?.pharmacyName || "Selected pharmacy",
       },
       medicine: {
         id: medicine.id,
@@ -622,11 +583,7 @@ export const pharmacyRefillService = {
 
   async listActiveRefillRequests(patientId: string) {
     const orders = await prisma.medicineOrder.findMany({
-      where: {
-        patientId,
-        orderSource: "REFILL_REQUEST",
-        status: { notIn: [...TERMINAL_ORDER_STATUSES] },
-      },
+      where: { patientId, orderSource: "REFILL_REQUEST", status: { notIn: [...TERMINAL_ORDER_STATUSES] } },
       select: {
         id: true,
         orderNumber: true,
@@ -687,7 +644,7 @@ export const pharmacyRefillService = {
             orderNumber: order.orderNumber,
             orderStatus: order.status,
             pharmacyId: order.pharmacyId,
-            pharmacyName: order.pharmacy?.pharmacyProfile?.pharmacyName || "Primary pharmacy",
+            pharmacyName: order.pharmacy?.pharmacyProfile?.pharmacyName || "Pharmacy",
             requestedQuantity: formatStoredRequestedQuantity(item.quantity, item.quantityUnit),
             quantityUnit: item.quantityUnit,
             prescriptionConfirmed: order.prescriptionConfirmed,

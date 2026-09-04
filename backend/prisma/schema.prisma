@@ -408,6 +408,7 @@ enum NotificationType {
   ORDER_DELAYED
   ORDER_OUT_OF_STOCK
   ORDER_CANCELLED
+  PHARMACY_PATIENT_LINKED
   PHARMACY_EXEMPTION_VERIFIED
   PHARMACY_EXEMPTION_REJECTED
   PHARMACY_PAYMENT_RECEIVED
@@ -418,6 +419,7 @@ enum NotificationType {
   CAREGIVER_LINK_APPROVED
   CAREGIVER_LINK_REJECTED
   CAREGIVER_LINK_REVOKED
+  PATIENT_CARE_DIARY_ADDED
 }
 
 model User {
@@ -471,6 +473,7 @@ model User {
   pharmacyReviewedSubmissions              PatientPrescriptionSubmission[]    @relation("PharmacyReviewedPrescriptionSubmissions")
   pharmacyExemptionClaims                  PrescriptionExemptionClaim[]       @relation("PharmacyExemptionClaims")
   pharmacyVerifiedExemptionClaims          PrescriptionExemptionClaim[]       @relation("PharmacyVerifiedExemptionClaims")
+  patientCareDiaryEntries                  PatientCareDiaryEntry[]            @relation("PatientCareDiaryEntries")
 
   patientSafetyAlerts             SafetyAlert[]                 @relation("PatientSafetyAlerts")
   doctorSafetyAlerts              SafetyAlert[]                 @relation("DoctorSafetyAlerts")
@@ -546,6 +549,24 @@ model PatientPrescriptionChargeProfile {
   patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@index([chargePreference])
+}
+
+model PatientCareDiaryEntry {
+  id        String   @id @default(uuid())
+  patientId String
+  title     String
+  note      String
+  mood      String?
+  symptoms  String?
+  entryDate DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient User @relation("PatientCareDiaryEntries", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([patientId, entryDate])
+  @@index([createdAt])
 }
 
 model PatientNotificationPreference {
@@ -766,6 +787,8 @@ model PharmacyInventoryItem {
   strength          String?
   form              String?
   stockUnit         String   @default("pack")
+  packSize          Int?
+  contentUnit       String?
   unitPricePence    Int      @default(0)
   quantityInStock   Int      @default(0)
   reservedQuantity  Int      @default(0)
@@ -1291,12 +1314,8 @@ model MedicineOrderItem {
   quantity     String?
   instructions String?
 
-  // Patient-facing requested quantity.
-  // Example: 1 pack.
   quantityUnit String?
 
-  // Actual quantity supplied by pharmacy.
-  // Example: 28 tablets.
   dispensedQuantity Int?
   dispensedUnit     String?
 

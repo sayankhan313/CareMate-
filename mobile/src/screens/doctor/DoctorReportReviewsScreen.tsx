@@ -60,17 +60,14 @@ const elevate = (level: 1 | 2 = 1) => ({
 });
 
 const getSafeString = (value: unknown) => typeof value === "string" ? value.trim() : "";
-
 const resolveReportId = (report: RuntimeReport) => getSafeString(report.id) || getSafeString(report.reportId) || getSafeString(report.report?.id);
-
 const resolvePatientId = (report: RuntimeReport) => getSafeString(report.patientId) || getSafeString(report.patient?.id) || getSafeString(report.report?.patientId) || getSafeString(report.report?.patient?.id);
-
 const resolvePatientName = (report: RuntimeReport) => getSafeString(report.patient?.fullName) || getSafeString(report.report?.patient?.fullName) || "Patient";
 
 const formatLabel = (value?: string | null) => {
   const safeValue = getSafeString(value);
   if (!safeValue) return "Medical Report";
-  return safeValue.toLowerCase().split("_").map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
+  return safeValue.toLowerCase().split("_").map(part => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
 };
 
 const formatDate = (value?: string | null) => {
@@ -103,10 +100,7 @@ const getInitials = (name?: string | null) => {
 };
 
 const getReviewTone = (report: DoctorPatientReport) => {
-  if (report.review?.status === "REVIEWED") {
-    return { background: SUCCESS_LIGHT, text: SUCCESS_DARK, accent: SUCCESS, label: "Reviewed", Icon: CheckCircle2 };
-  }
-
+  if (report.review?.status === "REVIEWED") return { background: SUCCESS_LIGHT, text: SUCCESS_DARK, accent: SUCCESS, label: "Reviewed", Icon: CheckCircle2 };
   return { background: WARNING_LIGHT, text: WARNING_DARK, accent: WARNING, label: "Pending", Icon: Clock3 };
 };
 
@@ -145,12 +139,12 @@ const DoctorReportReviewsScreen = ({ navigation }: Props) => {
       const result = await doctorReportsApi.listReportQueue(filter);
       const receivedReports = Array.isArray(result?.reports) ? result.reports : [];
 
-      const correctedReports = receivedReports.map((report) => {
+      const correctedReports = receivedReports.map(report => {
         const runtimeReport = report as RuntimeReport;
         return { ...report, id: resolveReportId(runtimeReport) };
       });
 
-      const validReports = correctedReports.filter((report) => Boolean(getSafeString(report.id)));
+      const validReports = correctedReports.filter(report => Boolean(getSafeString(report.id)));
 
       setReports(validReports);
       setSummary(result?.summary || EMPTY_SUMMARY);
@@ -241,7 +235,7 @@ const DoctorReportReviewsScreen = ({ navigation }: Props) => {
           </LinearGradient>
 
           <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-            {FILTERS.map((filter) => {
+            {FILTERS.map(filter => {
               const selected = selectedFilter === filter.value;
               const count = filter.value === "PENDING" ? summary.pending : filter.value === "REVIEWED" ? summary.reviewed : summary.total;
 

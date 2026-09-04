@@ -70,16 +70,84 @@ const notifyAssignedDoctor = async (requestId: string) => {
   } catch (error) {
     console.warn(
       `Unable to notify fallback doctor for medicine review ${requestId}:`,
-      error instanceof Error ? error.message : error
+      error instanceof Error ? error.message : error,
     );
   }
 };
 
-const findNextDoctor = async (
-  patientId: string,
-  currentDoctorId: string,
-  attemptedDoctorIds: string[]
-) => {
+const notifyAdminsAboutEscalatedReview = async (requestId: string) => {
+  try {
+    const request = await prisma.medicineReviewRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        patient: { select: { fullName: true } },
+        medicine: { select: { name: true, dose: true } },
+      },
+    });
+
+    if (!request || request.routingStatus !== "ADMIN_REVIEW_REQUIRED") return;
+
+    const admins = await prisma.user.findMany({
+      where: {
+        role: "ADMIN",
+        accountStatus: { in: ["ACTIVE", "APPROVED"] },
+        isEmailVerified: true,
+      },
+      select: { id: true },
+    });
+
+    if (admins.length === 0) return;
+
+    await Promise.all(
+      admins.map(async admin => {
+        const existingNotification = await prisma.userNotification.findFirst({
+          where: {
+            userId: admin.id,
+            type: "MEDICINE_REVIEW_REQUESTED",
+            entityType: "MEDICINE_REVIEW_ADMIN_ESCALATION",
+            entityId: request.id,
+          },
+          select: { id: true },
+        });
+
+        if (existingNotification) return;
+
+        await notificationService.createAndSend({
+          userId: admin.id,
+          type: "MEDICINE_REVIEW_REQUESTED",
+          title: "Medicine review needs reassignment",
+          body: `Assigned doctors have been exhausted for ${request.medicine.name}. Assign an alternate review doctor.`,
+          priority: "HIGH",
+          entityType: "MEDICINE_REVIEW_ADMIN_ESCALATION",
+          entityId: request.id,
+          targetScreen: "AdminMedicineReviewRequests",
+          forcePush: true,
+          data: {
+            requestId: request.id,
+            patientId: request.patientId,
+            patientName: request.patient.fullName,
+            medicineId: request.medicineId,
+            medicineName: request.medicine.name,
+            medicineDose: request.medicine.dose,
+            requestType: request.requestType,
+            routingStatus: request.routingStatus,
+            attemptedDoctorIds: request.attemptedDoctorIds,
+            escalatedAt: request.escalatedAt?.toISOString() || null,
+            recipientRole: "ADMIN",
+            source: "MEDICINE_REVIEW_ADMIN_ESCALATION",
+          },
+        });
+      }),
+    );
+  } catch (error) {
+    console.warn(
+      `Unable to notify administrators about escalated medicine review ${requestId}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+};
+
+const findNextDoctor = async (patientId: string, currentDoctorId: string, attemptedDoctorIds: string[]) => {
   const excludedDoctorIds = new Set([...attemptedDoctorIds, currentDoctorId]);
 
   const assignments = await prisma.patientDoctorAssignment.findMany({
@@ -113,12 +181,10 @@ const findNextDoctor = async (
     select: { doctorId: true, status: true },
   });
 
-  const statusByDoctorId = new Map(
-    todayAvailability.map(availability => [availability.doctorId, availability.status])
-  );
+  const statusByDoctorId = new Map(todayAvailability.map(availability => [availability.doctorId, availability.status]));
 
   const eligibleAssignments = assignments.filter(
-    assignment => statusByDoctorId.get(assignment.doctor.id) !== "OUT_OF_OFFICE"
+    assignment => statusByDoctorId.get(assignment.doctor.id) !== "OUT_OF_OFFICE",
   );
 
   if (eligibleAssignments.length === 0) return null;
@@ -137,15 +203,9 @@ const processExpiredRequest = async (request: {
   if (!request.doctorId) return;
 
   const currentDoctorId = request.doctorId;
-  const attemptedDoctorIds = Array.from(
-    new Set([...request.attemptedDoctorIds, currentDoctorId])
-  );
+  const attemptedDoctorIds = Array.from(new Set([...request.attemptedDoctorIds, currentDoctorId]));
 
-  const nextDoctor = await findNextDoctor(
-    request.patientId,
-    currentDoctorId,
-    attemptedDoctorIds
-  );
+  const nextDoctor = await findNextDoctor(request.patientId, currentDoctorId, attemptedDoctorIds);
 
   if (nextDoctor) {
     const reassigned = await prisma.$transaction(async tx => {
@@ -176,9 +236,7 @@ const processExpiredRequest = async (request: {
 
     if (!reassigned) return;
 
-    console.log(
-      `Medicine review ${request.id} reassigned from doctor ${currentDoctorId} to ${nextDoctor.id}.`
-    );
+    console.log(`Medicine review ${request.id} reassigned from doctor ${currentDoctorId} to ${nextDoctor.id}.`);
 
     await notifyAssignedDoctor(request.id);
     return;
@@ -212,6 +270,7 @@ const processExpiredRequest = async (request: {
 
   if (escalated) {
     console.log(`Medicine review ${request.id} escalated to administrator review.`);
+    await notifyAdminsAboutEscalatedReview(request.id);
   }
 };
 
@@ -247,7 +306,7 @@ const runMedicineReviewEscalationCheck = async () => {
   } catch (error) {
     console.error(
       "Medicine review escalation check failed:",
-      error instanceof Error ? error.message : error
+      error instanceof Error ? error.message : error,
     );
   } finally {
     isRunning = false;

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -8,7 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { pharmacyOrdersApi, type PharmacyOrderListItem, type PharmacyOrderSource, type PharmacyPaymentStatus } from "../../services/pharmacy/pharmacy-orders.api";
 import type { RootStackParamList } from "../../types/navigation";
 
-type QueueFilter = "ALL" | "DOCTOR_PRESCRIPTION" | "PATIENT_SUBMISSION" | "REFILL_REQUEST" | "MANUAL_REQUEST";
+type QueueFilter = "ALL" | "DOCTOR_PRESCRIPTION" | "REFILL_REQUEST" | "MANUAL_REQUEST";
 type PaymentFilter = "ALL" | PharmacyPaymentStatus;
 
 type PharmacyOrdersRouteList = {
@@ -23,19 +23,15 @@ const TEXT = "#111936";
 const MUTED = "#7A8194";
 const RIPPLE = "rgba(17,25,54,0.08)";
 const BORDER = "#E4E8F2";
-
 const PHARMACY = "#16A34A";
 const PHARMACY_DARK = "#0F6B3A";
 const PHARMACY_CONTAINER = "#ECFDF3";
-
 const WARNING = "#F6A545";
 const WARNING_DARK = "#A45A08";
 const WARNING_LIGHT = "#FFF3E2";
-
 const BLUE = "#5B86E5";
 const BLUE_DARK = "#315FBA";
 const BLUE_LIGHT = "#EEF4FF";
-
 const DANGER = "#EF4D56";
 const DANGER_DARK = "#B42318";
 const DANGER_LIGHT = "#FFEDEE";
@@ -66,8 +62,8 @@ const formatMoney = (amountPence: number, currency = "GBP") => {
 
 const getSourceLabel = (source: PharmacyOrderSource) => {
   if (source === "DOCTOR_PRESCRIPTION") return "Doctor prescription";
-  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   if (source === "REFILL_REQUEST") return "Refill request";
+  if (source === "PATIENT_SUBMISSION") return "Patient submission";
   return "Manual request";
 };
 
@@ -87,48 +83,54 @@ const getPaymentTone = (order: PharmacyOrderListItem) => {
   return { label: "Payment pending", background: WARNING_LIGHT, color: WARNING_DARK };
 };
 
+const toQueueFilter = (source?: PharmacyOrderSource): QueueFilter => {
+  if (source === "DOCTOR_PRESCRIPTION" || source === "REFILL_REQUEST" || source === "MANUAL_REQUEST") return source;
+  return "ALL";
+};
+
 export const PharmacyOrdersScreen = () => {
   const navigation = useNavigation<PharmacyNavigation>();
   const route = useRoute<RouteProp<PharmacyOrdersRouteList, "PharmacyOrders">>();
   const insets = useSafeAreaInsets();
 
   const screenTitle = route.params?.title || "Prescription orders";
-  const paymentMode = screenTitle.toLowerCase() === "payment pending" || screenTitle.toLowerCase() === "payments";
-  const initialSource = route.params?.source;
-  const initialFilter: QueueFilter = initialSource || "ALL";
+  const normalizedTitle = screenTitle.toLowerCase();
+  const paymentMode = normalizedTitle === "payment pending" || normalizedTitle === "payments";
+  const newOrdersMode = normalizedTitle === "new orders";
+  const routeFilter = toQueueFilter(route.params?.source);
 
-  const [filter, setFilter] = useState<QueueFilter>(initialFilter);
+  const [filter, setFilter] = useState<QueueFilter>(routeFilter);
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>(paymentMode ? "PENDING" : "ALL");
   const [orders, setOrders] = useState<PharmacyOrderListItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    setFilter(routeFilter);
+    setPaymentFilter(paymentMode ? "PENDING" : "ALL");
+  }, [paymentMode, routeFilter, route.params?.source, route.params?.title]);
 
   const loadOrders = useCallback(async (mode: "initial" | "refresh" = "initial", selectedFilter = filter) => {
     try {
       if (mode === "initial") setIsLoading(true);
       if (mode === "refresh") setIsRefreshing(true);
-
       setErrorMessage("");
-      const source = paymentMode || selectedFilter === "ALL" ? undefined : selectedFilter;
-      const result = await pharmacyOrdersApi.getOrders({ source, limit: 100 });
 
+      const source = paymentMode || newOrdersMode || selectedFilter === "ALL" ? undefined : selectedFilter;
+      const result = await pharmacyOrdersApi.getOrders({ source, limit: 100 });
       setOrders(result.orders || []);
-      setTotal(result.total || 0);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to load pharmacy orders");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [filter, paymentMode]);
+  }, [filter, newOrdersMode, paymentMode]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadOrders("initial");
-    }, [loadOrders]),
-  );
+  useFocusEffect(useCallback(() => {
+    void loadOrders("initial", routeFilter);
+  }, [loadOrders, routeFilter]));
 
   const changeFilter = (nextFilter: QueueFilter) => {
     if (filter === nextFilter) return;
@@ -138,13 +140,24 @@ export const PharmacyOrdersScreen = () => {
 
   const openOrder = (order: PharmacyOrderListItem) => navigation.navigate("PharmacyOrderDetail", { orderId: order.id });
 
+  const supportedOrders = useMemo(() => orders.filter(order => order.source !== "PATIENT_SUBMISSION"), [orders]);
   const paymentOrders = useMemo(() => orders.filter(order => Boolean(order.payment)), [orders]);
 
   const visibleOrders = useMemo(() => {
-    if (!paymentMode) return orders;
-    if (paymentFilter === "ALL") return paymentOrders;
-    return paymentOrders.filter(order => order.payment?.status === paymentFilter);
-  }, [orders, paymentFilter, paymentMode, paymentOrders]);
+    if (paymentMode) {
+      if (paymentFilter === "ALL") return paymentOrders;
+      return paymentOrders.filter(order => order.payment?.status === paymentFilter);
+    }
+
+    if (newOrdersMode) {
+      return supportedOrders.filter(order =>
+        order.status === "RECEIVED" &&
+        ["DOCTOR_PRESCRIPTION", "REFILL_REQUEST", "MANUAL_REQUEST"].includes(order.source),
+      );
+    }
+
+    return supportedOrders;
+  }, [newOrdersMode, paymentFilter, paymentMode, paymentOrders, supportedOrders]);
 
   const paymentCounts = useMemo(() => ({
     ALL: paymentOrders.length,
@@ -156,7 +169,7 @@ export const PharmacyOrdersScreen = () => {
   }), [paymentOrders]);
 
   const displayTitle = paymentMode ? "Payments" : screenTitle;
-  const displayTotal = paymentMode ? visibleOrders.length : total;
+  const displayTotal = visibleOrders.length;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -170,7 +183,9 @@ export const PharmacyOrdersScreen = () => {
 
           <View style={styles.appBarText}>
             <Text style={styles.title}>{displayTitle}</Text>
-            <Text style={styles.subtitle}>{paymentMode ? "Review patient prescription payment status" : "Review prescriptions routed to your pharmacy"}</Text>
+            <Text style={styles.subtitle}>
+              {paymentMode ? "Review patient prescription payment status" : newOrdersMode ? "Review newly received pharmacy orders" : "Review prescriptions routed to your pharmacy"}
+            </Text>
           </View>
         </View>
 
@@ -178,7 +193,7 @@ export const PharmacyOrdersScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 30, 46) }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh")} tintColor={PHARMACY} colors={[PHARMACY]} />}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh", filter)} tintColor={PHARMACY} colors={[PHARMACY]} />}
         >
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIcon, paymentMode ? styles.paymentSummaryIcon : undefined]}>
@@ -186,7 +201,7 @@ export const PharmacyOrdersScreen = () => {
             </View>
 
             <View style={styles.summaryText}>
-              <Text style={styles.summaryLabel}>{paymentMode ? "Payment queue" : "Prescription queue"}</Text>
+              <Text style={styles.summaryLabel}>{paymentMode ? "Payment queue" : newOrdersMode ? "New order queue" : "Prescription queue"}</Text>
               <Text style={styles.summaryValue}>{displayTotal} {displayTotal === 1 ? "order" : "orders"}</Text>
             </View>
 
@@ -215,20 +230,19 @@ export const PharmacyOrdersScreen = () => {
                 {paymentCounts.REFUNDED > 0 ? <FilterChip label={`Refunded ${paymentCounts.REFUNDED}`} selected={paymentFilter === "REFUNDED"} onPress={() => setPaymentFilter("REFUNDED")} /> : null}
               </ScrollView>
             </>
-          ) : (
+          ) : newOrdersMode ? null : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
               <FilterChip label="All" selected={filter === "ALL"} onPress={() => changeFilter("ALL")} />
               <FilterChip label="Doctor prescriptions" selected={filter === "DOCTOR_PRESCRIPTION"} onPress={() => changeFilter("DOCTOR_PRESCRIPTION")} />
               <FilterChip label="Refill requests" selected={filter === "REFILL_REQUEST"} onPress={() => changeFilter("REFILL_REQUEST")} />
-              <FilterChip label="Patient submissions" selected={filter === "PATIENT_SUBMISSION"} onPress={() => changeFilter("PATIENT_SUBMISSION")} />
             </ScrollView>
           )}
 
           {isLoading ? (
             <View style={styles.stateCard}>
               <ActivityIndicator color={PHARMACY} />
-              <Text style={styles.stateTitle}>{paymentMode ? "Loading payments" : "Loading prescription orders"}</Text>
-              <Text style={styles.stateText}>{paymentMode ? "Checking the latest payment status for pharmacy orders." : "Checking orders assigned to this pharmacy."}</Text>
+              <Text style={styles.stateTitle}>{paymentMode ? "Loading payments" : newOrdersMode ? "Loading new orders" : "Loading prescription orders"}</Text>
+              <Text style={styles.stateText}>{paymentMode ? "Checking the latest payment status for pharmacy orders." : newOrdersMode ? "Checking newly received orders assigned to this pharmacy." : "Checking orders assigned to this pharmacy."}</Text>
             </View>
           ) : null}
 
@@ -239,7 +253,7 @@ export const PharmacyOrdersScreen = () => {
                 <Text style={styles.errorTitle}>{paymentMode ? "Payments unavailable" : "Orders unavailable"}</Text>
                 <Text style={styles.errorText}>{errorMessage}</Text>
 
-                <Pressable android_ripple={{ color: RIPPLE }} style={styles.retryButton} onPress={() => void loadOrders("initial")}>
+                <Pressable android_ripple={{ color: RIPPLE }} style={styles.retryButton} onPress={() => void loadOrders("initial", filter)}>
                   <RefreshCw size={16} color={SURFACE} strokeWidth={2.5} />
                   <Text style={styles.retryText}>Try again</Text>
                 </Pressable>
@@ -250,10 +264,8 @@ export const PharmacyOrdersScreen = () => {
           {!isLoading && !errorMessage && visibleOrders.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>{paymentMode ? <CreditCard size={26} color={PHARMACY} strokeWidth={2.5} /> : <FileText size={26} color={PHARMACY} strokeWidth={2.5} />}</View>
-              <Text style={styles.emptyTitle}>{paymentMode ? "No payments in this status" : "No orders in this queue"}</Text>
-              <Text style={styles.emptyText}>
-                {paymentMode ? "Orders matching this payment status will appear here." : "New doctor prescriptions, refill requests or patient submissions routed to this pharmacy will appear here."}
-              </Text>
+              <Text style={styles.emptyTitle}>{paymentMode ? "No payments in this status" : newOrdersMode ? "No new orders" : "No orders in this queue"}</Text>
+              <Text style={styles.emptyText}>{paymentMode ? "Orders matching this payment status will appear here." : newOrdersMode ? "New prescriptions and medicine requests routed to this pharmacy will appear here." : "Doctor prescriptions and refill requests routed to this pharmacy will appear here."}</Text>
             </View>
           ) : null}
 
@@ -300,12 +312,10 @@ const OrderCard = ({ order, paymentMode, isLast, onPress }: { order: PharmacyOrd
 
       <View style={styles.medicinePanel}>
         <View style={styles.medicineIcon}><Pill size={19} color={PHARMACY} strokeWidth={2.5} /></View>
-
         <View style={styles.medicineText}>
           <Text style={styles.medicineName} numberOfLines={1}>{order.medicineName}</Text>
           <Text style={styles.itemCount}>{order.itemCount} {order.itemCount === 1 ? "medicine" : "medicines"}</Text>
         </View>
-
         <ChevronRight size={19} color={MUTED} strokeWidth={2.4} />
       </View>
 
@@ -316,15 +326,12 @@ const OrderCard = ({ order, paymentMode, isLast, onPress }: { order: PharmacyOrd
               <CreditCard size={13} color={paymentTone.color} strokeWidth={2.4} />
               <Text style={[styles.paymentText, { color: paymentTone.color }]}>{paymentTone.label}</Text>
             </View>
-
             <Text style={styles.paymentAmount}>{formatMoney(order.payment.amountPence, order.payment.currency)}</Text>
           </View>
 
           <View style={styles.paymentDetailBottom}>
             <Text style={styles.paymentPreference}>{formatStatus(order.payment.chargePreference)}</Text>
-            <Text style={[styles.releaseText, { color: paymentSatisfied ? PHARMACY_DARK : WARNING_DARK }]}>
-              {paymentSatisfied ? "Release allowed" : "Release locked"}
-            </Text>
+            <Text style={[styles.releaseText, { color: paymentSatisfied ? PHARMACY_DARK : WARNING_DARK }]}>{paymentSatisfied ? "Release allowed" : "Release locked"}</Text>
           </View>
         </View>
       ) : (
@@ -333,7 +340,6 @@ const OrderCard = ({ order, paymentMode, isLast, onPress }: { order: PharmacyOrd
             <CreditCard size={13} color={paymentTone.color} strokeWidth={2.4} />
             <Text style={[styles.paymentText, { color: paymentTone.color }]}>{paymentTone.label}</Text>
           </View>
-
           <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
         </View>
       )}
