@@ -14,5 +14,6 @@ export const createEmailVerificationToken = () => {
 };
 
 export const createVerificationLink = (token: string) => {
-  return `http://localhost:${env.PORT}/api/v1/auth/verify-email?token=${token}`;
+  const baseUrl = env.PUBLIC_API_URL || `http://localhost:${env.PORT}`;
+  return `${baseUrl}/api/v1/auth/verify-email?token=${token}`;
 };
