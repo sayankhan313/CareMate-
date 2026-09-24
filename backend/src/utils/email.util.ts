@@ -1,66 +1,64 @@
-import nodemailer from "nodemailer";
+const brevoApiKey = process.env.BREVO_API_KEY;
+const senderEmail = process.env.BREVO_SENDER_EMAIL;
+const senderName = process.env.BREVO_SENDER_NAME || "CareMate+";
 
-const smtpHost = process.env.SMTP_HOST;
-const smtpPort = Number(process.env.SMTP_PORT || 465);
-const smtpSecure = process.env.SMTP_SECURE === "true";
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS;
-const smtpFrom = process.env.SMTP_FROM;
-
-if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
-  console.warn("SMTP email settings are missing. Emails will not be sent.");
+if (!brevoApiKey || !senderEmail) {
+  console.warn("Brevo email settings are missing. Emails will not be sent.");
 }
 
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpSecure,
-  auth: {
-    user: smtpUser,
-    pass: smtpPass,
-  },
-});
+async function sendBrevoEmail(to: string, subject: string, htmlContent: string) {
+  if (!brevoApiKey || !senderEmail) return;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": brevoApiKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Brevo email failed (${response.status}): ${errorBody}`);
+  }
+}
 
 export const emailUtil = {
   async sendEmailVerificationEmail(email: string, verificationLink: string) {
-    if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
-      return;
-    }
-
-    await transporter.sendMail({
-      from: smtpFrom,
-      to: email,
-      subject: "Verify your CareMate+ email",
-      html: `
+    await sendBrevoEmail(
+      email,
+      "Verify your CareMate+ email",
+      `
         <h2>Welcome to CareMate+</h2>
         <p>Please verify your email address by clicking the link below:</p>
-        <p>
-          <a href="${verificationLink}">Verify Email</a>
-        </p>
+        <p><a href="${verificationLink}">Verify Email</a></p>
         <p>If the button does not work, copy this link:</p>
         <p>${verificationLink}</p>
       `,
-    });
+    );
   },
 
   async sendPasswordResetEmail(email: string, resetLink: string) {
-    if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
-      return;
-    }
-
-    await transporter.sendMail({
-      from: smtpFrom,
-      to: email,
-      subject: "Reset your CareMate+ password",
-      html: `
+    await sendBrevoEmail(
+      email,
+      "Reset your CareMate+ password",
+      `
         <h2>CareMate+ Password Reset</h2>
         <p>You requested to reset your password.</p>
-        <p>
-          <a href="${resetLink}">Reset Password</a>
-        </p>
+        <p><a href="${resetLink}">Reset Password</a></p>
         <p>If the button does not work, copy this link:</p>
         <p>${resetLink}</p>
       `,
-    });
+    );
   },
 };
