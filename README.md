@@ -1,5 +1,7 @@
 # CareMate+
 
+> CareMate+ was developed independently by Sayan Khan as an individual MSc Advanced Computer Science project at the University of Leicester.
+
 **A secure multi-role Android healthcare-support application for medication management, remote monitoring, pharmacy fulfilment and care coordination.**
 
 CareMate+ was developed as an MSc Advanced Computer Science project. It connects **Patients, Doctors, Caregivers, Pharmacy staff and Administrators** through one role-based mobile system, with a cloud-hosted backend and PostgreSQL database.
